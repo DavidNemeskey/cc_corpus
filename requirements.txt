@@ -1,6 +1,7 @@
 requests
 beautifulsoup4
-
+simplejson
+lxml
 boto3
 botocore
 justext

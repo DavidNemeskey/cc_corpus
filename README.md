@@ -8,11 +8,11 @@ With this tool you can query the CommonCrawl index and download pages to the loc
 It optionally uses [JusText](http://corpus.tools/wiki/Justext) to remove boilerplate content and only keep real text.
 Using this tool one can create raw text corpora from web (CommonCrawl) easily.
 
+This repository also contains the fixed version of [cdx-index-client](https://github.com/ikreymer/cdx-index-client/tree/1ae1301ae4fb8416f10bed97d4c7c96ba5ab4dc7).
+
 ## Install
     
     # Python 2.7.x required
-    git submodule init
-    git submodule update
     pip install -r requirements.txt
 
 ## Examples

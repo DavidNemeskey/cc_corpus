@@ -9,6 +9,7 @@ import boto3.session
 from botocore import UNSIGNED
 from botocore.client import Config
 import justext
+from lxml.etree import ParserError
 
 import Queue
 import threading
@@ -25,10 +26,16 @@ import sys
 
 def boilerplate_remove(inp_text):
     warc1, warc2, text = inp_text.split('\r\n\r\n', 2)
-    paragraphs = justext.justext(text, justext.get_stoplist('Hungarian'))  # TODO: wire out language selction to CLI
-    paragraphs_marked = (u'<p>\n{0}\n</p>'.format(paragraph.text)
-                         for paragraph in paragraphs if not paragraph.is_boilerplate)
-    text_removed = u'\n\n'.join(paragraphs_marked).encode('UTF-8') + '\n'
+    try:
+        paragraphs = justext.justext(text, justext.get_stoplist('Hungarian'))  # TODO: wire out language selction to CLI
+        paragraphs_marked = (u'<p>\n{0}\n</p>'.format(paragraph.text)
+                             for paragraph in paragraphs if not paragraph.is_boilerplate)
+        text_removed = u'\n\n'.join(paragraphs_marked).encode('UTF-8') + '\n'
+    except ParserError:
+        out = '\r\n\r\n'.join((warc1, warc2)).replace('\r\n', '\t')
+        logging.warning('Skipping: {0}'.format(out))
+        return None
+
     return '\r\n\r\n'.join((warc1, warc2, text_removed))
 
 
@@ -45,7 +52,9 @@ def wirte_file(out_gzip_file_name, gzip_text_str, remove_boilerplate):
     if remove_boilerplate:
         # https://stackoverflow.com/a/2695575
         with gzip.open(out_gzip_file_name, 'w') as f:
-            f.write(boilerplate_remove(zlib.decompress(gzip_text_str, 16 + zlib.MAX_WBITS)))
+            ret = boilerplate_remove(zlib.decompress(gzip_text_str, 16 + zlib.MAX_WBITS))
+            if ret:
+                f.write(ret)
 
     else:
         # Put the whole into a gzip archive
@@ -120,7 +129,7 @@ for i in range(num_of_threads):
     t.daemon = True
     t.start()
 
-remove_boilerplate_content = bool(sys.argv.get(2, 1))  # True
+remove_boilerplate_content = bool(sys.argv[2] if len(sys.argv) >= 3 else 1)  # True
 # Put the gzip files into the queue to be processed
 for fname in glob.glob(os.path.join(sys.argv[1], '*.gz')):
     q.put((fname, remove_boilerplate_content))
