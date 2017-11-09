@@ -7,6 +7,7 @@
 from botocore.exceptions import ClientError
 import boto3.session
 from botocore import UNSIGNED
+from botocore.vendored.requests.packages.urllib3.exceptions import ReadTimeoutError
 from botocore.client import Config
 import justext
 from lxml.etree import ParserError
@@ -68,7 +69,13 @@ def write_file(out_gzip_file_name, gzip_text_str, remove_boilerplate, entry_str)
     if remove_boilerplate:
         # https://stackoverflow.com/a/2695575
         with gzip.open(out_gzip_file_name, 'w') as f:
-            ret = boilerplate_remove(zlib.decompress(gzip_text_str, 16 + zlib.MAX_WBITS), entry_str)
+            try:
+                decompressed_text = zlib.decompress(gzip_text_str, zlib.MAX_WBITS | 32)
+            except Exception as err:  # TODO: Try to replace this with narrower exception class
+                logging.warning('Skipping because decompression error ({0}):\t\t{1}\t\t'.format(err.__class__.__name__,
+                                                                                                entry_str))
+                return
+            ret = boilerplate_remove(decompressed_text, entry_str)
             if ret:
                 f.write(ret)
 
@@ -84,11 +91,11 @@ def download_file(s3, offset, length, warc_file_name, entry_str):
     # This is a gzip bytearray (str)
     try:
         gzip_text = s3.get_object(Bucket='commoncrawl', Key=warc_file_name, Range=byte_range)['Body'].read()
-    except ClientError as ex:
+    except (ClientError, ReadTimeoutError) as ex:
         if ex.response['Error']['Code'] == 'NoSuchKey':
             logging.warning("NoSuchKey: {0}".format(entry_str))
         else:
-            raise
+            logging.warning("Other Error({0}): {1}".format(ex, entry_str))
         return
     return gzip_text
 
