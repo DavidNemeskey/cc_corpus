@@ -19,9 +19,9 @@ This repository also contains the fixed version of [cdx-index-client](https://gi
     # Dowload index for specfic condition
     ./get_indexfiles.sh CONDITION OUTPUT_DIR
     # Download pages for index to pages dir
-    ./download_pages.py OUTPUT_DIR [boilerplate removal with justext for no 1 for yes (default)]
-    # Extract domain for urls and count robots.txt
-    ./get_domain_for_urls.py OUTPUT_DIR
+    ./download_pages.py -b 'Hungarian' -o out -i *.gz
+    # or
+    zgrep "." *.gz | sed 's/:/ /' | ./download_pages.py -b 'Hungarian' -o out -s
 
 ## Licence
 
