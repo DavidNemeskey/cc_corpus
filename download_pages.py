@@ -1,9 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # Standard lib
 import argparse
-import Queue
+import queue
 import threading
 import multiprocessing
 import glob
@@ -87,9 +87,9 @@ def boilerplate_remove(inp_text, stopwordlist, entry_str):
         skip_action(warc1, warc2, err.__class__.__name__ + str(length), entry_str)
         return None
 
-    paragraphs_marked = (u'<p>\n{0}\n</p>'.format(paragraph.text)
+    paragraphs_marked = ('<p>\n{0}\n</p>'.format(paragraph.text)
                          for paragraph in paragraphs if not paragraph.is_boilerplate)
-    text_removed = u'\n\n'.join(paragraphs_marked).encode('UTF-8') + '\n'
+    text_removed = ('\n\n'.join(paragraphs_marked) + '\n').encode('UTF-8')
     if len(text_removed) <= 1:
         skip_action(warc1, warc2, 'JusTextBadError({0})'.format(length), entry_str)
         return None
@@ -261,7 +261,7 @@ if __name__ == '__main__':
 
     else:
         num_of_threads = multiprocessing.cpu_count() * 3.25  # Heuristic number...
-        q = Queue.Queue(maxsize=2 * num_of_threads)
+        q = queue.Queue(maxsize=2 * num_of_threads)
 
         # In a presistent connection process a whole gz file and ask for another
         def worker(conn, out_dir, stopwords):

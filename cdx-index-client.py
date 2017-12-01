@@ -1,13 +1,15 @@
-#!/usr/bin/env python
-# encoding: UTF-8
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 from argparse import ArgumentParser
-from Queue import Empty
+from queue import Empty
 from multiprocessing import Process, Queue, Value, cpu_count
 
 import requests
 import shutil
-import urllib
+import urllib.request
+import urllib.parse
+import urllib.error
 import signal
 import random
 import os
@@ -15,7 +17,7 @@ from simplejson.scanner import JSONDecodeError
 
 import logging
 
-from urlparse import urljoin
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 DEF_API_BASE = 'http://index.commoncrawl.org/'
@@ -38,7 +40,7 @@ def get_num_pages(api_url, url, page_size=None):
     if page_size:
         query['pageSize'] = page_size
 
-    query = urllib.urlencode(query)
+    query = urllib.parse.urlencode(query)
 
     # Get the result
     session = requests.Session()
@@ -85,7 +87,7 @@ def fetch_result_page(job_params):
     if job_params.get('page_size'):
         query['pageSize'] = job_params['page_size']
 
-    query = urllib.urlencode(query)
+    query = urllib.parse.urlencode(query)
 
     # format filename to number of digits
     nd = len(str(num_pages))
@@ -199,7 +201,7 @@ def run_workers(num_workers, jobs, shuffle):
 
     workers = []
 
-    for i in xrange(0, num_workers):
+    for i in range(0, num_workers):
         tmp = Process(target=do_work,
                       args=(job_queue, counter))
         tmp.start()
@@ -249,7 +251,7 @@ def read_index(r, prefix=None):
 
         output_prefix = output_prefix.strip('/')
         output_prefix = output_prefix.replace('/', '-')
-        output_prefix = urllib.quote(output_prefix) + '-'
+        output_prefix = urllib.parse.quote(output_prefix) + '-'
     else:
         output_prefix = r.output_prefix
 
@@ -267,7 +269,7 @@ def read_index(r, prefix=None):
         logging.info('Fetching pages {0} of {1}'.format(r.pages, r.url))
         num_pages = len(page_list)
     else:
-        page_list = range(0, num_pages)
+        page_list = list(range(0, num_pages))
         logging.info('Fetching {0} pages of {1}'.format(num_pages, r.url))
 
     if num_pages == 1:
@@ -286,7 +288,7 @@ def read_index(r, prefix=None):
     num_workers = min(num_workers, num_pages)
 
     # generate page jobs
-    job_list = map(get_page_job, page_list)
+    job_list = list(map(get_page_job, page_list))
 
     run_workers(num_workers, job_list, not r.in_order)
 

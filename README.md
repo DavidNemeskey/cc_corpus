@@ -12,8 +12,8 @@ This repository also contains the fixed version of [cdx-index-client](https://gi
 
 ## Install
     
-    # Python 2.7.x required
-    pip install -r requirements.txt
+    # Python 3.x required
+    pip3 install -r requirements.txt
 
 ## Examples
     # Dowload index for specfic condition
