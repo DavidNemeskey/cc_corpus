@@ -95,8 +95,8 @@ def fetch_result_page(job_params):
     page_str = format_ % page
     filename = output_prefix + page_str
 
-    logging.debug('Fetching page {0} ({2} of {1})'.format(
-        page_str, num_pages, page + 1))
+    logging.debug('Fetching page {0} ({2} of {1}) for crawl {3}'.format(page_str, num_pages, page + 1,
+                                                                        api_url.rsplit('/', maxsplit=1)[1]))
 
     # Add any custom headers that may have been specified
     req_headers = {}
@@ -157,8 +157,8 @@ def do_work(job_queue, counter=None):
                 counter.value += 1
                 num_done = counter.value
 
-            logging.info('{0} page(s) of {1} finished'.format(num_done,
-                                                              job['num_pages']))
+            logging.info('{0} page(s) of {1} finished for crawl {2}'.format(num_done, job['num_pages'],
+                                                                            job['api_url'].rsplit('/', maxsplit=1)[1]))
         except Empty:
             pass
 
@@ -171,12 +171,13 @@ def do_work(job_queue, counter=None):
 
             retries = job.get('retries', 0)
             if retries < job['max_retries']:
-                logging.error('Retrying Page {0}'.format(job['page']))
+                logging.error('Retrying {0} Page {1} of crawl {2}'.format(retries, job['page'],
+                                                                          job['api_url'].rsplit('/', maxsplit=1)[1]))
                 job['retries'] = retries + 1
                 job_queue.put_nowait(job)
             else:
-                logging.error('Max retries exceeded for page {0}'.
-                              format(job['page']))
+                logging.error('Max retries exceeded for page {0} for crawl {1}'.
+                              format(job['page'], job['api_url'].rsplit('/', maxsplit=1)[1]))
 
 
 def run_workers(num_workers, jobs, shuffle):
@@ -348,7 +349,7 @@ def get_args():
     parser.add_argument('--timeout', default=30, type=int,
                         help='HTTP read timeout before retry')
 
-    parser.add_argument('--max-retries', default=5, type=int,
+    parser.add_argument('--max-retries', default=10, type=int,
                         help='Number of retry attempts')
 
     parser.add_argument('-v', '--verbose', action='store_true',
