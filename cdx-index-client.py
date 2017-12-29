@@ -13,6 +13,7 @@ import urllib.error
 import signal
 import random
 import os
+import time
 from simplejson.scanner import JSONDecodeError
 
 import logging
@@ -23,6 +24,10 @@ from bs4 import BeautifulSoup
 DEF_API_BASE = 'http://index.commoncrawl.org/'
 
 
+class IndexDownloadError(Exception):
+    pass
+
+
 def get_index_urls(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, "lxml")
@@ -30,7 +35,7 @@ def get_index_urls(url):
             for a in soup.select("a") if a.attrs.get("href").startswith("/CC-MAIN-")]
 
 
-def get_num_pages(api_url, url, page_size=None):
+def get_num_pages(api_url, url, max_retries, timeout, page_size=None):
     """ Use the showNumPages query
     to get the number of pages in the result set
     """
@@ -44,20 +49,29 @@ def get_num_pages(api_url, url, page_size=None):
 
     # Get the result
     session = requests.Session()
-    r = session.get(api_url + '?' + query)
-    try:
-        pages_info = r.json()
-    except JSONDecodeError:
-        logging.info(str(r))
-        raise
+    r = None
+    for curr_try in range(max_retries):
+        r = session.get(api_url + '?' + query)
+        if r.status_code == 502:
+            logging.error('Retrying {0} page number of crawl {1}'.format(curr_try, url.rsplit('/', maxsplit=1)[1]))
+            time.sleep(timeout)
 
-    if isinstance(pages_info, dict):
-        return pages_info['pages']
-    elif isinstance(pages_info, int):
-        return pages_info
+    if r is not None and r.status_code != 502:
+        try:
+            pages_info = r.json()
+        except JSONDecodeError:
+            logging.info(str(r))
+            raise
+
+        if isinstance(pages_info, dict):
+            return pages_info['pages']
+        elif isinstance(pages_info, int):
+            return pages_info
+        else:
+            raise IndexDownloadError('Num pages query returned invalid data: ' + r.text)
     else:
-        msg = 'Num pages query returned invalid data: ' + r.text
-        raise Exception(msg)
+        logging.error('Max retries exceeded for page any for crawl {1}'.format(max_retries,
+                                                                               url.rsplit('/', maxsplit=1)[1]))
 
 
 def fetch_result_page(job_params):
@@ -229,7 +243,7 @@ def read_index(r, prefix=None):
     logging.info('Getting Index From ' + api_url)
 
     logging.debug('Getting Num Pages...')
-    num_pages = get_num_pages(api_url, r.url, r.page_size)
+    num_pages = get_num_pages(api_url, r.url, r.max_retries, r.timeout, r.page_size)
 
     # Num Pages Only Query
     if r.show_num_pages:
