@@ -123,8 +123,8 @@ def fetch_result_page(job_params):
 
     # Get the result
     session = requests.Session()
-    r = session.get(api_url + '?' + query, headers=req_headers,
-                    stream=True, timeout=timeout)
+    time.sleep(1)  # Sleep a bit to prevent ddos and maybe cause less retries...
+    r = session.get(api_url + '?' + query, headers=req_headers, stream=True, timeout=timeout)
 
     if r.status_code == 404:
         logging.error('No Results for for this query')
