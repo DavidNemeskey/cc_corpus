@@ -17,7 +17,8 @@ This repository also contains the fixed version of [cdx-index-client](https://gi
 
 ## Examples
     # Dowload index for specfic condition
-    ./get_indexfiles.sh CONDITION OUTPUT_DIR
+    ./get_indexfiles.sh CONDITION OUTPUT_DIR LOG_FILE MAX_FULL_RETRY
+    # e.g. ./get_indexfiles.sh '*.hu' cc_index get_index.log 10
     # Download pages for index to pages dir
     ./download_pages.py -b 'Hungarian' -o out -i *.gz
     # or
