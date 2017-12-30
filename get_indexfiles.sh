@@ -28,4 +28,9 @@ while [ ${i} -le $4 ] && grep "Max retries" -q "$3.$i"; do
     }
     i=$(($i+1))
 done
-echo "Successfully finnished after $i iterations " >&2
+
+if [ ${i} -lt $4 ]; then
+    echo "Successfully finnished after $i iterations!" >&2
+else
+    echo "Finnished after ${i} of $4 iterations please check if everything is all right!" >&2
+fi

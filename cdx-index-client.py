@@ -14,6 +14,7 @@ import signal
 import random
 import os
 import time
+from random import randint
 from simplejson.scanner import JSONDecodeError
 
 import logging
@@ -123,7 +124,7 @@ def fetch_result_page(job_params):
 
     # Get the result
     session = requests.Session()
-    time.sleep(1)  # Sleep a bit to prevent ddos and maybe cause less retries...
+    time.sleep(randint(0, 9))  # Sleep a bit to prevent ddos and maybe cause less retries...
     r = session.get(api_url + '?' + query, headers=req_headers, stream=True, timeout=timeout)
 
     if r.status_code == 404:
@@ -292,15 +293,11 @@ def read_index(r, prefix=None):
         return
 
     # set num workers based on proesses
-    if not r.processes:
-        try:
-            num_workers = cpu_count() * 2
-        except NotImplementedError:
-            num_workers = 4
-    else:
-        num_workers = r.processes
-
-    num_workers = min(num_workers, num_pages)
+    try:
+        num_workers = cpu_count() * 2
+    except NotImplementedError:
+        num_workers = 4
+    num_workers = min(r.processes, num_workers, num_pages)
 
     # generate page jobs
     job_list = list(map(get_page_job, page_list))
@@ -330,8 +327,8 @@ def get_args():
     parser.add_argument('-n', '--show-num-pages', action='store_true',
                         help='Show Number of Pages only and exit')
 
-    parser.add_argument('-p', '--processes', type=int,
-                        help='Number of worker processes to use')
+    parser.add_argument('-p', '--processes', type=int, default=4,
+                        help='Number of worker processes to use (max is the num of cores)')
 
     parser.add_argument('--fl',
                         help=field_list_help)
