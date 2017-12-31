@@ -302,8 +302,10 @@ def read_index(r, prefix=None):
     else:
         output_prefix = r.output_prefix
 
-    if prefix:
-        output_prefix += prefix
+    if prefix is None:
+        prefix = (api_url.split('/')[-1])[0:-6] + '-'
+
+    output_prefix += prefix
 
     def get_page_job(page):
         job = {'api_url': api_url, 'url': r.url, 'page': page, 'num_pages': num_pages, 'output_prefix': output_prefix,

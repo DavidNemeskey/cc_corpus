@@ -8,7 +8,7 @@ With this tool you can query the CommonCrawl index and download pages to the loc
 It optionally uses [JusText](http://corpus.tools/wiki/Justext) to remove boilerplate content and only keep real text.
 Using this tool one can create raw text corpora from web (CommonCrawl) easily.
 
-This repository also contains the fixed version of [cdx-index-client](https://github.com/ikreymer/cdx-index-client/tree/1ae1301ae4fb8416f10bed97d4c7c96ba5ab4dc7).
+This repository also contains a massively fixed and overhauled version of [cdx-index-client](https://github.com/ikreymer/cdx-index-client/tree/1ae1301ae4fb8416f10bed97d4c7c96ba5ab4dc7).
 
 ## Install
     
@@ -20,8 +20,8 @@ This repository also contains the fixed version of [cdx-index-client](https://gi
     ./get_indexfiles.sh CONDITION OUTPUT_DIR LOG_FILE MAX_FULL_RETRY
     # e.g. ./get_indexfiles.sh '*.hu' cc_index get_index.log 10
     # Download pages for index to pages dir
-    ./download_pages.py -b 'Hungarian' -o out -i *.gz
-    # or
+    ./download_pages.py -b 'Hungarian' -o out -i 'cc_index/*.gz'
+    # or (with optionally GNU parallel)
     zgrep "." *.gz | sed 's/:/ /' | ./download_pages.py -b 'Hungarian' -o out -s
 
 ## Licence
