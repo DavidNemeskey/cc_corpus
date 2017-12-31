@@ -74,12 +74,14 @@ def setup_logging(log_dir):
 
 
 def skip_action(warc1, warc2, name, entry_str):
-    out = '\r\n\r\n'.join((warc1, warc2)).replace('\r\n', '\t')
+    out = '\r\n\r\n'.join((warc1, warc2)).replace('\n', '\t')
     logging.warning('Skipping({0}):\t\t{1}\t\t{2}'.format(name, entry_str, out))
 
 
 def boilerplate_remove(inp_text, stopwordlist, entry_str):
     warc1, warc2, text = inp_text.split(b'\r\n\r\n', 2)
+    warc1 = warc1.decode('UTF-8').replace('\r\n', '\n')
+    warc2 = warc2.decode('UTF-8').replace('\r\n', '\n')
     length = len(text)
     if length <= 13:  # Threshold minimum: '<html></html>' is 13 long
         skip_action(warc1, warc2, 'LengthError({0})'.format(length), entry_str)
@@ -104,8 +106,7 @@ def boilerplate_remove(inp_text, stopwordlist, entry_str):
     return '<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" offset="{4}" length="{5}" response="{6}"' \
            ' mime-type="{7}">\n<meta>\n<request>\n{8}\n</request>\n' \
            '<response>\n{9}\n</response>\n</meta>\n{10}\n</doc>\n\n\n'.\
-        format(domain, filename, url, warc_file, offset_str, length_str, response, mime_type,
-               warc1.decode('UTF-8').replace('\r\n', '\n'), warc2.decode('UTF-8').replace('\r\n', '\n'),
+        format(domain, filename, url, warc_file, offset_str, length_str, response, mime_type, warc1, warc2,
                text_removed).encode('UTF-8')
 
 
