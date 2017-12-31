@@ -104,7 +104,8 @@ def boilerplate_remove(inp_text, stopwordlist, entry_str):
     return '<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" offset="{4}" length="{5}" response="{6}"' \
            ' mime-type="{7}">\n<meta>\n<request>\n{8}\n</request>\n' \
            '<response>\n{9}\n</response>\n</meta>\n{10}\n</doc>\n\n\n'.\
-        format(domain, filename, url, warc_file, offset_str, length_str, response, mime_type, warc1, warc2,
+        format(domain, filename, url, warc_file, offset_str, length_str, response, mime_type,
+               warc1.decode('UTF-8').replace('\r\n', '\n'), warc2.decode('UTF-8').replace('\r\n', '\n'),
                text_removed).encode('UTF-8')
 
 
@@ -247,9 +248,8 @@ def filter_stream(stream, out_dir, conn, retries):
 
 
 def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_info):
-    # sorted by filename and domain, and grouped by filename
-    for batch_name, group in itertools.groupby(sorted(filter_stream(stream, out_dir, conn, retries),
-                                                      key=lambda x: x[0:1]), key=lambda x: x[0]):
+    # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to be grouped by filename
+    for batch_name, group in itertools.groupby(filter_stream(stream, out_dir, conn, retries), key=lambda x: x[0]):
         if len(rotate_info) > 0:
             write_file = RotatedGzip(out_dir, batch_name, *rotate_info).write
         else:
