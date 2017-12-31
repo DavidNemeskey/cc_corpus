@@ -129,7 +129,7 @@ class RotatedGzip:
     def __init__(self, out_d, batch_name, chunk_size, name, padding, ext):
         self.chunk_size = chunk_size
         if name is None:
-            logging.warning("No output filename specified using batch name: {0}".format(batch_name))
+            logging.warning('No output filename specified using batch name: {0}'.format(batch_name))
             name = batch_name
         mkdir_p(os.path.abspath(out_d))
         self.out_dir = out_d
@@ -179,14 +179,14 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
             gzip_text = s3.get_object(Bucket='commoncrawl', Key=warc_file_name, Range=byte_range)['Body'].read()
         except (ClientError, ReadTimeoutError, EndpointConnectionError) as ex:
             if hasattr(ex, 'response') and ex.response['Error']['Code'] == 'NoSuchKey':
-                logging.warning("NoSuchKey: {0}".format(entry_str))
+                logging.warning('NoSuchKey: {0}'.format(entry_str))
                 retry_left = 0  # Skip later probes
             # ReadTimeoutError has no property response
             elif hasattr(ex, 'response') and ex.response['Error']['Code'] == 'InternalError' or \
                     ex.__class__.__name__ in {'ReadTimeoutError', 'EndpointConnectionError'}:
-                logging.warning("InternalError({0}): {1}".format(ex, entry_str))
+                logging.warning('InternalError({0}): {1}'.format(ex, entry_str))
             else:  # This shouldn't happen...
-                logging.warning("Other Error({0}): {1}".format(ex, entry_str))
+                logging.warning('Other Error({0}): {1}'.format(ex, entry_str))
                 retry_left = 0  # Skip later probes
             continue  # Skip decompression test
 
@@ -208,11 +208,11 @@ def filter_stream(stream, out_dir, conn, retries):
     for num, line in enumerate(stream):
         line = line.strip()
         filename, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', 6)
-        if response != "200":
-            logging.warning("Skipping entry because response is not 200 ({0}) {1}".format(num, response))
+        if response != '200':
+            logging.warning('Skipping entry because response is not 200 ({0}) {1}'.format(num, response))
             continue
         if url.endswith('/robots.txt'):
-            logging.debug("Skipping robots.txt URL {0}".format(url))
+            logging.debug('Skipping robots.txt URL {0}'.format(url))
             continue
         mime_type = mime_type.replace(';', ' ').replace(',', ' ').replace('\\"', '').replace('"', '').split(None, 1)[0]
         if mime_type not in {'*/*', 'all', 'aplication/pdf', 'aplication/valami', 'application/atom+xml',
@@ -224,12 +224,12 @@ def filter_stream(stream, out_dir, conn, retries):
                              'text/htm', 'texthtml', 'text/HTML', 'Text/html', 'TEXT/HTML', 'text/html', 'text/rss+xml',
                              'text/text', 'text/txt', 'text/x-httpd-php', 'text/xml', 'txt/html', 'unk',
                              'unknown/unknown', 'x-unknown/unknown'}:
-            logging.warning("Skipping entry because response mime-type not in list ({0}) {1}".format(num, mime_type))
+            logging.warning('Skipping entry because response mime-type not in list ({0}) {1}'.format(num, mime_type))
             continue
         filename_str = os.path.basename(filename.replace('.gz', ''))
         if num % 100 == 0:
-            logging.warning("Downloading URL ({0}) {1}".format(num, url))
-        logging.debug("Downloading URL ({0}) {1}".format(num, url))  # Print every url in debug mode
+            logging.warning('Downloading URL ({0}) {1}'.format(num, url))
+        logging.debug('Downloading URL ({0}) {1}'.format(num, url))  # Print every url in debug mode
         m = domain_re.match(url)
         if m:
             domain = replace_re.sub('', m.group(3))
@@ -263,7 +263,7 @@ def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_in
 
 
 def process_index_gz_file(conn, filename, out_dir, remove_boilerplate, num_retries, rotate_det):
-    logging.warning("Starting batch {0}".format(filename))
+    logging.warning('Starting batch {0}'.format(filename))
     filename_str = filename.replace('.gz', '')
     with gzip.open(filename) as inpfh:
         process_stream(conn, (' '.join((filename_str, line.decode('UTF-8'))) for line in inpfh),
@@ -357,7 +357,7 @@ if __name__ == '__main__':
         session = boto3.session.Session()
         # Start num_of_threads many boto session to process a gzip file with worker
         for i in range(num_of_threads):
-            logging.warning("Creating thread no. {0}".format(i))
+            logging.warning('Creating thread no. {0}'.format(i))
             c = session.client('s3', config=Config(signature_version=UNSIGNED))
             t = threading.Thread(target=worker, args=(c, output_dir, stoplist,))
             t.daemon = True

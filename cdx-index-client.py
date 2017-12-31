@@ -6,7 +6,6 @@ from queue import Empty
 from multiprocessing import Process, Queue, Value, cpu_count
 
 import requests
-import shutil
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -14,6 +13,7 @@ import signal
 import random
 import os
 import time
+import gzip
 from random import randint
 from simplejson.scanner import JSONDecodeError
 
@@ -72,7 +72,7 @@ def get_num_pages(api_url, url, max_retries, timeout, page_size=None):
             raise IndexDownloadError('Num pages query returned invalid data: ' + r.text)
     else:
         logging.error('Max retries exceeded for page any for crawl {1}'.format(max_retries,
-                                                                               url.rsplit('/', maxsplit=1)[1]))
+                                                                               api_url.rsplit('/', maxsplit=1)[1]))
 
 
 def fetch_result_page(job_params):
@@ -97,7 +97,11 @@ def fetch_result_page(job_params):
         query['output'] = 'json'
 
     if job_params.get('fl'):
-        query['fl'] = job_params['fl']
+        fields = job_params['fl']
+        # Quirky collections has no status and mime field... raise HTTP 400
+        if api_url.rsplit('/', maxsplit=1)[1] in {'CC-MAIN-2015-11-index', 'CC-MAIN-2015-06-index'}:
+            fields = ','.join((field for field in fields.split(',') if field not in {'status', 'mime'}))
+        query['fl'] = fields
 
     if job_params.get('page_size'):
         query['pageSize'] = job_params['page_size']
@@ -124,7 +128,7 @@ def fetch_result_page(job_params):
 
     # Get the result
     session = requests.Session()
-    time.sleep(randint(0, 9))  # Sleep a bit to prevent ddos and maybe cause less retries...
+    time.sleep(randint(0, 5))  # Sleep a bit to prevent ddos and maybe cause less retries...
     r = session.get(api_url + '?' + query, headers=req_headers, stream=True, timeout=timeout)
 
     if r.status_code == 404:
@@ -143,16 +147,22 @@ def fetch_result_page(job_params):
             os.makedirs(dir_)
         filename = os.path.join(dir_, filename)
 
-    if not gzipped:
-        with open(filename, 'w+b') as fh:
-            for chunk in r.iter_content(1024):
-                fh.write(chunk)
+    # Quirky collections has no status and mime field...
+    if api_url.rsplit('/', maxsplit=1)[1] in {'CC-MAIN-2015-11-index', 'CC-MAIN-2015-06-index'}:
+        response_iterator = ('{0} {1} {2}\n'.format(line, '200', 'all').encode('UTF-8')
+                             for line in r.iter_lines(decode_unicode=True))
     else:
-        if r.headers.get('content-encoding') == 'gzip':
-            filename += '.gz'
+        response_iterator = r.iter_content(1024)
 
-        with open(filename, 'w+b') as fh:
-            shutil.copyfileobj(r.raw, fh)
+    if not gzipped:
+        fh = open(filename, 'w+b')
+    else:
+        filename += '.gz'
+        fh = gzip.open(filename, 'w+b')
+
+    for chunk in response_iterator:
+        fh.write(chunk)
+    fh.close()
 
     logging.debug('Done with "{0}"'.format(filename))
 
@@ -179,6 +189,9 @@ def do_work(job_queue, counter=None):
 
         except KeyboardInterrupt:
             break
+
+        except urllib.error.HTTPError:  # Some sneaky communication error. Better raise than sorry...
+            raise
 
         except Exception:
             if not job:
@@ -327,8 +340,8 @@ def get_args():
     parser.add_argument('-n', '--show-num-pages', action='store_true',
                         help='Show Number of Pages only and exit')
 
-    parser.add_argument('-p', '--processes', type=int, default=4,
-                        help='Number of worker processes to use (max is the num of cores)')
+    parser.add_argument('-p', '--processes', type=int, default=8,
+                        help='Number of worker processes to use (max is the num of cores, default: 8)')
 
     parser.add_argument('--fl',
                         help=field_list_help)
