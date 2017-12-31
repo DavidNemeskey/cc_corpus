@@ -29,6 +29,23 @@ class IndexDownloadError(Exception):
     pass
 
 
+def process_quirky_line(line, fields):
+    fields = fields.split(',')
+    line = line.split(' ')
+    new_line = []
+    i = 0
+    for field in fields:
+        if field == 'status':
+            new_line.append('200')
+        elif field == 'mime':
+            new_line.append('all')
+        else:
+            new_line.append(line[i])
+            i += 1
+
+    return '{0}\n'.format(' '.join(new_line)).encode('UTF-8')
+
+
 def get_index_urls(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, "lxml")
@@ -148,8 +165,9 @@ def fetch_result_page(job_params):
         filename = os.path.join(dir_, filename)
 
     # Quirky collections has no status and mime field...
-    if api_url.rsplit('/', maxsplit=1)[1] in {'CC-MAIN-2015-11-index', 'CC-MAIN-2015-06-index'}:
-        response_iterator = ('{0} {1} {2}\n'.format(line, '200', 'all').encode('UTF-8')
+    if api_url.rsplit('/', maxsplit=1)[1] in {'CC-MAIN-2015-11-index', 'CC-MAIN-2015-06-index'} and \
+            ('status' in job_params['fl'] or 'mime' in job_params['fl']):
+        response_iterator = (process_quirky_line(line, job_params['fl'])
                              for line in r.iter_lines(decode_unicode=True))
     else:
         response_iterator = r.iter_content(1024)
