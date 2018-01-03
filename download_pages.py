@@ -202,14 +202,16 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
     return decompressed_text
 
 
-def filter_stream(stream, out_dir, conn, retries):
+def preproc_stream(stream):
+    # Do preprocess now (filter everything and compute domain)
     # Regexes
-    domain_re = re.compile('^https?://((www|ww2|ww3|www2|www3)[.])?([^/]+)(:[0-9]+)?/.*')
+    domain_re = re.compile('^https?://((www|ww2|ww3|www2|www3)[.])?([^/]+)(:[0-9]+)?/?.*')
     replace_re = re.compile('[?].*')
 
     for num, line in enumerate(stream):
         line = line.strip()
         filename, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', 6)
+
         if response != '200':
             logging.warning('Skipping entry because response is not 200 ({0}) {1}'.format(num, response))
             continue
@@ -228,29 +230,48 @@ def filter_stream(stream, out_dir, conn, retries):
                              'unknown/unknown', 'x-unknown/unknown'}:
             logging.warning('Skipping entry because response mime-type not in list ({0}) {1}'.format(num, mime_type))
             continue
-        filename_str = os.path.basename(filename.replace('.gz', ''))
-        if num % 100 == 0:
-            logging.warning('Downloading URL ({0}) {1}'.format(num, url))
-        logging.debug('Downloading URL ({0}) {1}'.format(num, url))  # Print every url in debug mode
+
         m = domain_re.match(url)
         if m:
             domain = replace_re.sub('', m.group(3))
         else:
             domain = 'NONE'
-        out_file = warc_file.replace('/', '_').replace('.warc.gz', '-{0}-{1}.warc.gz'.format(offset_str, length_str))
 
-        out_gz_file_name = os.path.join(out_dir, 'pages', domain, filename_str, out_file)
-        line = ' '.join((filename_str, domain, line))
+        yield num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type
+
+
+def preprocessed_stream(stream):
+    # Already preprocessed (everything is filtered and domain is computed)
+    for num, line in enumerate(stream):
+        line = line.strip()
+        filename, domain, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', 7)
+
+        yield num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type
+
+
+def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
+    for num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type in prefilter_stream(stream):
+        if num % 100 == 0:
+            logging.warning('Downloading URL ({0}) {1}'.format(num, url))
+        logging.debug('Downloading URL ({0}) {1}'.format(num, url))  # Print every url in debug mode
+
+        filename_str = os.path.basename(filename.replace('.gz', ''))
+        line = ' '.join((filename_str, domain, url, warc_file, offset_str, length_str, response, mime_type))
 
         document = download_file(conn, warc_file, int(offset_str), int(length_str), line, retries)
         # None or gzip_text
         if len(document) > 0:
+            out_file = warc_file.replace('/', '_').replace('.warc.gz',
+                                                           '-{0}-{1}.warc.gz'.format(offset_str, length_str))
+            out_gz_file_name = os.path.join(out_dir, 'pages', domain, filename_str, out_file)
             yield filename_str, domain, line, document, out_gz_file_name
 
 
-def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_info):
+def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_info, filter_and_sort_funs):
+    filter_fun, sort_fun = filter_and_sort_funs
     # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to be grouped by filename
-    for batch_name, group in itertools.groupby(filter_stream(stream, out_dir, conn, retries), key=lambda x: x[0]):
+    for batch_name, group in itertools.groupby(sort_fun(filter_stream(stream, out_dir, conn, retries, filter_fun)),
+                                               key=lambda x: x[0]):
         if len(rotate_info) > 0:
             write_file = RotatedGzip(out_dir, batch_name, *rotate_info).write
         else:
@@ -263,12 +284,12 @@ def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_in
             write_file(document, out_file_name)
 
 
-def process_index_gz_file(conn, filename, out_dir, remove_boilerplate, num_retries, rotate_det):
+def process_index_gz_file(conn, filename, out_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort):
     logging.warning('Starting batch {0}'.format(filename))
     filename_str = filename.replace('.gz', '')
     with gzip.open(filename) as inpfh:
         process_stream(conn, (' '.join((filename_str, line.decode('UTF-8'))) for line in inpfh),
-                       out_dir, remove_boilerplate, num_retries, rotate_det)
+                       out_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort)
 
 
 # -------------------------------------------------END Download-------------------------------------------------
@@ -293,6 +314,8 @@ def get_args():
                         help='Padding for numbering (default: 4)')
     parser.add_argument('-P', '--perdoc', action='store_true',
                         help='One file per document grouped by the TLD (default: no)')
+    parser.add_argument('--preprocessed', action='store_true',
+                        help='Index filtered, and domain computed fro url (default: no)')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-s', '--single-threaded', action='store_true',
@@ -326,6 +349,13 @@ if __name__ == '__main__':
     else:
         rotate_details = ()
 
+    if args.preprocessed:
+        filter_and_sort_opts = (preproc_stream,
+                                lambda x: sorted(x, key=lambda y: y[0:1]))
+    else:
+        filter_and_sort_opts = (preprocessed_stream,
+                                lambda x: x)
+
     stoplist = None
     if remove_boilerplate_content:
         try:
@@ -341,7 +371,8 @@ if __name__ == '__main__':
         session = boto3.session.Session()
         c = session.client('s3', config=Config(signature_version=UNSIGNED))
 
-        process_stream(c, sys.stdin, output_dir, (remove_boilerplate_content, stoplist), retry, rotate_details)
+        process_stream(c, sys.stdin, output_dir, (remove_boilerplate_content, stoplist), retry, rotate_details,
+                       filter_and_sort_opts)
 
     else:
         num_of_threads = int(multiprocessing.cpu_count() * 3.25)  # Heuristic number...
@@ -351,7 +382,8 @@ if __name__ == '__main__':
         def worker(conn, out_dir, stopwords):
             while True:
                 fn, rem_bp = q.get()
-                process_index_gz_file(conn, fn, out_dir, (rem_bp, stopwords), retry, rotate_details)
+                process_index_gz_file(conn, fn, out_dir, (rem_bp, stopwords), retry, rotate_details,
+                                      filter_and_sort_opts)
                 q.task_done()
 
         # Initate boto3 sessions...
