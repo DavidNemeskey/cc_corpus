@@ -79,7 +79,7 @@ def skip_action(warc1, warc2, name, entry_str):
 
 
 def boilerplate_remove(inp_text, stopwordlist, entry_str):
-    warc1, warc2, text = inp_text.split(b'\r\n\r\n', 2)
+    warc1, warc2, text = inp_text.split(b'\r\n\r\n', maxsplit=2)
     warc1 = warc1.decode('UTF-8').replace('\r\n', '\n')
     warc2 = warc2.decode('UTF-8').replace('\r\n', '\n')
     length = len(text)
@@ -101,7 +101,7 @@ def boilerplate_remove(inp_text, stopwordlist, entry_str):
         skip_action(warc1, warc2, 'JusTextBadError({0})'.format(length), entry_str)
         return None
 
-    _, domain, filename, url, warc_file, offset_str, length_str, response, mime_type = entry_str.split(' ', 8)
+    filename, domain, url, warc_file, offset_str, length_str, response, mime_type = entry_str.split(' ', maxsplit=8)
     filename = filename.replace('.gz', '')
     return '<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" offset="{4}" length="{5}" response="{6}"' \
            ' mime-type="{7}">\n<meta>\n<request>\n{8}\n</request>\n' \
@@ -210,7 +210,7 @@ def preproc_stream(stream):
 
     for num, line in enumerate(stream):
         line = line.strip()
-        filename, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', 6)
+        filename, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', maxsplit=6)
 
         if response != '200':
             logging.warning('Skipping entry because response is not 200 ({0}) {1}'.format(num, response))
@@ -218,7 +218,8 @@ def preproc_stream(stream):
         if url.endswith('/robots.txt'):
             logging.debug('Skipping robots.txt URL {0}'.format(url))
             continue
-        mime_type = mime_type.replace(';', ' ').replace(',', ' ').replace('\\"', '').replace('"', '').split(None, 1)[0]
+        mime_type = mime_type.replace(';', ' ').replace(',', ' ').replace('\\"', '').replace('"', '').\
+            split(maxsplit=1)[0]
         if mime_type not in {'*/*', 'all', 'aplication/pdf', 'aplication/valami', 'application/atom+xml',
                              'application/pls+xml', 'application/rss+xml', 'application/smil+xml', 'application/text',
                              'application/unknown', 'application/valami', 'application/x-dtbresource+xml',
@@ -244,7 +245,7 @@ def preprocessed_stream(stream):
     # Already preprocessed (everything is filtered and domain is computed)
     for num, line in enumerate(stream):
         line = line.strip()
-        filename, domain, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', 7)
+        filename, domain, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', maxsplit=7)
 
         yield num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type
 
@@ -349,7 +350,7 @@ if __name__ == '__main__':
     else:
         rotate_details = ()
 
-    if args.preprocessed:
+    if not args.preprocessed:
         filter_and_sort_opts = (preproc_stream,
                                 lambda x: sorted(x, key=lambda y: y[0:1]))
     else:
