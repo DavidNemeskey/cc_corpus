@@ -88,8 +88,8 @@ def boilerplate_remove(inp_text, stopwordlist, entry_str):
         return None
     try:
         paragraphs = justext.justext(text, stopwordlist)
-    # TypeError JusText bug, AssertionError lxml bug...
-    except (ParserError, UnicodeDecodeError, TypeError, AssertionError) as err:
+    # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
+    except (ParserError, UnicodeDecodeError, TypeError, AssertionError, ValueError) as err:
         # Do not distinguish between the different errors
         skip_action(warc1, warc2, err.__class__.__name__ + str(length), entry_str)
         return None
@@ -196,7 +196,7 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
             # https://stackoverflow.com/a/2695575
             decompressed_text = zlib.decompress(gzip_text, zlib.MAX_WBITS | 32)
         except zlib.error:
-            logging.warning('Decompression error is occured:\t\t{0}\t\t'.format(entry_str))
+            logging.warning('Decompression error is occured ({0}):\t\t{1}\t\t'.format(retry_left, entry_str))
             decompressed_text = b''
 
     return decompressed_text
