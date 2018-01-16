@@ -1,0 +1,138 @@
+domain-hu-CC-MAIN-2017-34-000:
+1link.hu http://www.1link.hu/tag/ingatlan/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 463581043 9246 200 text/html
+domain-hu-CC-MAIN-2017-34-014:
+akcion.hu http://akcion.hu/1821-rendezvenyszervezo-tanfolyam-oklevellel crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 14645062 15649 200 text/html
+akcios-ujsag.hu https://akcios-ujsag.hu/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 742628037 25404 200 text/html
+akesz.hu http://akesz.hu/2016_02HN crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 14674324 2438 200 text/html
+domain-hu-CC-MAIN-2017-34-018:
+almafaapartmanhaz.hu http://almafaapartmanhaz.hu/komfort-studio-apartman/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 17494302 14953 200 text/html
+domain-hu-CC-MAIN-2017-34-019:
+amikisvarosunk.hu http://amikisvarosunk.hu/cikk/budakeszi-allattortenetek-4-deneverek-haloszobaban-video crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 19459427 9610 200 text/html
+amikisvarosunk.hu http://amikisvarosunk.hu/galeria/budakeszi-portrek-eljusson-gyerek-az-ismeretekhez-es-kozben-elvezze-hellner-kata-egy-eve-mar crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 19469832 8277 200 text/html
+domain-hu-CC-MAIN-2017-34-030:
+noi-dzseki-kabat.arukereso.hu https://noi-dzseki-kabat.arukereso.hu/bon-prix/mubor-dzseki-915737-p259235697/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 811201825 20468 200 text/html
+domain-hu-CC-MAIN-2017-34-076:
+kultura-es-kritika.blog.hu http://kultura-es-kritika.blog.hu/tags/forr%C3%A1s_gal%C3%A9ria?token=3557d7c957dbc16f1d7008f87cc49ca6 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 235890551 27148 200 text/html
+laszlozoltan.blog.hu http://laszlozoltan.blog.hu/2013/01/10/nagate?token=5f16446fcdf0c030dd5b8d1b20cf19a4 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 239783994 17430 200 text/html
+laszlozoltan.blog.hu http://laszlozoltan.blog.hu/2013/02/15/textreme?token=f61c7176167fb7f1c7eb37addb386a68 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 239802190 17091 200 text/html
+domain-hu-CC-MAIN-2017-34-097:
+naturephotobuilder.blogspot.hu http://naturephotobuilder.blogspot.hu/2012/05/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 303053601 21420 200 text/html
+domain-hu-CC-MAIN-2017-34-107:
+booked.hu http://www.booked.hu/hotels/netherlands/amsterdam/dry-cleaning crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 492474411 35360 200 text/html
+booked.hu http://www.booked.hu/time/roissy-en-france-37773 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 492510497 10747 200 text/html
+domain-hu-CC-MAIN-2017-34-166:
+deszy-konyv.hu http://www.deszy-konyv.hu/2013/07/leiner-laura-szent-johanna-gimi-1-2.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 516132204 62560 200 text/html
+domain-hu-CC-MAIN-2017-34-202:
+lo-nevelde.eoldal.hu http://www.lo-nevelde.eoldal.hu/cikkek/tudtad-/ferrari.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 599237136 7801 200 text/html
+lunalovegood.eoldal.hu http://www.lunalovegood.eoldal.hu/fenykepek/nincs-megadva-rovat/mindenki/199119.jpg.-.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 600657993 2020 200 text/html
+domain-hu-CC-MAIN-2017-34-231:
+furdo-zalakaros.hu http://furdo-zalakaros.hu/hotel-freya/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 163930320 8317 200 text/html
+furdo-zalakaros.hu http://furdo-zalakaros.hu/szolgaltatasok crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 163939336 6754 200 text/html
+domain-hu-CC-MAIN-2017-34-233:
+gabojsza.hu http://www.gabojsza.hu/2013/02/baconos-pores-sous-vide-kelbimbo.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 545852994 28675 200 text/html
+domain-hu-CC-MAIN-2017-34-242:
+gepigeny.hu http://gepigeny.hu/user/lyezus crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 167774239 8765 200 text/html
+domain-hu-CC-MAIN-2017-34-274:
+haon.hu http://www.haon.hu/folytatodott-a-nyilparbaj-debrecenben/3276178 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 557345619 18682 200 text/html
+domain-hu-CC-MAIN-2017-34-328:
+innoportal.hu http://www.innoportal.hu/google-mapen-is-kezelhetok-a-kozmuvezetekek-a-ge-uj-alkalmazasaval crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 572610886 16474 200 text/html
+domain-hu-CC-MAIN-2017-34-329:
+internetpatika.hu https://internetpatika.hu/olcso-muzli-natura-500-g crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 790947609 18424 200 text/html
+lovas.e.internettudakozo.hu http://lovas.e.internettudakozo.hu/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 256473566 32783 200 text/html
+domain-hu-CC-MAIN-2017-34-332:
+uj.irokboltja.hu http://uj.irokboltja.hu/?t=globalsearch&srcwhere=SZERZONEV&srctext=Borb%C3%A9ly+Szil%C3%A1rd crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 438421853 8535 200 text/html
+domain-hu-CC-MAIN-2017-34-339:
+valentin-nap.jatek-online.hu http://valentin-nap.jatek-online.hu/fwg_valentines.php crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 443418117 4853 200 text/html
+domain-hu-CC-MAIN-2017-34-340:
+jegy.hu https://www.jegy.hu/person/bakos-panni-4021 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 919919411 17275 200 text/html
+domain-hu-CC-MAIN-2017-34-353:
+jokortv.hu http://jokortv.hu/hirek/a_vihar_es_a_jegveres_okozza_a_legnagyobb_karokat crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 214628049 4351 200 text/html
+domain-hu-CC-MAIN-2017-34-366:
+kepguru.hu http://kepguru.hu/foto/243083/magyarorszag-budapest?from=cimlapfoto&i=5 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 226271089 4885 200 text/html
+domain-hu-CC-MAIN-2017-34-373:
+kirakat.hu https://www.kirakat.hu/fulhallgato-fejhallgato/Samson-Technologies/SAMSON-Concert-88-Guitar-G--arak-522c76d60f1dafcfbd4bff72e08745a4.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 922728760 28948 200 text/html
+kirakat.hu https://www.kirakat.hu/jatek-puzzle/Ravensburger/Edenkert-puzzle-18000-darabos-arak-08ef8ac9a98eae7bfced822da90c2941.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 922758536 29532 200 text/html
+domain-hu-CC-MAIN-2017-34-385:
+konyvkolcsonzo.hu https://konyvkolcsonzo.hu/spl/141262,8/Megvasarolhato-de-nem-kolcsonozheto-konyvek crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 796382760 31016 200 text/html
+domain-hu-CC-MAIN-2017-34-394:
+lampak.hu https://www.lampak.hu/eglo-93867-led-spotlampa-gemini-1-4xled-5-4w-230v/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 924483307 22777 200 text/html
+domain-hu-CC-MAIN-2017-34-395:
+laptop.hu http://www.laptop.hu/index.php?main=main&page=bolt&itemid=14651&op=details&mode=laptop_uj crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 590456898 42524 200 text/html
+domain-hu-CC-MAIN-2017-34-398:
+leg-technic.hu http://www.leg-technic.hu/epites/677/lego-42056-decool-3368-b-c crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 592395824 12555 200 text/html
+domain-hu-CC-MAIN-2017-34-407:
+lira.hu https://www.lira.hu/index.php/hu/cimke_list/dr-tildy-zoltan crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 926124254 12153 200 text/html
+domain-hu-CC-MAIN-2017-34-408:
+lira.hu https://www.lira.hu/index.php/hu/cimke_list/szabo-laszlo-gy crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 926137144 11841 200 text/html
+domain-hu-CC-MAIN-2017-34-418:
+lumenet.hu https://lumenet.hu/osram-easy-pb-coupler crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 800396739 83610 200 text/html
+lumenet.hu https://lumenet.hu/shop_artforum.php?cikk=043168351782 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 800481067 22577 200 text/html
+lumenet.hu https://lumenet.hu/shop_artforum.php?cikk=4008321624277 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 800504376 22627 200 text/html
+domain-hu-CC-MAIN-2017-34-420:
+nyiregyhaza.lutheran.hu http://nyiregyhaza.lutheran.hu/kepmappak/?type_0=gallery&album_gallery_id_0=17&bwg_previous_album_id_0=2,2&bwg_previous_album_page_number_0=0,0 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 314539962 86211 200 text/html
+domain-hu-CC-MAIN-2017-34-427:
+fesztival.mandiner.hu http://fesztival.mandiner.hu/cikk/20160909_binder_laura_en_mar_akkor_tudtam_hogy_fodrasz_es_enekesno_leszek crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 146883757 16614 200 text/html
+domain-hu-CC-MAIN-2017-34-444:
+mixat.hu http://mixat.hu/index.php/nemet/138-als-austauschschuler-in-osterburken crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 287411077 5543 200 text/html
+domain-hu-CC-MAIN-2017-34-456:
+m.mult-kor.hu http://m.mult-kor.hu/kiderult-ki-volt-leonardo-da-vinci-edesanyja-20170613 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 262439805 8625 200 text/html
+multi-vitamin.hu https://multi-vitamin.hu/Elelmiszerek/Solio-Hidegen-Sajtolt-Mariatovismag-olaj-200ml.html?keyword=m%C3%A1riat%C3%B6vis crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 807893219 15047 200 text/html
+domain-hu-CC-MAIN-2017-34-472:
+muvesz-vilag.hu http://www.muvesz-vilag.hu/film/esemenyek/19753 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 620023468 13425 200 text/html
+domain-hu-CC-MAIN-2017-34-475:
+n-mk.hu http://n-mk.hu/muvelodesi-kozpont/videok/2010--jul--7--nyari-tabor-a-muzeumban crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 299539960 6745 200 text/html
+domain-hu-CC-MAIN-2017-34-494:
+obi.hu https://www.obi.hu/allvanyok/alpe-letras-allvany-2-x-6-foku-munkamagassag-2-50-m/p/3659901 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 938032226 25044 200 text/html
+obi.hu https://www.obi.hu/kefek/lux-sargarezdrotkefe-4-soros/p/5207071 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 938058059 29848 200 text/html
+domain-hu-CC-MAIN-2017-34-504:
+mke.org.hu http://mke.org.hu/sajtoszolgalat.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 287555213 8934 200 text/html
+domain-hu-CC-MAIN-2017-34-510:
+otvenentul.hu http://otvenentul.hu/penzugyek/106226 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 322517751 577 200 text/html
+domain-hu-CC-MAIN-2017-34-519:
+pcx.hu https://www.pcx.hu/brother-hl-l5100dnyj1-nyomtato-173324 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 941640346 10425 200 text/html
+pcx.hu https://www.pcx.hu/canon-cli-571-sarga-patron-619778 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 941651529 10021 200 text/html
+domain-hu-CC-MAIN-2017-34-531:
+plus500.hu https://www.plus500.hu/Instruments/SAN.MC crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 946065933 12552 200 text/html
+domain-hu-CC-MAIN-2017-34-539:
+projektorlampak-eshop.hu http://www.projektorlampak-eshop.hu/hustem-srp-4500-original-module crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 650933686 8491 200 text/html
+domain-hu-CC-MAIN-2017-34-541:
+aok.pte.hu http://aok.pte.hu/hu/galeriak/galeria/575 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 24472422 4556 200 text/html
+domain-hu-CC-MAIN-2017-34-544:
+quickdrink.hu http://www.quickdrink.hu/koktel_lista crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 652943456 8649 200 text/html
+domain-hu-CC-MAIN-2017-34-556:
+regikonyvek.hu https://www.regikonyvek.hu/szerzo/plavecz-nandor crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 951697451 15893 200 text/html
+domain-hu-CC-MAIN-2017-34-559:
+rejtelmek.hu http://www.rejtelmek.hu/app/interface.php?view=v_lemezek&lemez=weores100&APPSID=r6333onichqpc58ae9slbmn3q4 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 655923422 3074 200 text/html
+domain-hu-CC-MAIN-2017-34-589:
+parkfurdo.sostort.hu http://parkfurdo.sostort.hu/hu/kepgaleria/ten-palm-s-pool-bar-berelheto crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 330846082 5769 200 text/html
+domain-hu-CC-MAIN-2017-34-593:
+startlapjatekok.hu http://www.startlapjatekok.hu/jatekok/Magic_Pond_Solitaire/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 680435269 14702 200 text/html
+domain-hu-CC-MAIN-2017-34-610:
+szellemikulturalisorokseg.hu http://szellemikulturalisorokseg.hu/index0.php?name=f52_reprezentativ_lista_japan_kumiodori crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 410373862 6164 200 text/html
+domain-hu-CC-MAIN-2017-34-612:
+szepmuveszeti.hu http://www.szepmuveszeti.hu/adatlap_eng/felalakos_no_hendrick_goudt_14409 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 684955955 6672 200 text/html
+domain-hu-CC-MAIN-2017-34-614:
+szerszamdoboz.hu http://szerszamdoboz.hu/metabo-khe-96-furo-vesokalapacs.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 410380820 41437 200 text/html
+domain-hu-CC-MAIN-2017-34-615:
+szexpartnerindex.hu http://www.szexpartnerindex.hu/SzexPartner/6729?Nev=Szabina38&Telefon=06706673351&Varos=Szeged crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 684963395 19348 200 text/html
+domain-hu-CC-MAIN-2017-34-617:
+forum.szkeptikus.hu http://forum.szkeptikus.hu/viewtopic.php?f=8&t=239&sid=9ea31f82a0d60a8a0d070a316d3007d2 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 156437171 25181 200 text/html
+domain-hu-CC-MAIN-2017-34-625:
+tchibo.hu http://www.tchibo.hu/noi-sal-szurke-p400063056.html crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 686498715 23249 200 text/html
+domain-hu-CC-MAIN-2017-34-626:
+teglas.hu http://teglas.hu/onk_ulesnapok/index/58d3c3348f8cc crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 415246169 8605 200 text/html
+domain-hu-CC-MAIN-2017-34-641:
+trollfesz.hu http://trollfesz.hu/hashtag/0/%C3%A9s crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 433506754 7685 200 text/html
+domain-hu-CC-MAIN-2017-34-656:
+uvegmuvesz.hu http://www.uvegmuvesz.hu/ngg_tag/nepmuveszeti-alkotas/ crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 706912435 15191 200 text/html
+domain-hu-CC-MAIN-2017-34-666:
+shop.vems.hu https://shop.vems.hu/catalog/-c-21.html?osCsid=ea8e5fa19f9947fbed814850af2f7c2f crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 828020217 3780 200 text/html
+domain-hu-CC-MAIN-2017-34-667:
+veszpreminfo.hu http://veszpreminfo.hu/record/sikeres-turisztikai-szezon-veszpremben crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 445015058 12056 200 text/html
+domain-hu-CC-MAIN-2017-34-679:
+hq.webdesign.hu http://hq.webdesign.hu/ajanlatkeres crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 191544123 7401 200 text/html
+domain-hu-CC-MAIN-2017-34-694:
+xporno.hu http://xporno.hu/szexvideo/git%C3%A1r crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 727915167 4176 200 text/html
+xporno.hu http://xporno.hu/szexvideo/KELEMEN%20ANNA crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 727909555 4904 200 text/html
+domain-hu-CC-MAIN-2017-34-707:
+ekszer-ora.zsibvasar.hu http://ekszer-ora.zsibvasar.hu/egyeb/csepp-alaku-lila-strasszos-fulbevalo-1-bp-6412287 crawl-data/CC-MAIN-2017-34/segments/1502886109157.57/warc/CC-MAIN-20170821152953-20170821172953-00527.warc.gz 126512925 10496 200 text/html
