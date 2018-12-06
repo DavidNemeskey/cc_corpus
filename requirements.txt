@@ -5,3 +5,4 @@ lxml
 boto3
 botocore
 justext
+tldextract
