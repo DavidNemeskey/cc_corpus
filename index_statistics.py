@@ -68,7 +68,7 @@ def dict_to_file(d, out_file, percent=False):
         for key, value in sorted(d.items(), key=lambda kv: (-kv[1], kv[0])):
             print('{}\t{}'.format(key, value), end='', file=outf)
             if percent:
-                print('\t{:.3f}'.format(value / all_values), file=outf)
+                print('\t{:.3f}'.format(value / all_values), end='', file=outf)
             print(file=outf)
 
 
