@@ -49,7 +49,9 @@ def one_file_stats(file_name):
     stats = Stats()
     with gzip.open(file_name, 'rt') as inf:
         for line in map(str.strip, inf):
-            url, _, _, length, status, mime = line.split()
+            # After filtering, the line is prepended with the "domain"
+            # I skip that and extract it myself
+            url, _, _, length, status, mime = line.split()[:7][-6:]
             er = tldextract.extract(url)
 
             stats.urls[url] += 1
