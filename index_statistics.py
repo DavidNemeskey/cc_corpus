@@ -32,6 +32,7 @@ class Stats:
     def __init__(self):
         self.urls = Counter()
         self.domains = Counter()
+        self.segments = set()
         self.lengths = 0
         self.statuses = Counter()
         self.mimes = Counter()
@@ -39,6 +40,7 @@ class Stats:
     def __iadd__(self, other):
         self.urls.update(other.urls)
         self.domains.update(other.domains)
+        self.segments |= other.segments
         self.lengths += other.lengths
         self.statuses.update(other.statuses)
         self.mimes.update(other.mimes)
@@ -51,11 +53,12 @@ def one_file_stats(file_name):
         for line in map(str.strip, inf):
             # After filtering, the line is prepended with the "domain"
             # I skip that and extract it myself
-            url, _, _, length, status, mime = line.split()[:7][-6:]
+            url, segment, _, length, status, mime = line.split()[:7][-6:]
             er = tldextract.extract(url)
 
             stats.urls[url] += 1
             stats.domains[er.domain + '.' + er.suffix] += 1
+            stats.segments.add(segment)
             stats.lengths += int(length)
             stats.statuses[status] += 1
             stats.mimes[mime] += 1
@@ -85,6 +88,10 @@ def write_statistics(stats, output_dir, file_prefix=None):
         print('{}\t{}'.format('sum_length', stats.lengths), file=outf)
         print('{}\t{}'.format(
             'avg_length', stats.lengths / sum(stats.domains.values())), file=outf)
+        print('{}\t{}'.format('num_segments', len(stats.segments)), file=outf)
+        print('{}\t{}'.format('avg_docs_per_segment',
+                              sum(stats.domains.values()) / len(stats.segments)),
+              file=outf)
 
 
 def main():
