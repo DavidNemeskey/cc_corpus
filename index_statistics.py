@@ -80,6 +80,7 @@ def write_statistics(stats, output_dir, file_prefix=None):
     dict_to_file(stats.mimes, op.join(output_dir, 'mimes.tsv'), True)
     with open('stats.tsv', 'wt') as outf:
         print('{}\t{}'.format('num_docs', sum(stats.domains.values())), file=outf)
+        print('{}\t{}'.format('sum_length', stats.lengths, file=outf))
         print('{}\t{}'.format(
             'avg_length', stats.lengths / sum(stats.domains.values()), file=outf))
 
