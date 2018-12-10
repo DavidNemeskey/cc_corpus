@@ -81,7 +81,7 @@ def write_statistics(stats, output_dir, file_prefix=None):
     with open('stats.tsv', 'wt') as outf:
         print('{}\t{}'.format('num_docs', sum(stats.domains.values())), file=outf)
         print('{}\t{}'.format(
-            'avg_length', stats.lengths / sum(stats.domains.values()), file=outf)
+            'avg_length', stats.lengths / sum(stats.domains.values()), file=outf))
 
 
 def main():
