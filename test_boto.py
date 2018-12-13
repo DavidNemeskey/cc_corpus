@@ -94,7 +94,7 @@ def download_by_segments(client, group, func_name):
     print('{}: {}, {} segments, '.format(func_name, group[0].warc, len(group)) +
           '{} bytes, {} retries, {} errors: '.format(num_bytes, retries, errors) +
           '{:.2f} seconds => '.format(seconds) +
-          '{:.2f} seconds per segment, '.format(len(group) / seconds) +
+          '{:.2f} segments per second, '.format(len(group) / seconds) +
           '{:.2f} bytes per second.'.format(num_bytes / seconds))
 
 
@@ -124,7 +124,7 @@ def download_full(client, group):
                     text_to_skip = body.read(record.offset - bytes_read)
                     bytes_read += len(text_to_skip)
                 end = record.offset + record.length
-                gzip_text = ''
+                gzip_text = b''
                 while end > bytes_read:
                     gzip_read = body.read(end - bytes_read)
                     gzip_text += gzip_read
@@ -133,20 +133,20 @@ def download_full(client, group):
                     # https://stackoverflow.com/a/2695575
                     decompressed_text = zlib.decompress(gzip_text, zlib.MAX_WBITS | 32)
                 except zlib.error:
-                    logging.warning('Decompression error is occured ({0}):\t\t{1}\t\t'.format(retry_left, entry_str))
+                    logging.warning('Decompression error is occured ({0}):\t\t{1}\t\t'.format(retries, record))
                     decompressed_text = b''
         except (ClientError, ReadTimeoutError, EndpointConnectionError) as ex:
             errors += 1
             if hasattr(ex, 'response') and ex.response['Error']['Code'] == 'NoSuchKey':
-                logging.warning('NoSuchKey: {0}'.format(entry_str))
+                logging.warning('NoSuchKey: {0}'.format(record))
                 break
             # ReadTimeoutError has no property response
             elif hasattr(ex, 'response') and ex.response['Error']['Code'] == 'InternalError' or \
                     ex.__class__.__name__ in {'ReadTimeoutError', 'EndpointConnectionError'}:
-                logging.warning('InternalError({0}): {1}'.format(ex, entry_str))
-                num_retries += 1
+                logging.warning('InternalError({0}): {1}'.format(ex, record))
+                retries += 1
             else:  # This shouldn't happen...
-                logging.warning('Other Error({0}): {1}'.format(ex, entry_str))
+                logging.warning('Other Error({0}): {1}'.format(ex, record))
                 break
 
     seconds = time.time() - start_time
@@ -154,8 +154,8 @@ def download_full(client, group):
     print('download_full: {}, {} segments, '.format(group[0].warc, len(group)) +
           '{} bytes, {} retries, {} errors: '.format(num_bytes, retries, errors) +
           '{:.2f} seconds => '.format(seconds) +
-          '{:.2f} seconds per segment, '.format(len(group) / seconds) +
-          '{:.2f} seconds per byte.'.format(num_bytes / seconds))
+          '{:.2f} segments per second, '.format(len(group) / seconds) +
+          '{:.2f} bytes per second.'.format(num_bytes / seconds))
 
 
 def main():
@@ -171,12 +171,10 @@ def main():
 
         for i, group in enumerate(groups):
             print(i, group[0].warc, len(group))
-            if i % 3 == 0:
+            if i % 2 == 0:
                 download_in_order(c, group)
-            elif i % 3 == 1:
-                download_shuffled(c, group)
             else:
-                download_full(c, group)
+                download_shuffled(c, group)
 
 
 if __name__ == '__main__':
