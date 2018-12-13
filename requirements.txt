@@ -1,5 +1,6 @@
 requests
 beautifulsoup4
+multiprocessing-logging
 simplejson
 lxml
 boto3
