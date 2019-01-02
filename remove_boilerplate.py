@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from collections import namedtuple
-import fnmatch
+from fnmatch import fnmatch
 import gzip
 import io
 import os
@@ -74,11 +74,12 @@ class IndexWarcReader:
         """Returns all WARC files that correspond to an index file."""
         pattern = op.splitext(index_file)[0] + '_*.warc*'
         return [op.join(self.warc_dir, f)
-                for f in os.listdir(warc_dir) if fnmatch(f, pattern)]
+                for f in os.listdir(self.warc_dir) if fnmatch(f, pattern)]
 
 
 def main():
-    pass
+    # reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52')
+    # reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
 
 
 if __name__ == '__main__':
