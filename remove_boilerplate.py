@@ -43,7 +43,7 @@ class IndexWarcReader:
         if not op.isdir(output_dir):
             os.makedirs(output_dir)
 
-    def read(self, index_file, func):
+    def read(self, index_file):
         """
         Enumerates the index and WARC records in the specified index file and
         the matching WARC files. Calls the specified function with the two
@@ -66,7 +66,7 @@ class IndexWarcReader:
               'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n' \
               '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n'
               '</response>\n</meta>\n{10}\n</doc>\n\n\n'.format(
-                  index.domain, index.index, index.url, index.warc_file,
+                  index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
                   # warc1, warc2, text_removed).encode('UTF-8'),
                   'a', 'b', 'c').encode('UTF-8'),
@@ -103,7 +103,7 @@ class IndexWarcReader:
 
 
 def main():
-    reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52')
+    reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52', 'cc_test_out')
     reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
 
 
