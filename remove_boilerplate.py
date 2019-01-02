@@ -44,14 +44,13 @@ class IndexWarcReader:
         """
         index_iter = self.index_lines(index_file)
         warc_iter = self.warc_records(index_file)
-        for i, index_tuple in enumerate(index_iter):
-            print(index_tuple)
-            if i == 4:
-                break
-        for i, record in enumerate(warc_iter):
-            print(record['WARC-Target-URI'])
-            if i == 4:
-                break
+        for i, warc_record in enumerate(warc_iter):
+            url = warc_record['WARC-Target-URI']
+            for index in index_iter:
+                if index.url == url:
+                    print(url)
+            else:
+                raise ValueError('URL {} was not found in index'.format(url))
 
     def index_lines(self, index_file):
         """Enumerates the lines of the index file into IndexTuples."""
@@ -73,13 +72,13 @@ class IndexWarcReader:
     def warc_files_for_index(self, index_file):
         """Returns all WARC files that correspond to an index file."""
         pattern = op.splitext(index_file)[0] + '_*.warc*'
-        return [op.join(self.warc_dir, f)
-                for f in os.listdir(self.warc_dir) if fnmatch(f, pattern)]
+        return sorted([op.join(self.warc_dir, f)
+                       for f in os.listdir(self.warc_dir) if fnmatch(f, pattern)])
 
 
 def main():
-    # reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52')
-    # reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
+    reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52')
+    reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
 
 
 if __name__ == '__main__':
