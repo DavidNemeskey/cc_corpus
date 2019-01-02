@@ -3,21 +3,22 @@
 
 # Standard lib
 import argparse
-import queue
-import threading
-import multiprocessing
-import glob
-import socket
-import logging
-import re
-import sys
-import os
-import errno
-import zlib
-import gzip
 import datetime
+import errno
+import glob
+import gzip
 import itertools
+import logging
+import multiprocessing
+import os
+import queue
+import re
+import socket
+import sys
+import threading
+import time
 import xml.sax.saxutils
+import zlib
 
 # Boto3
 import boto3
@@ -163,9 +164,9 @@ class RotatedGzip:
         self.total = 0
         self._fh = None
         while self._fh is None:
-            fn = os.path.join(os.path.realpath(self.out_dir), os.path.basename(self.format_string.format(self.counter)))
+            self.current_file = os.path.join(os.path.realpath(self.out_dir), os.path.basename(self.format_string.format(self.counter)))
             try:  # Atomically open create a new file or increment counter till can not create it...
-                self._fh = gzip.open(fn, 'xb')
+                self._fh = gzip.open(self.current_file, 'xb')
             except FileExistsError:
                 self.counter += 1
 
@@ -181,23 +182,27 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
             gzip_text = s3.get_object(Bucket='commoncrawl', Key=warc_file_name, Range=byte_range)['Body'].read()
         except (ClientError, ReadTimeoutError, EndpointConnectionError) as ex:
             if hasattr(ex, 'response') and ex.response['Error']['Code'] == 'NoSuchKey':
-                logging.warning('NoSuchKey: {0}'.format(entry_str))
+                logging.exception('NoSuchKey: {0}'.format(entry_str))
                 retry_left = 0  # Skip later probes
             # ReadTimeoutError has no property response
             elif hasattr(ex, 'response') and ex.response['Error']['Code'] == 'InternalError' or \
                     ex.__class__.__name__ in {'ReadTimeoutError', 'EndpointConnectionError'}:
-                logging.warning('InternalError({0}): {1}'.format(ex, entry_str))
+                logging.exception('InternalError({0}): {1}'.format(ex, entry_str))
             else:  # This shouldn't happen...
-                logging.warning('Other Error({0}): {1}'.format(ex, entry_str))
+                logging.exception('Other Error({0}): {1}'.format(ex, entry_str))
                 retry_left = 0  # Skip later probes
             continue  # Skip decompression test
+        except:
+            logging.exception('Some other error while downloading')
 
         try:  # Test decompression to avoid decompression errors later
             # https://stackoverflow.com/a/2695575
             decompressed_text = zlib.decompress(gzip_text, zlib.MAX_WBITS | 32)
         except zlib.error:
-            logging.warning('Decompression error is occured ({0}):\t\t{1}\t\t'.format(retry_left, entry_str))
+            logging.exception('Decompression error is occured ({0}):\t\t{1}\t\t'.format(retry_left, entry_str))
             decompressed_text = b''
+        except:
+            logging.exception('Some other error while decompressing')
 
     return decompressed_text
 
@@ -251,6 +256,7 @@ def preprocessed_stream(stream):
 
 
 def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
+    start_t = time.time()
     for num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type in prefilter_stream(stream):
         if num % 100 == 0:
             logging.warning('Downloading URL ({0}) {1}'.format(num, url))
@@ -266,6 +272,15 @@ def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
                                                            '-{0}-{1}.warc.gz'.format(offset_str, length_str))
             out_gz_file_name = os.path.join(out_dir, 'pages', domain, filename_str, out_file)
             yield filename_str, domain, line, document, out_gz_file_name
+        else:
+            logging.info('Could not download URL {}'.format(url))
+    else:
+        try:
+            # Raises NameError if the stream is empty
+            logging.info('Downloaded a total of {} URLs in {} seconds.'.format(
+                num, time.time() - start_t))
+        except NameError:
+            pass
 
 
 def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_info, filter_and_sort_funs):
@@ -376,7 +391,7 @@ if __name__ == '__main__':
                        filter_and_sort_opts)
 
     else:
-        num_of_threads = int(multiprocessing.cpu_count() * 3.25)  # Heuristic number...
+        num_of_threads = int(multiprocessing.cpu_count() * 5)  # Heuristic number...
         q = queue.Queue(maxsize=2 * num_of_threads)
 
         # In a presistent connection process a whole gz file and ask for another

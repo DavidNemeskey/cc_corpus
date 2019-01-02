@@ -9,6 +9,7 @@ import concurrent.futures as cf
 from functools import partial
 import gzip
 import logging
+from multiprocessing import Pool
 from multiprocessing_logging import install_mp_handler
 import os
 import os.path as op
@@ -69,21 +70,28 @@ def uniq_record(url, record, uniqs, keep):
 
 def file_to_dict(file_name, keep):
     logging.info('Collecting URLs from {}...'.format(file_name))
-    with gzip.open(file_name, 'rt') as inf:
-        uniqs = {}
-        file_id = file_name_p.search(file_name).groups(1)
-        for line_no, line in enumerate(map(str.strip, inf)):
-            try:
-                # After filtering, the line is prepended with the "domain"
-                # I skip that and extract it myself
-                url, warc, offset, length = line.split()[:7][-6:-2]
-                record = Record(warc, offset, length, file_id)
-                uniq_record(url, record, uniqs, keep)
-            except:
-                logging.exception(
-                    'Exception in file {}:{}'.format(file_name, line_no))
-                break
-        return uniqs
+    try:
+        with gzip.open(file_name, 'rt') as inf:
+            uniqs = {}
+            file_id = file_name_p.search(file_name).group(1)
+            for line_no, line in enumerate(map(str.strip, inf), start=1):
+                try:
+                    # After filtering, the line is prepended with the "domain"
+                    # I skip that and extract it myself
+                    url, warc, offset, length = line.split()[:7][-6:-2]
+                    record = Record(warc, offset, length, file_id)
+                    uniq_record(url, record, uniqs, keep)
+                except:
+                    logging.exception(
+                        'Exception in file {}:{}'.format(file_name, line_no))
+                    break
+            logging.info('Deduplicated {} URLs in {} to {}.'.format(
+                line_no, file_name, len(uniqs)))
+            return uniqs
+    except:
+        logging.exception(
+            'Exception in file {}'.format(file_name))
+        return {}
 
 
 def filter_file(input_file, output_file, uniqs):
@@ -91,7 +99,8 @@ def filter_file(input_file, output_file, uniqs):
         return
     logging.info('Filtering file {}...'.format(input_file))
     with gzip.open(input_file, 'rt') as inf, gzip.open(output_file, 'wt') as outf:
-        for line_no, line in enumerate(map(str.strip, inf)):
+        lines_printed = 0
+        for line_no, line in enumerate(map(str.strip, inf), start=1):
             try:
                 url, warc, offset, length = line.split()[:7][-6:-2]
                 record = uniqs.get(url)
@@ -100,9 +109,12 @@ def filter_file(input_file, output_file, uniqs):
                     record.offset == int(offset) and record.length == int(length)
                 ):
                     print(line, file=outf)
+                    lines_printed += 1
             except:
                 logging.exception(
                     'Exception in file {}:{}'.format(input_file, line_no))
+        logging.info('Kept {} URLs out of {} in {}.'.format(
+            lines_printed, line_no, input_file))
 
 
 def main():
@@ -116,12 +128,15 @@ def main():
     # Collect the representative records for all URLs
     files = os.listdir(args.input_dir)
     to_process = [op.join(args.input_dir, f) for f in files]
-    with cf.ProcessPoolExecutor(max_workers=args.processes) as executor:
+    with Pool(args.processes) as pool:
+    # with cf.ProcessPoolExecutor(max_workers=args.processes) as executor:
         aggr_uniqs = {}
         fn = partial(file_to_dict, keep=args.keep)
-        for uniqs in executor.map(fn, to_process):
+        for uniqs in pool.imap(fn, to_process):
             for url, record in uniqs.items():
                 uniq_record(url, record, aggr_uniqs, args.keep)
+            logging.info('Aggregated result: {} URLs.'.format(len(aggr_uniqs)))
+        logging.info('Final tally: {} URLs.'.format(len(aggr_uniqs)))
 
     # Sort them by file (so that the whole dict need not be sent to every process)
     uniqs_by_file = defaultdict(dict)
@@ -134,9 +149,10 @@ def main():
         os.mkdir(args.output_dir)
     tasks = zip([op.join(args.input_dir, f) for f in files],
                 [op.join(args.output_dir, f) for f in files],
-                [uniqs_by_file.get(file_name_p.search(f).groups(1), {}) for f in files])
+                [uniqs_by_file.pop(file_name_p.search(f).groups(1), {}) for f in files])
     with cf.ProcessPoolExecutor(max_workers=args.processes) as executor:
         cf.wait([executor.submit(filter_file, *task) for task in tasks])
+
 
 if __name__ == '__main__':
     main()
