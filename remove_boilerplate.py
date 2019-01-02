@@ -40,6 +40,9 @@ class IndexWarcReader:
         # This is the output stream
         self.outf = None
 
+        if not op.isdir(output_dir):
+            os.makedirs(output_dir)
+
     def read(self, index_file, func):
         """
         Enumerates the index and WARC records in the specified index file and
