@@ -69,7 +69,7 @@ class IndexWarcReader:
                   index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
                   # warc1, warc2, text_removed).encode('UTF-8'),
-                  'a', 'b', 'c').encode('UTF-8'),
+                  'a', 'b', 'c'),
               file=self.outf)
 
     def index_lines(self, index_file):
@@ -88,7 +88,7 @@ class IndexWarcReader:
         try:
             for warc_file in self.warc_files_for_index(index_file):
                 output_file = op.basename(warc_file).replace('.warc.', '.txt.')
-                with gzip.open(op.join(self.output_dir, output_file), 'wt') as outf:
+                with gzip.open(op.join(self.output_dir, output_file), 'wt', encoding='utf-8') as outf:
                     self.outf = outf
                     for record in warc.open(warc_file):
                         yield record
