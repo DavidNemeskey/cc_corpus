@@ -49,6 +49,7 @@ class IndexWarcReader:
             for index in index_iter:
                 if index.url == url:
                     print(url)
+                    break
             else:
                 raise ValueError('URL {} was not found in index'.format(url))
 
