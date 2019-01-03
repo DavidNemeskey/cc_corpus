@@ -162,7 +162,7 @@ def parse_arguments():
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
-    parser.add_argument('--log-level', '-L', type=str, default=None,
+    parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
