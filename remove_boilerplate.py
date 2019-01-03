@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Removes boilerplate from WARC segments and converts them to the corpus's
+semi-XML format.
+"""
+
+from argparse import ArgumentParser
 from collections import namedtuple
 from fnmatch import fnmatch
 import gzip
@@ -142,6 +148,28 @@ class IndexWarcReader:
                        for f in os.listdir(self.warc_dir) if fnmatch(f, pattern)])
 
 
+def parse_arguments():
+    parser = ArgumentParser('Removes boilerplate from WARC segments and ' +
+                            'converts them to the corpus\'s semi-XML format.')
+    parser.add_argument('--index-dir', '-i', required=True,
+                        help='the index directory')
+    parser.add_argument('--warc-dir', '-w', required=True,
+                        help='the directory with the WARC segments')
+    parser.add_argument('--output-dir', '-o', required=True,
+                        help='the output directory')
+    parser.add_argument('-b', '--boilerplate-language', default='Hungarian',
+                        help='boilerplate removal language (default: Hungarian)')
+    parser.add_argument('--processes', '-p', type=int, default=1,
+                        help='number of worker processes to use (max is the '
+                             'num of cores, default: 1)')
+    args = parser.parse_args()
+    num_procs = len(os.sched_getaffinity(0))
+    if args.processes < 1 or args.processes > num_procs:
+        parser.error('Number of processes must be between 1 and {}'.format(
+            num_procs))
+    return args
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -149,15 +177,17 @@ def main():
     )
     install_mp_handler()
 
+    args = parse_arguments()
+
     try:
-        stopwordlist_lang = 'Hungarian'
-        stoplist = justext.get_stoplist(stopwordlist_lang)
+        stoplist = justext.get_stoplist(args.boilerplate_language)
     except ValueError as e:
-        logging.error('Invalid stopword language {}.'.format(stopwordlist_lang))
+        logging.error(
+            'Invalid stopword language {}.'.format(args.boilerplate_language))
         exit(1)
 
-    reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52',
-                             'cc_test_out', stoplist)
+    reader = IndexWarcReader(args.index_dir, args.warc_dir,
+                             args.output_dir, stoplist)
     reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
 
 
