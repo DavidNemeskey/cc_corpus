@@ -5,6 +5,7 @@ from collections import namedtuple
 from fnmatch import fnmatch
 import gzip
 import io
+import logging
 from multiprocessing import Pool
 import os
 import os.path as op
@@ -142,6 +143,8 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
     install_mp_handler()
+
+    
 
     reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52', 'cc_test_out')
     reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
