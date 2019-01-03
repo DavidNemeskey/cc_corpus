@@ -66,9 +66,11 @@ class IndexWarcReader:
         """
         index_iter = self.index_lines(index_file)
         warc_iter = self.warc_records(index_file)
-        for record_id, warc_record in enumerate(warc_iter):
+        index_id = 0
+        for warc_record in warc_iter:
             url = warc_record['WARC-Target-URI']
-            for index_id, index in enumerate(index_iter, start=1):
+            for index in index_iter:
+                index_id += 1
                 if index.url == url:
                     self.process_record(index_id, index, warc_record)
                     break
