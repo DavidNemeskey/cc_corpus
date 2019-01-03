@@ -64,16 +64,17 @@ class IndexWarcReader:
         """Writes the output file."""
         # We need the WARC header...
         bio = io.BytesIO()
-        index.warc.header.write_to(bio)
+        warc.header.write_to(bio)
         # And the HTML header and text as well. jusText can handle bytes
-        header, text = warc.read().split(b'\r\n\r\n', maxsplit=1)
+        header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
         print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" ' \
               'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n' \
               '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n'
               '</response>\n</meta>\n{10}\n</doc>\n\n\n'.format(
                   index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
-                  bio.getvalue().decode('utf-8'), header.decode('utf-8'),
+                  bio.getvalue().decode('utf-8').strip(),
+                  header.decode('utf-8').strip(),
                   # warc, warc2, text_removed).encode('UTF-8'),
                   'c'),
               file=self.outf)
