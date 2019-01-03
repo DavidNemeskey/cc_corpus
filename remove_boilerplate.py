@@ -78,7 +78,6 @@ class IndexWarcReader:
         header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
         try:
             paragraphs = justext.justext(text, self.stopwords)
-            logging.info('text: {}, paragraphs: {}'.format(len(text), len(paragraphs)))
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
         except (ParserError, UnicodeDecodeError,
                 TypeError, AssertionError, ValueError) as err:
@@ -92,7 +91,6 @@ class IndexWarcReader:
             '<p>\n{0}\n</p>'.format(xml.sax.saxutils.escape(paragraph.text))
             for paragraph in paragraphs if not paragraph.is_boilerplate
         )
-        logging.info('Removed: {}'.format(text_removed))
         if len(text_removed) == 0:
             logging.info('Nothing\'s left of {} after boilerplate removal'.format(index))
             return
@@ -110,6 +108,8 @@ class IndexWarcReader:
         if index_id % 1000 == 0:
             logging.info('Removed boilerplate from {} ({})'.format(
                 index.url, index_id))
+        logging.debug('Removed boilerplate from {} ({})'.format(
+            index.url, index_id))
 
     def index_lines(self, index_file):
         """Enumerates the lines of the index file into IndexTuples."""
