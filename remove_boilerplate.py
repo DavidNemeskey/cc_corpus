@@ -173,7 +173,7 @@ def parse_arguments():
     return args
 
 
-def process(index_dir, warc_dir, output_dir, stoplist, index_file):
+def process(index_file, index_dir, warc_dir, output_dir, stoplist):
     reader = IndexWarcReader(index_dir, warc_dir, output_dir, stoplist)
     reader.read(index_file)
 
