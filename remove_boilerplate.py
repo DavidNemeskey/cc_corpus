@@ -9,6 +9,7 @@ semi-XML format.
 from argparse import ArgumentParser
 from collections import namedtuple
 from fnmatch import fnmatch
+import functools
 import gzip
 import io
 import logging
@@ -54,9 +55,6 @@ class IndexWarcReader:
         self.stopwords = stopwords
         # This is the output stream
         self.outf = None
-
-        if not op.isdir(output_dir):
-            os.makedirs(output_dir)
 
     def read(self, index_file):
         """
@@ -175,6 +173,11 @@ def parse_arguments():
     return args
 
 
+def process(index_dir, warc_dir, output_dir, stoplist, index_file):
+    reader = IndexWarcReader(index_dir, warc_dir, output_dir, stoplist)
+    reader.read(index_file)
+
+
 def main():
     args = parse_arguments()
 
@@ -193,10 +196,14 @@ def main():
             'Invalid stopword language {}.'.format(args.boilerplate_language))
         exit(1)
 
-    reader = IndexWarcReader(args.index_dir, args.warc_dir,
-                             args.output_dir, stoplist)
-    reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
+    if not op.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
 
+    index_files = os.listdir(args.index_dir)
+    fn = functools.partial(process, index_dir=args.index_dir,
+                           warc_dir=args.warc_dir, output_dir=args.output_dir,
+                           stoplist=stoplist)
+    fn(index_files[0])
 
 if __name__ == '__main__':
     main()
