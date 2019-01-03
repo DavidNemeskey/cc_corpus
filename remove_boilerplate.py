@@ -45,6 +45,7 @@ class IndexWarcReader:
         self.index_dir = index_dir
         self.warc_dir = warc_dir
         self.output_dir = output_dir
+        self.stopwords = stopwords
         # This is the output stream
         self.outf = None
 
