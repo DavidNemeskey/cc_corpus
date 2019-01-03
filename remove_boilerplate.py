@@ -159,9 +159,12 @@ def parse_arguments():
                         help='the output directory')
     parser.add_argument('-b', '--boilerplate-language', default='Hungarian',
                         help='boilerplate removal language (default: Hungarian)')
-    parser.add_argument('--processes', '-p', type=int, default=1,
+    parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
+    parser.add_argument('--log-level', '-L', type=str, default=None,
+                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        help='the logging level.')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
@@ -171,15 +174,17 @@ def parse_arguments():
 
 
 def main():
+    args = parse_arguments()
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
     install_mp_handler()
 
-    args = parse_arguments()
-
     try:
+        logging.info('Acquiring stopword list for {}...'.format(
+            args.boilerplate_language))
         stoplist = justext.get_stoplist(args.boilerplate_language)
     except ValueError as e:
         logging.error(
