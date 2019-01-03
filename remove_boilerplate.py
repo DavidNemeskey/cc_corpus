@@ -62,14 +62,20 @@ class IndexWarcReader:
 
     def process_record(self, index, warc):
         """Writes the output file."""
+        # We need the WARC header...
+        bio = io.BytesIO()
+        index.warc.header.write_to(bio)
+        # And the HTML header and text as well. jusText can handle bytes
+        header, text = warc.read().split(b'\r\n\r\n', maxsplit=1)
         print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" ' \
               'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n' \
               '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n'
               '</response>\n</meta>\n{10}\n</doc>\n\n\n'.format(
                   index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
-                  # warc1, warc2, text_removed).encode('UTF-8'),
-                  'a', 'b', 'c'),
+                  bio.getvalue().decode('utf-8'), header.decode('utf-8'),
+                  # warc, warc2, text_removed).encode('UTF-8'),
+                  'c'),
               file=self.outf)
 
     def index_lines(self, index_file):
@@ -88,7 +94,8 @@ class IndexWarcReader:
         try:
             for warc_file in self.warc_files_for_index(index_file):
                 output_file = op.basename(warc_file).replace('.warc.', '.txt.')
-                with gzip.open(op.join(self.output_dir, output_file), 'wt', encoding='utf-8') as outf:
+                with gzip.open(op.join(self.output_dir, output_file),
+                               'wt', encoding='utf-8') as outf:
                     self.outf = outf
                     for record in warc.open(warc_file):
                         yield record
