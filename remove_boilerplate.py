@@ -5,9 +5,12 @@ from collections import namedtuple
 from fnmatch import fnmatch
 import gzip
 import io
+from multiprocessing import Pool
 import os
 import os.path as op
+import xml.sax.saxutils
 
+from multiprocessing_logging import install_mp_handler
 import warc
 
 
@@ -24,7 +27,7 @@ class IndexWarcReader:
     downloaded WARC segments from Common Crawl". One difference to a CC WARC
     file is that these files only contain the responses.
     """
-    def __init__(self, index_dir, warc_dir, output_dir):
+    def __init__(self, index_dir, warc_dir, output_dir, stopwords):
         """
         Creates a new IndexWarcReader with the specified index and warc
         directories. These must be compatible, i.e. the WARC directory should
@@ -33,6 +36,8 @@ class IndexWarcReader:
 
         index_dir: the directory with the index files.
         warc_dir: the directory with the WARC files.
+        output_dir: the output directory
+        stopword: the stopword list for justext
         """
         self.index_dir = index_dir
         self.warc_dir = warc_dir
@@ -51,22 +56,41 @@ class IndexWarcReader:
         """
         index_iter = self.index_lines(index_file)
         warc_iter = self.warc_records(index_file)
-        for i, warc_record in enumerate(warc_iter):
+        for record_id, warc_record in enumerate(warc_iter):
             url = warc_record['WARC-Target-URI']
-            for index in index_iter:
+            for index_id, index in enumerate(index_iter, start=1):
                 if index.url == url:
-                    self.process_record(index, warc_record)
+                    self.process_record(index_id, index, warc_record)
                     break
             else:
                 raise ValueError('URL {} was not found in index'.format(url))
 
-    def process_record(self, index, warc):
+    def process_record(self, index_id, index, warc):
         """Writes the output file."""
         # We need the WARC header...
         bio = io.BytesIO()
         warc.header.write_to(bio)
         # And the HTML header and text as well. jusText can handle bytes
         header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
+        try:
+            paragraphs = justext.justext(text, self.stopwords)
+        # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
+        except (ParserError, UnicodeDecodeError,
+                TypeError, AssertionError, ValueError) as err:
+            # Do not distinguish between the different errors
+            logging.exception(
+                'Exception with record {} in line {}.'.format(index, index_id))
+            return
+
+        # Escape paragraph for parsable XML
+        text_removed = '\n\n'.join(
+            '<p>\n{0}\n</p>'.format(xml.sax.saxutils.escape(paragraph.text))
+            for paragraph in paragraphs if not paragraph.is_boilerplate
+        )
+        if len(text_removed) == 0:
+            logging.info('Nothing\'s left of {} after boilerplate removal'.format(index))
+            return
+
         print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" ' \
               'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n' \
               '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n'
@@ -74,10 +98,12 @@ class IndexWarcReader:
                   index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
                   bio.getvalue().decode('utf-8').strip(),
-                  header.decode('utf-8').strip(),
-                  # warc, warc2, text_removed).encode('UTF-8'),
-                  'c'),
+                  header.decode('utf-8').strip(), text_removed),
               file=self.outf)
+
+        if index_id % 1000 == 0:
+            logging.info('Removed boilerplate from {} ({})'.format(
+                index.url, index_id))
 
     def index_lines(self, index_file):
         """Enumerates the lines of the index file into IndexTuples."""
@@ -111,6 +137,12 @@ class IndexWarcReader:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
+    )
+    install_mp_handler()
+
     reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52', 'cc_test_out')
     reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
 
