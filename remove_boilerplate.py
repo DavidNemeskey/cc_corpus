@@ -203,7 +203,10 @@ def main():
     fn = functools.partial(process, index_dir=args.index_dir,
                            warc_dir=args.warc_dir, output_dir=args.output_dir,
                            stoplist=stoplist)
-    fn(index_files[0])
+
+    with Pool(args.processes) as pool:
+        pool.map(fn, index_files)
+
 
 if __name__ == '__main__':
     main()
