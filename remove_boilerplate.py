@@ -144,9 +144,15 @@ def main():
     )
     install_mp_handler()
 
-    
+    try:
+        stopwordlist_lang = 'Hungarian'
+        stoplist = justext.get_stoplist(stopwordlist_lang)
+    except ValueError as e:
+        logging.error('Invalid stopword language {}.'.format(stopwordlist_lang))
+        exit(1)
 
-    reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52', 'cc_test_out')
+    reader = IndexWarcReader('cc_index_dedup_52', 'cc_downloaded_52',
+                             'cc_test_out', stoplist)
     reader.read('domain-hu-CC-MAIN-2018-05-0000.gz')
 
 
