@@ -11,6 +11,8 @@ import os
 import os.path as op
 import xml.sax.saxutils
 
+import justext
+from lxml.etree import ParserError
 from multiprocessing_logging import install_mp_handler
 import warc
 
