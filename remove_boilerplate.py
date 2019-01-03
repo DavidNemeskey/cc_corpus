@@ -198,6 +198,7 @@ def main():
 
     if not op.isdir(args.output_dir):
         os.makedirs(args.output_dir)
+    os.nice(20) # Play nice
 
     index_files = os.listdir(args.index_dir)
     fn = functools.partial(process, index_dir=args.index_dir,
