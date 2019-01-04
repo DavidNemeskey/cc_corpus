@@ -98,7 +98,8 @@ class IndexWarcReader:
             for paragraph in paragraphs if not paragraph.is_boilerplate
         )
         if len(text_removed) == 0:
-            logging.info('Nothing\'s left of {} after boilerplate removal'.format(index))
+            logging.info('Nothing\'s left of {} after boilerplate removal'.format(
+                index.url))
             return
 
         print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" ' \
@@ -174,8 +175,14 @@ def parse_arguments():
 
 
 def process(index_file, index_dir, warc_dir, output_dir, stoplist):
+    logging.info('Processing {}...'.format(index_file))
     reader = IndexWarcReader(index_dir, warc_dir, output_dir, stoplist)
-    reader.read(index_file)
+    try:
+        reader.read(index_file)
+    except:
+        logging.exception('Exception in file {}:'.format(index_file))
+    else:
+        logging.info('Processed {}...'.format(index_file))
 
 
 def main():
@@ -198,7 +205,7 @@ def main():
 
     if not op.isdir(args.output_dir):
         os.makedirs(args.output_dir)
-    os.nice(20) # Play nice
+    os.nice(20)  # Play nice
 
     index_files = os.listdir(args.index_dir)
     fn = functools.partial(process, index_dir=args.index_dir,
