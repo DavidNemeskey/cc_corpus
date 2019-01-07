@@ -9,6 +9,7 @@ import gzip
 import io
 import logging
 import os
+import os.path as op
 
 
 def parse_arguments():
@@ -22,7 +23,9 @@ def parse_arguments():
                         help='the file that lists known URLs.')
     parser.add_argument('--parallel', '-p', type=int, default=1,
                         help='number of worker threads to use (max is the '
-                             'num of cores, default: 1)')
+                             'num of cores, default: 1). Because of the GIL, '
+                             'some level of concurrency is possible, but not '
+                             'much; 2-4 threads might be the maximum.')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.parallel < 1 or args.parallel > num_procs:
@@ -32,25 +35,29 @@ def parse_arguments():
 
 
 def read_urls(urls_file):
-    module = gzip if index_file.endswith('.gz') else io
+    module = gzip if urls_file.endswith('.gz') else io
     with module.open(urls_file, 'rt') as inf:
         return set(line.strip() for line in inf)
 
 
 def filter_file(input_file, output_file, known_urls):
     logging.info('Filtering file {}...'.format(input_file))
-    with gzip.open(input_file, 'rt') as inf, gzip.open(output_file, 'wt') as outf:
-        lines_printed = 0
-        for line_no, line in enumerate(map(str.strip, inf), start=1):
-            try:
-                url, warc, offset, length = line.split()[:7][-6:-2]
-                if url not in known_urls:
-                    print(line, file=outf)
-            except:
-                logging.exception(
-                    'Exception in file {}:{}'.format(input_file, line_no))
-        logging.info('Kept {} URLs out of {} in {}.'.format(
-            lines_printed, line_no, input_file))
+    try:
+        with gzip.open(input_file, 'rt') as inf, gzip.open(output_file, 'wt') as outf:
+            lines_printed = 0
+            for line_no, line in enumerate(map(str.strip, inf), start=1):
+                try:
+                    url, warc, offset, length = line.split()[:7][-6:-2]
+                    if url not in known_urls:
+                        lines_printed += 1
+                        print(line, file=outf)
+                except:
+                    logging.exception(
+                        'Exception in file {}:{}'.format(input_file, line_no))
+            logging.info('Kept {} URLs out of {} in {}.'.format(
+                lines_printed, line_no, input_file))
+    except:
+        logging.exception('Exception while processing {}'.format(input_file))
 
 
 def main():
@@ -62,6 +69,10 @@ def main():
 
     known_urls = read_urls(args.urls)
     logging.info('Read {} known URLs.'.format(len(known_urls)))
+
+    if not op.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+    os.nice(20)  # Play nice
 
     files = os.listdir(args.input_dir)
     to_process = [op.join(args.input_dir, f) for f in files]
