@@ -7,8 +7,10 @@ download process stops for some reason.
 """
 
 from argparse import ArgumentParser
+import gzip
+import io
 import os
-import os.open as op
+import os.path as op
 import re
 
 
@@ -20,10 +22,10 @@ def parse_arguments():
     args = parser.parse_args()
     if not op.isfile(args.log_file):
         parser.error('The log file must exist.')
-    return args.log_file, args.finished
+    return args.log_file
 
 
-def find_files(log_file, finished):
+def find_files(log_file):
     start_p = re.compile(r'Thread-(\d+)\s*\).*Starting batch (.+)$')
     end_p = re.compile(r'Thread-(\d+)\s*\).*Downloaded a total of (\d+) URLs')
     threads = {}
@@ -39,8 +41,8 @@ def find_files(log_file, finished):
 
 
 def main():
-    log_file, finished = parse_args()
-    for fn in find_files(log_file, finished):
+    log_file = parse_arguments()
+    for fn in find_files(log_file):
         print(fn)
 
 
