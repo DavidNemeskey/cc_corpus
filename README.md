@@ -1,6 +1,8 @@
 # CommonCrawl Downloader
 
-Simple Python command line tools for retrieving a list of urls and specific files in bulk
+A Python package for retrieving a list of urls and specific files in bulk from Common Crawl, as well as for processing the downloaded files.
+
+This is a modification of the original code in [this repo](https://github.com/ppke-nlpg/commoncrawl-downloader).
 
 ## Overview
 
@@ -33,7 +35,7 @@ This repository also contains a massively fixed and overhauled version of [cdx-i
 
 ## Licence
 
-GNU LGPL 3.0 or any later version
+GNU LGPL 3.0 or any later version.
 
 If you use this program please cite the following paper:
 
