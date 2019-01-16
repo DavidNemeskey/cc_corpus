@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Sorts all entries in a list of index files.
+
+I am not sure how much the parallellism helps, as there is a "reduce" step
+at the end. Also, it would probably be faster to use the fact that the files
+are sorted after sort_one_file() and do a merge-sort.
+"""
+
 from argparse import ArgumentParser
 import concurrent.futures as cf
 import gzip
