@@ -60,6 +60,8 @@ setup(name='commoncrawl-downloader',
           'justext',
           'lxml',
           'multiprocessing-logging',
+          # Just for URL deduplication
+          'redis',
           'requests',
           # Will maybe remove this later
           'simplejson',
