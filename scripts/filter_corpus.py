@@ -50,7 +50,7 @@ def parse_arguments():
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
-    if not re.match(r'^\d+[w|c]$', args.min_len):
+    if args.min_len and not re.match(r'^\d+[w|c]$', args.min_len):
         parser.error('Invalid value for the minimum length parameter.')
     if not args.languages and not args.min_len:
         parser.error('At least one filter must be specified.')
@@ -67,10 +67,13 @@ def filter_languages(doc_iter, languages):
 
     doc_no, kept = 0, 0
     for doc_no, doc in enumerate(doc_iter, start=1):
-        _, _, lang = cld2.detect(doc.content())
-        if lang[0].language_code in languages:
-            yield doc
-            kept += 1
+        try:
+            _, _, lang = cld2.detect(doc.content())
+            if lang[0].language_code in languages:
+                yield doc
+                kept += 1
+        except:
+            logging.exception('Error in doc {}'.format(doc))
     if doc_no:
         logging.info('Filtered {} documents based on language, kept {}.'.format(
             doc_no, kept))
