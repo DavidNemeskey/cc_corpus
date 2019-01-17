@@ -83,7 +83,7 @@ class Document:
             for p in self.paragraphs[:-1]:
                 print('<p>\n{}\n</p>\n'.format(p), file=buffer)
             print('<p>\n{}\n</p>'.format(self.paragraphs[-1]), file=buffer)
-        print('</doc>', file=buffer)
+        print('</doc>', end='', file=buffer)
         return buffer.getvalue()
 
     def __repr__(self):
