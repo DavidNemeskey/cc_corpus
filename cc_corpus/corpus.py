@@ -34,6 +34,29 @@ class Document:
         """
         return '\n'.join(self.paragraphs)
 
+    def wc(self, p=False, w=False, c=False):
+        """
+        Returns the number of paragraphs (p), words (w) or characters (c) in
+        the document. If all three arguments are False, returns a three-tuple
+        of each of them. Otherwise returns a single number.
+        """
+        ps = self.paragraphs
+        if ps:
+            if not (p or w or c):
+                return (
+                    len(ps),
+                    sum(len(p.split()) for p in ps),
+                    sum(len(p) for p in ps) + len(ps) - 1
+                )
+            elif p:
+                return len(ps)
+            elif w:
+                return sum(len(p.split()) for p in ps)
+            else:
+                return sum(len(p) for p in ps) + len(ps) - 1
+        else:
+            return 0 if p or w or c else (0, 0, 0)
+
     def __len__(self):
         """
         The length (in characters) of the document. Same as len(self.content()).
