@@ -67,10 +67,12 @@ setup(name='commoncrawl-downloader',
           'simplejson',
           # Easier TLD extraction
           'tldextract',
-          # WARC 3 library
-          'git+git://github.com/erroneousboat/warc3.git#egg=warc'
           # Language identification
           'cld2-cffi', 'langid',
+      ],
+      dependency_links=[
+          # WARC 3 library
+          'git+git://github.com/erroneousboat/warc3.git#egg=warc'
       ],
       # zip_safe=False,
       use_2to3=False)
