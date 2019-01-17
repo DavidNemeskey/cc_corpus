@@ -50,7 +50,7 @@ def parse_arguments():
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
-    if not re.match('\d+[w|c]^$', args.min_len):
+    if not re.match(r'^\d+[w|c]$', args.min_len):
         parser.error('Invalid value for the minimum length parameter.')
     if not args.languages and not args.min_len:
         parser.error('At least one filter must be specified.')
@@ -65,41 +65,48 @@ def parse_arguments():
 def filter_languages(doc_iter, languages):
     import cld2
 
-    kept = 0
-    for doc_no, doc in enumerate(doc_iter):
+    doc_no, kept = 0, 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
         _, _, lang = cld2.detect(doc.content())
-        if lang[0][0] in languages:
+        if lang[0].language_code in languages:
             yield doc
             kept += 1
-    logging.info('Filtered {} documents based on language, kept {}.'.format(
-        doc_no, kept))
+    if doc_no:
+        logging.info('Filtered {} documents based on language, kept {}.'.format(
+            doc_no, kept))
 
 
 def filter_length(doc_iter, min_len_str):
     min_len = int(min_len_str[:-1])
     arg = {min_len_str[-1]: True}
 
-    kept = 0
-    for doc_no, doc in enumerate(doc_iter):
+    doc_no, kept = 0, 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
         if doc.wc(**arg) >= min_len:
             kept += 1
             yield doc
-    logging.info('Filtered {} documents based on length, kept {}.'.format(
-        doc_no, kept))
+    if doc_no:
+        logging.info('Filtered {} documents based on length, kept {}.'.format(
+            doc_no, kept))
 
 
 def process_file(filename, input_dir, output_dir, languages, min_len_str):
     input_file = os.path.join(input_dir, filename)
     output_file = os.path.join(output_dir, filename)
+    logging.info('Processing file {}...'.format(filename))
 
     it = parse_file(input_file, True, True, True)
     if languages:
         it = filter_languages(it, languages)
     if min_len_str:
-        it = filter_languages(it, min_len_str)
-    with openall(output_file, 'wt') as outf:
-        for doc in it:
-            print(doc, file=outf)
+        it = filter_length(it, min_len_str)
+    try:
+        with openall(output_file, 'wt') as outf:
+            for doc in it:
+                print(doc, file=outf)
+    except:
+        logging.exception('Got an error.')
+    logging.info('Finished processing file {}...'.format(filename))
 
 
 def main():
@@ -112,14 +119,14 @@ def main():
     install_mp_handler()
 
     os.nice(20)
-    if os.path.isdir(args.output_dir):
+    if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
     files = os.listdir(args.input_dir)
     logging.info('Scheduled {} files for filtering.'.format(len(files)))
     p = Pool(args.processes)
     f = partial(process_file, input_dir=args.input_dir,
-                output_dir=args.output_dir, languages=args.languages,
+                output_dir=args.output_dir, languages=set(args.languages),
                 min_len_str=args.min_len)
     p.map(f, files)
     p.close()
