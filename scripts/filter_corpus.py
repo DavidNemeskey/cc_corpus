@@ -67,13 +67,25 @@ def filter_languages(doc_iter, languages):
 
     doc_no, kept = 0, 0
     for doc_no, doc in enumerate(doc_iter, start=1):
+        content = doc.content()
         try:
-            _, _, lang = cld2.detect(doc.content())
+            _, _, lang = cld2.detect(content)
             if lang[0].language_code in languages:
                 yield doc
                 kept += 1
-        except:
-            logging.exception('Error in doc {}'.format(doc))
+        except Exception as cld_ex:
+            # cld2 cannot handle some UTF-8 characters that Python can. See
+            # https://github.com/mikemccand/chromium-compact-language-detector/issues/22
+            # There is a workaround, but I'd rather just call langid in this case
+            try:
+                import langid
+                lang, _ = langid.classify(content)
+                if lang in languages:
+                    yield doc
+                    kept += 1
+            except Exception as langid_ex:
+                logging.exception('Error identifying document {}\'s language'.format(
+                    repr(doc)))
     if doc_no:
         logging.info('Filtered {} documents based on language, kept {}.'.format(
             doc_no, kept))
