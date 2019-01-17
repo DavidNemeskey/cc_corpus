@@ -9,6 +9,7 @@ Filters documents in a corpus. Currently two filters are supported:
 """
 
 from argparse import ArgumentParser
+from collections import Counter
 from functools import partial
 import logging
 from multiprocessing import Pool
@@ -62,7 +63,18 @@ def parse_arguments():
     return args
 
 
-def filter_languages(doc_iter, languages):
+def each_doc(doc_iter, stats):
+    """
+    This function is just there so that we can count the number of documents
+    initially.
+    """
+    doc_no = 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
+        yield doc
+    stats['initial'] = doc_no
+
+
+def filter_languages(doc_iter, languages, stats):
     import cld2
 
     doc_no, kept = 0, 0
@@ -89,9 +101,10 @@ def filter_languages(doc_iter, languages):
     if doc_no:
         logging.info('Filtered {} documents based on language, kept {}.'.format(
             doc_no, kept))
+    stats['language'] = kept
 
 
-def filter_length(doc_iter, min_len_str):
+def filter_length(doc_iter, min_len_str, stats):
     min_len = int(min_len_str[:-1])
     arg = {min_len_str[-1]: True}
 
@@ -103,6 +116,7 @@ def filter_length(doc_iter, min_len_str):
     if doc_no:
         logging.info('Filtered {} documents based on length, kept {}.'.format(
             doc_no, kept))
+    stats['length'] = kept
 
 
 def process_file(filename, input_dir, output_dir, languages, min_len_str):
@@ -110,11 +124,13 @@ def process_file(filename, input_dir, output_dir, languages, min_len_str):
     output_file = os.path.join(output_dir, filename)
     logging.info('Processing file {}...'.format(filename))
 
+    stats = Counter()
     it = parse_file(input_file, True, True, True)
+    it = each_doc(it, stats)
     if languages:
-        it = filter_languages(it, languages)
+        it = filter_languages(it, languages, stats)
     if min_len_str:
-        it = filter_length(it, min_len_str)
+        it = filter_length(it, min_len_str, stats)
     try:
         with openall(output_file, 'wt') as outf:
             for doc in it:
@@ -122,6 +138,7 @@ def process_file(filename, input_dir, output_dir, languages, min_len_str):
     except:
         logging.exception('Got an error.')
     logging.info('Finished processing file {}...'.format(filename))
+    return stats
 
 
 def main():
@@ -143,7 +160,11 @@ def main():
     f = partial(process_file, input_dir=args.input_dir,
                 output_dir=args.output_dir, languages=set(args.languages),
                 min_len_str=args.min_len)
-    p.map(f, files)
+    # Note: + / sum() do not keep keys with 0 values here, hence update()
+    stats = Counter()
+    for sub_stats in p.map(f, files):
+        stats.update(sub_stats)
+    logging.info('Statistics: {}'.format(stats))
     p.close()
     p.join()
     logging.info('Done.')
