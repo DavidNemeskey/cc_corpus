@@ -250,6 +250,11 @@ def _parse(input, parse_fn, attrs=True, meta=True, content=True, **meta_fields):
                 yield queue.get(timeout=0.1)
             except Empty:
                 pass
+        while True:
+            try:
+                yield queue.get_nowait()
+            except Empty:
+                break
         return future.result()
 
 
