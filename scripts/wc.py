@@ -70,6 +70,7 @@ def collect_inputs(inputs):
 
 def count_file(filename, docs, ps, words, chars):
     # We need the content if we are counting anything aside from docs
+    logging.debug('Counting {}...'.format(filename))
     need_content = ps or words or chars
     num_docs = num_ps = num_words = num_chars = 0
     for doc in parse_file(filename, False, False, need_content):
@@ -80,6 +81,7 @@ def count_file(filename, docs, ps, words, chars):
             num_words += doc.wc(w=True)
         if chars:
             num_chars += doc.wc(c=True)
+    logging.debug('Counted {}.'.format(filename))
     return num_docs, num_ps, num_words, num_chars
 
 
@@ -95,7 +97,7 @@ def main():
     os.nice(20)
 
     files = collect_inputs(args.inputs)
-    logging.info('Scheduled {} files for filtering.'.format(len(files)))
+    logging.info('Scheduled {} files for counting...'.format(len(files)))
     with Pool(args.processes) as p:
         f = partial(count_file, docs=args.documents, ps=args.paragraphs,
                     words=args.words, chars=args.characters)
