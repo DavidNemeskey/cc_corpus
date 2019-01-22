@@ -77,7 +77,7 @@ class Document:
         if self.meta:
             print('<meta>', file=buffer)
             for k, v in self.meta.items():
-                print('<{0}>\n{1}\n<{0}>'.format(k, v), file=buffer)
+                print('<{0}>\n{1}\n</{0}>'.format(k, v), file=buffer)
             print('</meta>', file=buffer)
         if self.paragraphs:
             for p in self.paragraphs[:-1]:
