@@ -32,7 +32,8 @@ def parse_arguments():
                         help='the corpus directory')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory')
-    parser.add_argument('--language', '-l', action='append', dest='languages',
+    parser.add_argument('--language', '-l', action='append', default=[],
+                        dest='languages',
                         help='activates language filtering and marks a '
                              'language to keep. Should be specified once '
                              'per language.')
