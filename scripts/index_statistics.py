@@ -96,6 +96,8 @@ def write_statistics(stats, output_dir, file_prefix=None):
 
 def main():
     args = parse_arguments()
+    os.nice(20)  # Play nice
+
     to_process = [op.join(args.input_dir, f) for f in os.listdir(args.input_dir)]
     with cf.ProcessPoolExecutor(max_workers=args.processes) as executor:
         aggr_stats = Stats()
