@@ -3,7 +3,7 @@
 
 """
 Counts the number of documents, paragraphs, words and / or characters in
-(a set of) documents in the files format.
+(a set of) documents in WARC or the corpus format.
 """
 
 from argparse import ArgumentParser
@@ -14,6 +14,7 @@ import os
 import os.path as op
 
 from multiprocessing_logging import install_mp_handler
+import warc
 
 from cc_corpus.corpus import parse_file
 
@@ -21,11 +22,12 @@ from cc_corpus.corpus import parse_file
 def parse_arguments():
     parser = ArgumentParser('Counts the number of documents, paragraphs, '
                             'words and / or characters in (a set of) '
-                            'files in the corpus format.\n\nSimilarly to '
-                            'Unix wc, any number of these switches can be '
+                            'files in WARC or the corpus format.\n\nSimilarly '
+                            'to Unix wc, any number of these switches can be '
                             'specified, and then only those numbers are '
                             'printed; if no flags are specified, all numbers '
-                            'are printed.')
+                            'are printed.\n\nFor WARC, number of paragraphs '
+                            'and words will always be 0.')
     parser.add_argument('inputs', nargs='*',
                         help='the files/directories to count.')
     parser.add_argument('--documents', '-d', action='store_true',
@@ -36,6 +38,8 @@ def parse_arguments():
                         help='Count the number of words.')
     parser.add_argument('--characters', '-c', action='store_true',
                         help='Count the number of characters.')
+    parser.add_argument('--warc', '-W', action='store_true',
+                        help='Assume ALL input files are in the WARC format.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -50,6 +54,8 @@ def parse_arguments():
     # Without fields specified => all fields
     if not any([args.documents, args.paragraphs, args.words, args.characters]):
         args.documents = args.paragraphs = args.words = args.characters = True
+    if args.warc and not (args.documents or args.characters):
+        parser.error('Can only count documents and characters in WARC format.')
     return args
 
 
@@ -69,6 +75,10 @@ def collect_inputs(inputs):
 
 
 def count_file(filename, docs, ps, words, chars):
+    """
+    Counts the file denoted by filename. docs, ps, words and chars are bools
+    telling the code whether to count the respective units.
+    """
     # We need the content if we are counting anything aside from docs
     logging.debug('Counting {}...'.format(filename))
     need_content = ps or words or chars
@@ -89,6 +99,23 @@ def count_file(filename, docs, ps, words, chars):
     return num_docs, num_ps, num_words, num_chars
 
 
+def count_warc_file(filename, docs, ps, words, chars):
+    """Same as count_file, but for WARC files."""
+    # We need the content if we are counting anything aside from docs
+    logging.debug('Counting {}...'.format(filename))
+    num_docs = num_chars = 0
+    try:
+        for doc in warc.open(filename):
+            num_docs += 1
+            if chars:
+                num_chars += doc.header.content_length
+    except:
+        logging.exception('Error in file {}; read {} documents thus far.'.format(
+            filename, num_docs))
+    logging.debug('Counted {}.'.format(filename))
+    return num_docs, 0, 0, num_chars
+
+
 def main():
     args = parse_arguments()
 
@@ -101,9 +128,10 @@ def main():
     os.nice(20)
 
     files = collect_inputs(args.inputs)
+    count_fn = count_file if not args.warc else count_warc_file
     logging.info('Scheduled {} files for counting...'.format(len(files)))
     with Pool(args.processes) as p:
-        f = partial(count_file, docs=args.documents, ps=args.paragraphs,
+        f = partial(count_fn, docs=args.documents, ps=args.paragraphs,
                     words=args.words, chars=args.characters)
         stats = [0, 0, 0, 0]
         for sub_stats in p.map(f, files):

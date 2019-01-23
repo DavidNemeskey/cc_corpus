@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.1.3',
+      version='1.1.4',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -75,6 +75,8 @@ setup(name='commoncrawl-downloader',
           'tldextract',
           # Language identification
           'cld2-cffi', 'langid',
+          # WARC 3 library
+          'warc',
       ],
       dependency_links=[
           # WARC 3 library
