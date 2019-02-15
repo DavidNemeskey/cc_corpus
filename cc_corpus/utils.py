@@ -5,6 +5,8 @@
 
 import bz2
 import gzip
+import os
+import os.path as op
 
 def openall(
     filename, mode='rt', encoding=None, errors=None, newline=None,
