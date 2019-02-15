@@ -8,6 +8,7 @@ Computes the minhash for a directory of files.
 from argparse import ArgumentParser
 from functools import partial
 import logging
+from multiprocessing import Pool
 import os
 import pickle
 
@@ -72,7 +73,7 @@ def main():
 
     os.nice(20)
 
-    files = collect_inputs(args.inputs)
+    files = sorted(collect_inputs(args.inputs))
     logging.info('Found a total of {} input files.'.format(len(files)))
     with Pool(args.processes) as pool:
         f = partial(process_file, permutations=args.permutations, n=args.n)
