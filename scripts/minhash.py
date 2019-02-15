@@ -51,14 +51,21 @@ def shinglize(text, n):
 
 
 def process_file(input_file, permutations, n):
+    logging.info('Processing {}...'.format(input_file))
     results = {'id': [], 'minhash': []}
+    num_docs, num_ps = 0, 0
     for doc in parse_file(input_file, meta=False):
+        num_docs += 1
+        num_ps += len(doc.paragraphs)
+        logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
         for p, text in enumerate(doc.paragraphs, start=1):
             results['id'].append((doc.attrs['url'], p))
             mh = MinHash(num_perm=permutations)
             for shingle in shinglize(text, n):
                 mh.update(shingle.encode('utf-8'))
             results['minhash'].append(LeanMinHash(mh))
+    logging.info('Finished processing {}, which contained {} paragraphs in {} '
+                 'documents.'.format(input_file, num_ps, num_docs))
     return results
 
 
@@ -79,11 +86,14 @@ def main():
         f = partial(process_file, permutations=args.permutations, n=args.n)
         with openall('{}.minhashes'.format(args.output), 'wb') as mout, \
              openall('{}.doc_ids'.format(args.output), 'wt') as dout:
+            num_ps = 0
             for results in pool.map(f, files):
                 for mh in results['minhash']:
-                    mout.write(mh)
+                    mout.write(pickle.dumps(mh))
                 for doc, p in results['id']:
                     print(doc, p, sep='\t', file=dout)
+                num_ps += len(results['minhash'])
+            logging.info('Hashed in total {} paragraphs.'.format(num_ps))
 
         pool.close()
         pool.join()
