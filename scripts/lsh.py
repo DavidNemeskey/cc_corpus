@@ -11,7 +11,7 @@ import logging
 import os
 import pickle
 
-from datasketch import MinHash, LeanMinHash
+from datasketch import MinHashLSH, LeanMinHash
 
 from cc_corpus.utils import unpickle_stream
 
@@ -22,6 +22,10 @@ def parse_arguments():
                             'by minhash.py.')
     parser.add_argument('--input', '-i', required=True,
                         help='the input file prefix.')
+    parser.add_argument('--threshold', '-t', type=float, default=0.9,
+                        help='the number of permutations per paragraph (256).')
+    parser.add_argument('--permutations', '-p', type=int, default=256,
+                        help='the number of permutations per paragraph (256).')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
@@ -36,6 +40,16 @@ def load_minhashes(minhash_file):
         step = len(pickle.dumps(obj))
         inf.seek(0)
         return list(unpickle_stream(inf))
+
+
+def find_duplicates(minhashes, permutations):
+    """Find the duplicates amongst the minhashes."""
+    lsh = MinHashLSH(threshold=0.9, num_perm=permutations)
+    for i, mh in enumerate(minhashes):
+        lsh.insert(str(i), mh, check_duplication=False)
+    for i, mh in enumerate(minhashes):
+        similar = sh.query(mh)
+        print(i, similar)
 
 
 def main():
