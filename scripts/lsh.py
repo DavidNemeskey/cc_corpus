@@ -13,6 +13,8 @@ import pickle
 
 from datasketch import MinHash, LeanMinHash
 
+from cc_corpus.utils import unpickle_stream
+
 
 def parse_arguments():
     parser = ArgumentParser('Deduplicates the documents with Locality '
@@ -33,10 +35,7 @@ def load_minhashes(minhash_file):
         obj = pickle.load(inf)
         step = len(pickle.dumps(obj))
         inf.seek(0)
-        minhashes = []
-        while True:
-            minhashes.append(pickle.load(inf))
-        return minhashes
+        return list(unpickle_stream(inf))
 
 
 def main():

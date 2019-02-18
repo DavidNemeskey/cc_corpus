@@ -7,6 +7,7 @@ import bz2
 import gzip
 import os
 import os.path as op
+import pickle
 
 def openall(
     filename, mode='rt', encoding=None, errors=None, newline=None,
@@ -29,6 +30,18 @@ def openall(
     else:
         return open(filename, mode, buffering, encoding, errors, newline,
                     closefd, opener)
+
+
+def unpickle_stream(inf):
+    """
+    Wraps the while loop of loading stuff with pickle from a stream so that
+    the user can use a for loop instead.
+    """
+    try:
+        while True:
+            yield pickle.load(inf)
+    except EOFError:
+        return
 
 
 def collect_inputs(inputs):
