@@ -59,6 +59,7 @@ setup(name='commoncrawl-downloader',
           'scripts/remove_boilerplate.py',
           'scripts/wc.py',
           'scripts/minhash.py',
+          'scripts/lsh.py',
       ],
       install_requires=[
           'boto3',
