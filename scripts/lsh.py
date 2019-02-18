@@ -76,7 +76,8 @@ def find_duplicates(minhashes, threshold, permutations, name_hashes):
         similar = lsh.query(mh)
         similar.remove(str(i))
         if name_hashes:
-            similar = [s for s in similar if name_hashes[i] != name_hashes[int(s)]]
+            # Remove matches that occur in the same document
+            similar = [s for s in similar if name_hashes[i - 1] != name_hashes[int(s) - 1]]
         if similar:
             print(i, similar)
 
