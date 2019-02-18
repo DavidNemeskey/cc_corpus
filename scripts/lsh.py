@@ -42,14 +42,16 @@ def load_minhashes(minhash_file):
         return list(unpickle_stream(inf))
 
 
-def find_duplicates(minhashes, permutations):
+def find_duplicates(minhashes, threshold, permutations):
     """Find the duplicates amongst the minhashes."""
-    lsh = MinHashLSH(threshold=0.9, num_perm=permutations)
-    for i, mh in enumerate(minhashes):
+    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+    for i, mh in enumerate(minhashes, start=1):
         lsh.insert(str(i), mh, check_duplication=False)
-    for i, mh in enumerate(minhashes):
-        similar = sh.query(mh)
-        print(i, similar)
+    for i, mh in enumerate(minhashes, start=1):
+        similar = lsh.query(mh)
+        similar.remove(str(i))
+        if similar:
+            print(i, similar)
 
 
 def main():
@@ -61,6 +63,7 @@ def main():
     )
 
     minhashes = load_minhashes(args.input + '.minhashes')
+    find_duplicates(minhashes, args.threshold, args.permutations)
 
     os.nice(20)
 
