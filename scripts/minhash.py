@@ -25,7 +25,7 @@ def parse_arguments():
                         action='append', default=[],
                         help='the files/directories to compute the minhash for.')
     parser.add_argument('--output', '-o', required=True,
-                        help='the output file(s).')
+                        help='the output file prefix.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--n', '-n', type=int, default=5,
@@ -98,6 +98,7 @@ def main():
         pool.close()
         pool.join()
     logging.info('Done.')
+
 
 if __name__ == '__main__':
     main()
