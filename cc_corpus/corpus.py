@@ -106,8 +106,8 @@ class Document:
 
 class SAXParser:
     """A SAX-like parser for the corpus format."""
-    tag_p = re.compile(r'^<([^\s>]+)((?:\s+\S+="[^"]*")*)\s*>$')
-    attrs_p = re.compile(r'(\S+)="([^"]*)"')
+    tag_p = re.compile(r'^<([^\s>]+)((?:\s+[^\s=]+="[^"]*")*)\s*>$')
+    attrs_p = re.compile(r'([^\s=]+)="([^"]*)"')
 
     def __init__(self, handler, attrs=True):
         """
