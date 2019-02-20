@@ -54,16 +54,24 @@ def process_file(input_file, permutations, n):
     logging.info('Processing {}...'.format(input_file))
     results = {'id': [], 'minhash': []}
     num_docs, num_ps = 0, 0
-    for doc in parse_file(input_file, meta=False):
-        num_docs += 1
-        num_ps += len(doc.paragraphs)
-        logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
-        for p, text in enumerate(doc.paragraphs, start=1):
-            results['id'].append((doc.attrs['url'], p))
-            mh = MinHash(num_perm=permutations)
-            for shingle in shinglize(text, n):
-                mh.update(shingle.encode('utf-8'))
-            results['minhash'].append(LeanMinHash(mh))
+    try:
+        for doc in parse_file(input_file, meta=False):
+            try:
+                num_docs += 1
+                num_ps += len(doc.paragraphs)
+                logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
+                for p, text in enumerate(doc.paragraphs, start=1):
+                    results['id'].append((doc.attrs['url'], p))
+                    mh = MinHash(num_perm=permutations)
+                    for shingle in shinglize(text, n):
+                        mh.update(shingle.encode('utf-8'))
+                    results['minhash'].append(LeanMinHash(mh))
+            except:
+                logging.exception(
+                    'Exception while processing file {}, in doc {}'.format(
+                        input_file, doc))
+    except:
+        logging.exception('Error processing file {}'.format(input_file))
     logging.info('Finished processing {}, which contained {} paragraphs in {} '
                  'documents.'.format(input_file, num_ps, num_docs))
     return results
