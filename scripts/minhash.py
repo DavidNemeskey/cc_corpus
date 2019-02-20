@@ -2,7 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-Computes the minhash for a directory of files.
+Computes the minhash for a directory of files. Outputs the results into another
+directory, with consecutively numbered files:
+    - xxx.minhashes: the minhashes of the paragraphs in a batch
+    - xxx.doc_ids: the document and paragraph ids of a batch
+    - xxx.files: contains the names of all data files in the batch, the number
+                 of paragraphs from each, as well as offsets for the data in
+                 both the minhashes and doc_ids files.
 """
 
 from argparse import ArgumentParser
@@ -20,12 +26,17 @@ from cc_corpus.utils import openall, collect_inputs
 
 
 def parse_arguments():
-    parser = ArgumentParser('Computes the minhash for a directory of files.')
+    parser = ArgumentParser(__doc__)
     parser.add_argument('--input', '-i', dest='inputs', required=True,
                         action='append', default=[],
                         help='the files/directories to compute the minhash for.')
-    parser.add_argument('--output', '-o', required=True,
-                        help='the output file prefix.')
+    parser.add_argument('--output-dir', '-o', required=True,
+                        help='the output directory.')
+    parser.add_argument('--batch-size', '-b', type=int, default=1000000,
+                        help='the number of paragraphs in a single batch. '
+                             'This is not an exact number, as documents in '
+                             'the same data files are always put into the same '
+                             'batch.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--n', '-n', type=int, default=5,
@@ -36,6 +47,8 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
+    parser.add_argument('--zeroes', '-Z', type=int, default=4,
+                        help='the number of zeroes in the batch files\' names.')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
@@ -77,6 +90,27 @@ def process_file(input_file, permutations, n):
     return results
 
 
+class BatchWriter:
+    """Writes batches of minhash data."""
+    def __init__(self, batch_size, zeroes=4):
+        self.batch_size = batch_size
+        self.zeroes = zeroes
+        self.batch = 1
+        self.minhashf = self.doc_idf == self.filef = None
+        self.mh_offset = self.di_offset = 0
+
+    def write_results(self, input_file, results):
+        """Prints the results of minhashing a data file."""
+        print('{}\t{}\t{}\t{}'.format(input_file, len(results),
+                                      self.mh_offset, self.di_offset),
+              file=self.filef)
+        for mh in results['minhash']:
+            self.mh_offset += self.minhashf.write(pickle.dumps(mh))
+        for doc, p in results['id']:
+            self.di_offset += self.doc_idf.write(
+                '{}\t{}\n'.format(doc, p).encode('utf-8'))
+
+
 def main():
     args = parse_arguments()
 
@@ -87,6 +121,8 @@ def main():
     install_mp_handler()
 
     os.nice(20)
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
 
     files = sorted(collect_inputs(args.inputs))
     logging.info('Found a total of {} input files.'.format(len(files)))
