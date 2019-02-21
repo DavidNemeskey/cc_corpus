@@ -87,7 +87,7 @@ def process_file(input_file, permutations, n):
         logging.exception('Error processing file {}'.format(input_file))
     logging.info('Finished processing {}, which contained {} paragraphs in {} '
                  'documents.'.format(input_file, num_ps, num_docs))
-    return results
+    return input_file, results
 
 
 class BatchWriter:
@@ -97,7 +97,7 @@ class BatchWriter:
         self.out_dir = out_dir
         self.zeroes = zeroes
         self.batch = 0
-        self.minhashf = self.doc_idf == self.filef = None
+        self.minhashf = self.doc_idf = self.filef = None
         self.mh_offset = self.di_offset = 0
         self.p_written = self.batch_size + 1  # so that we invoke new_file
         self.total_written = 0
@@ -138,14 +138,13 @@ class BatchWriter:
             self.minhashf.close()
             self.doc_idf.close()
             self.filef.close()
-            self.minhashf = self.doc_idf == self.filef = None
+            self.minhashf = self.doc_idf = self.filef = None
 
             self.total_written += self.p_written
             self.p_written = 0
 
     def __del__(self):
         """Just calls close()."""
-        super().__del__()
         self.close()
 
 
@@ -167,8 +166,8 @@ def main():
     writer = BatchWriter(args.batch_size, args.output_dir, args.zeroes)
     with Pool(args.processes) as pool:
         f = partial(process_file, permutations=args.permutations, n=args.n)
-        for results in pool.map(f, files):
-            writer.write_results(, results)
+        for input_file, results in pool.map(f, files):
+            writer.write_results(input_file, results)
 
         pool.close()
         pool.join()
