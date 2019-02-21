@@ -144,7 +144,7 @@ class BatchWriter:
             self.di_offset = 0
 
             self.total_written += self.p_written
-            self.p_written = 0
+        self.p_written = 0
 
     def __del__(self):
         """Just calls close()."""
