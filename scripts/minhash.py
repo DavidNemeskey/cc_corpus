@@ -107,7 +107,7 @@ class BatchWriter:
         if self.p_written >= self.batch_size:
             self.new_file()
 
-        print('{}\t{}\t{}\t{}'.format(input_file, len(results),
+        print('{}\t{}\t{}\t{}'.format(input_file, len(results['minhash']),
                                       self.mh_offset, self.di_offset),
               file=self.filef)
         for mh in results['minhash']:
@@ -115,7 +115,7 @@ class BatchWriter:
         for doc, p in results['id']:
             self.di_offset += self.doc_idf.write(
                 '{}\t{}\n'.format(doc, p).encode('utf-8'))
-        self.p_written += len(results)
+        self.p_written += len(results['minhash'])
 
     def new_file(self):
         """Closes the old file and opens a new one."""
