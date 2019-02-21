@@ -140,6 +140,9 @@ class BatchWriter:
             self.filef.close()
             self.minhashf = self.doc_idf = self.filef = None
 
+            self.mh_offset = 0
+            self.di_offset = 0
+
             self.total_written += self.p_written
             self.p_written = 0
 
