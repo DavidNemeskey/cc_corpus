@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.1.5',
+      version='1.1.6',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -58,6 +58,7 @@ setup(name='commoncrawl-downloader',
           'scripts/index_statistics.py',
           'scripts/remove_boilerplate.py',
           'scripts/wc.py',
+          'scripts/extract_pages_from_warc.py',
           'scripts/minhash.py',
           'scripts/lsh.py',
       ],
