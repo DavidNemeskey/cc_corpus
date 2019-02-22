@@ -37,6 +37,10 @@ def parse_arguments():
                         help='activates language filtering and marks a '
                              'language to keep. Should be specified once '
                              'per language.')
+    parser.add_argument('--language-unit', '-u', choices=['doc', 'p'],
+                        default='p',
+                        help='the unit of language detection: document or '
+                             'paragraph.')
     parser.add_argument('--min-len', '-m', type=str,
                         help='the minimum number of characters / words in a '
                              'document. Activates length filtering. Values '
@@ -75,34 +79,59 @@ def each_doc(doc_iter, stats):
     stats['initial'] = doc_no
 
 
-def filter_languages(doc_iter, languages, stats):
+def check_language(text, languages):
+    """Checks if text is written in any of the specified languages."""
     import cld2
+    try:
+        _, _, lang = cld2.detect(text)
+        return lang[0].language_code in languages
+    except Exception as cld_ex:
+        # cld2 cannot handle some UTF-8 characters that Python can. See
+        # https://github.com/mikemccand/chromium-compact-language-detector/issues/22
+        # There is a workaround, but I'd rather just call langid in this case
+        import langid
+        lang, _ = langid.classify(text)
+        return lang in languages
 
+
+def filter_languages_doc(doc_iter, languages, stats):
+    """Filters languages on the document level."""
     doc_no, kept = 0, 0
     for doc_no, doc in enumerate(doc_iter, start=1):
         content = doc.content()
         try:
-            _, _, lang = cld2.detect(content)
-            if lang[0].language_code in languages:
-                yield doc
+            if check_language(content, languages):
                 kept += 1
-        except Exception as cld_ex:
-            # cld2 cannot handle some UTF-8 characters that Python can. See
-            # https://github.com/mikemccand/chromium-compact-language-detector/issues/22
-            # There is a workaround, but I'd rather just call langid in this case
-            try:
-                import langid
-                lang, _ = langid.classify(content)
-                if lang in languages:
-                    yield doc
-                    kept += 1
-            except Exception as langid_ex:
-                logging.exception('Error identifying document {}\'s language'.format(
-                    repr(doc)))
+                yield doc
+        except Exception:
+            logging.exception('Error identifying document {}\'s language'.format(
+                repr(doc)))
     if doc_no:
         logging.info('Filtered {} documents based on language, kept {}.'.format(
             doc_no, kept))
     stats['language'] = kept
+
+
+def filter_languages_p(doc_iter, languages, stats):
+    """Filters languages on the paragraph level."""
+    doc_no, kept, all_p, kept_p = 0, 0, 0, 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
+        all_p += len(doc.paragraphs)
+        try:
+            doc.paragraphs = [p for p in doc.paragraphs
+                              if check_language(p, languages)]
+            if doc.paragraphs:
+                kept_p += len(doc.paragraphs)
+                kept += 1
+                yield doc
+        except:
+            logging.exception('Error identifying document {}\'s language'.format(
+                repr(doc)))
+    if doc_no:
+        logging.info('Filtered {} documents / {} paragraphs based on language, '
+                     'kept {} / {}.'.format(doc_no, all_p, kept, kept_p))
+    stats['language'] = kept
+    stats['language_p'] = kept_p
 
 
 def filter_length(doc_iter, min_len_str, stats):
@@ -120,7 +149,8 @@ def filter_length(doc_iter, min_len_str, stats):
     stats['length'] = kept
 
 
-def process_file(filename, input_dir, output_dir, languages, min_len_str):
+def process_file(filename, input_dir, output_dir,
+                 languages, language_unit, min_len_str):
     input_file = os.path.join(input_dir, filename)
     output_file = os.path.join(output_dir, filename)
     logging.info('Processing file {}...'.format(filename))
@@ -160,7 +190,7 @@ def main():
     p = Pool(args.processes)
     f = partial(process_file, input_dir=args.input_dir,
                 output_dir=args.output_dir, languages=set(args.languages),
-                min_len_str=args.min_len)
+                language_unit=args.language_unit, min_len_str=args.min_len)
     # Note: + / sum() do not keep keys with 0 values here, hence update()
     stats = Counter()
     for sub_stats in p.map(f, files):
