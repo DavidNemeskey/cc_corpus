@@ -159,7 +159,10 @@ def process_file(filename, input_dir, output_dir,
     it = parse_file(input_file, True, True, True)
     it = each_doc(it, stats)
     if languages:
-        it = filter_languages(it, languages, stats)
+        if language_unit == 'doc':
+            it = filter_languages_doc(it, languages, stats)
+        else:
+            it = filter_languages_p(it, languages, stats)
     if min_len_str:
         it = filter_length(it, min_len_str, stats)
     try:
