@@ -14,6 +14,7 @@
           dest: "{{ github_repo_dir }}"
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
+          version: minhash
         tags:
             - install
       - name: initialize virtualenv + install tmuxp

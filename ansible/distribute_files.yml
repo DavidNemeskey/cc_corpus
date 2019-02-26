@@ -1,0 +1,27 @@
+---
+# Everything here runs on the very first host
+- hosts: "{{ groups['slaves'][0] }}"
+  gather_facts: no
+  tasks:
+    # Collect the per-host process count to a common dictionary
+    - name: assemble per-host process count
+      local_action:
+        module: set_fact
+        host_weights: "{{ host_weights|default({}) | combine(
+            {host: hostvars[host]['processes']|default(1) }) }}"
+      loop: "{{ groups['slaves'] }}"
+      loop_control:
+          loop_var: host
+    # Assembles the hosts command-line argument for distribute_files.py 
+    - name: hosts argument for distribute_files.py
+      local_action:
+        module: set_fact
+        hosts_argument: "{{ (hosts_argument|default('') + ' -H ' + item.key + ':' + item.value|string)|trim }}"
+      loop: "{{ host_weights | dict2items }}"
+    - local_action:
+        module: debug
+        msg: "This is the dictionary I collected: {{ host_weights }}: {{ hosts_argument }}"
+      run_once: True
+    # Runs the python script distribute_files.py
+    - name: runs distribute_files.py on the first host
+      shell: "{{ virtualenv_dir }}/bin/python {{ github_repo_dir }}/scripts/distribute_files.py -i {{ input_dir }} -o {{ output_dir }} {{ hosts_argument }}"
