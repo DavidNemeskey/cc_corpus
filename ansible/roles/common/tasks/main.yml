@@ -1,0 +1,9 @@
+---
+# Collect the per-host process count to a common dictionary
+- name: assemble per-host process count
+  local_action:
+    module: set_fact
+    host_weights: "{{ host_weights|default({}) | combine({host: hostvars[host]['processes']|default(1) }) }}"
+  loop: "{{ groups['slaves'] }}"
+  loop_control:
+      loop_var: host

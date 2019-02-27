@@ -1,0 +1,13 @@
+---
+# Runs minhash.py in a distributed way.
+
+- hosts: localhost
+  roles:
+    - assert
+
+- hosts: test_slaves
+  vars:
+    - tmux_session_name: test_session
+    - tmux_window_title: test_window
+  roles:
+    - tmux

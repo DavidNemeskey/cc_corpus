@@ -1,13 +1,7 @@
 ---
 
-- hosts: slaves
-  tasks:
-      - assert:
-          that: (ansible_version.major, ansible_version.minor) >= (2, 0)
-          msg: require ansible >= 2.0, found {{ansible_version.full}}
-
 # Installation
-- hosts: slaves
+- hosts: test_slaves
   tasks:
       - git:
           repo: git@github.com:DavidNemeskey/commoncrawl-downloader2.git
