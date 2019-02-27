@@ -4,3 +4,9 @@ ginny
 ron
 percy
 charlie
+
+[controller]
+nessie
+
+[test_slaves]
+fred
