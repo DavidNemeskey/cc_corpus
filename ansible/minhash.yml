@@ -9,5 +9,6 @@
   vars:
     - tmux_session_name: test_session
     - tmux_window_title: test_window
+    - python_script: minhash.py
   roles:
-    - tmux
+    - python
