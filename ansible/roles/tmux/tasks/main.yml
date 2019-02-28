@@ -1,8 +1,0 @@
----
-# Uploads the tmuxp configuration file and starts the tmux session
-- name: upload the tmuxp configuration template
-  template:
-    src: tmuxp.yml.j2
-    dest: "{{ github_repo_dir }}/ansible/tmuxp.yml"
-- name: start the tmux session
-  shell: "{{ virtualenv_dir }}/bin/tmuxp load -d {{ github_repo_dir }}/ansible/tmuxp.yml"
