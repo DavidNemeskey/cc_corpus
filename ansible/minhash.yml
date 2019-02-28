@@ -5,7 +5,7 @@
   roles:
     - assert
 
-- hosts: test_slaves
+- hosts: slaves
   vars:
     - tmux_session_name: test_session
     - tmux_window_title: test_window

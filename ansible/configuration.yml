@@ -1,7 +1,7 @@
 ---
 
 # Installation
-- hosts: test_slaves
+- hosts: slaves
   tasks:
       - git:
           repo: git@github.com:DavidNemeskey/commoncrawl-downloader2.git
