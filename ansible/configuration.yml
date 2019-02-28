@@ -11,9 +11,19 @@
           version: minhash
         tags:
             - install
-      - name: initialize virtualenv + install tmuxp
+      - name: initialize virtualenv + upgrade setuptools and pip
         pip: 
-            name: tmuxp
+            name:
+              - setuptools>=40.0.0
+              - pip>=19.0.0
+            virtualenv: "{{ virtualenv_dir }}"
+            virtualenv_python: python3
+        tags:
+            - install
+      - name: install tmuxp
+        pip: 
+            name:
+              - tmuxp
             virtualenv: "{{ virtualenv_dir }}"
             virtualenv_python: python3
         tags:
