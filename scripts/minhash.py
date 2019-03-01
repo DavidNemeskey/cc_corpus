@@ -122,6 +122,7 @@ class BatchWriter:
         self.close()
 
         self.batch += 1
+        logging.info('Opening file {}...'.format(self.batch))
         prefix = os.path.join(self.out_dir,
                               '{{:0{}}}'.format(self.zeroes).format(self.batch))
         self.minhashf = open(prefix + '.minhashes', 'wb')
@@ -169,7 +170,9 @@ def main():
     writer = BatchWriter(args.batch_size, args.output_dir, args.zeroes)
     with Pool(args.processes) as pool:
         f = partial(process_file, permutations=args.permutations, n=args.n)
-        for input_file, results in pool.map(f, files):
+        for input_file, results in pool.imap(f, files):
+            logging.debug('Got results for {}: {}'.format(
+                input_file, len(results['minhash'])))
             writer.write_results(input_file, results)
 
         pool.close()
