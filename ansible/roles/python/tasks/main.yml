@@ -29,9 +29,6 @@
   set_fact:
     common_args: "{{ script_args['common_args']|default('') }}"
     per_host_log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
-- name: log file before
-  debug:
-    msg: "Log file after {{ per_host_log_file }}"
 - name: upload the tmuxp configuration template
   template:
     src: tmuxp.yml.j2
