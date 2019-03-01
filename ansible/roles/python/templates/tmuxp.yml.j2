@@ -4,6 +4,6 @@ windows:
     panes:
       - shell_command:
         - source {{ virtualenv_dir }}/bin/activate
-        - {{ python_script }} -P {{ processes }} {{ per_host_args }} {{ common_args }} > {{ log_file }} 2>&1
+        - {{ python_script }} -P {{ processes }} {{ per_host_args }} {{ common_args }} > {{ per_host_log_file }} 2>&1
         - deactivate
         - exit

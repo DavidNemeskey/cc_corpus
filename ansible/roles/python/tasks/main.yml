@@ -28,10 +28,21 @@
 - name: setting arguments common to processes on all hosts and the log file
   set_fact:
     common_args: "{{ script_args['common_args']|default('') }}"
-    log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
+    per_host_log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
+- name: log file before
+  debug:
+    msg: "Log file after {{ per_host_log_file }}"
 - name: upload the tmuxp configuration template
   template:
     src: tmuxp.yml.j2
     dest: "{{ github_repo_dir }}/ansible/tmuxp.yml"
 - name: start the tmux session
   shell: "{{ virtualenv_dir }}/bin/tmuxp load -d {{ github_repo_dir }}/ansible/tmuxp.yml"
+
+# Task that kills the running tmux sessions. Use if you want to stop
+# script execution.
+- name: kill the tmux session
+  shell: "tmux kill-session -t {{ tmux_session_name }}"
+  tags:
+    - never
+    - kill_tmux
