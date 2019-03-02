@@ -65,7 +65,7 @@ def shinglize(text, n):
         yield text[i:i+n]
 
 
-def minhash_ps(input_file, unit, permutations, n):
+def minhash_ps(input_file, permutations, n):
     """Minhashes paragraphs."""
     logging.info('Processing {}...'.format(input_file))
     results = {'id': [], 'minhash': []}
@@ -93,7 +93,7 @@ def minhash_ps(input_file, unit, permutations, n):
     return input_file, results
 
 
-def minhash_docs(input_file, unit, permutations, n):
+def minhash_docs(input_file, permutations, n):
     """Minhashes documents."""
     logging.info('Processing {}...'.format(input_file))
     results = {'id': [], 'minhash': []}
