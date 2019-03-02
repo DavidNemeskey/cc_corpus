@@ -37,7 +37,7 @@ def parse_arguments():
                              'This is not an exact number, as documents in '
                              'the same data files are always put into the same '
                              'batch.')
-    parser.add_arguemnt('--unit', '-u', choices=['doc', 'p'], default='p',
+    parser.add_argument('--unit', '-u', choices=['doc', 'p'], default='p',
                         help='the deduplication unit: document or paragraph (p).')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
