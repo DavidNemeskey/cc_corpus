@@ -37,6 +37,8 @@ def parse_arguments():
                              'This is not an exact number, as documents in '
                              'the same data files are always put into the same '
                              'batch.')
+    parser.add_arguemnt('--unit', '-u', choices=['doc', 'p'], default='p',
+                        help='the deduplication unit: document or paragraph (p).')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--n', '-n', type=int, default=5,
@@ -63,7 +65,8 @@ def shinglize(text, n):
         yield text[i:i+n]
 
 
-def process_file(input_file, permutations, n):
+def minhash_ps(input_file, unit, permutations, n):
+    """Minhashes paragraphs."""
     logging.info('Processing {}...'.format(input_file))
     results = {'id': [], 'minhash': []}
     num_docs, num_ps = 0, 0
@@ -90,6 +93,32 @@ def process_file(input_file, permutations, n):
     return input_file, results
 
 
+def minhash_docs(input_file, unit, permutations, n):
+    """Minhashes documents."""
+    logging.info('Processing {}...'.format(input_file))
+    results = {'id': [], 'minhash': []}
+    num_docs = 0
+    try:
+        for doc in parse_file(input_file, meta=False):
+            try:
+                num_docs += 1
+                logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
+                results['id'].append((doc.attrs['url'],))
+                mh = MinHash(num_perm=permutations)
+                for shingle in shinglize(doc.content(), n):
+                    mh.update(shingle.encode('utf-8'))
+                results['minhash'].append(LeanMinHash(mh))
+            except:
+                logging.exception(
+                    'Exception while processing file {}, in doc {}'.format(
+                        input_file, doc))
+    except:
+        logging.exception('Error processing file {}'.format(input_file))
+    logging.info('Finished processing {}, which contained {} documents.'.format(
+        input_file, num_docs))
+    return input_file, results
+
+
 class BatchWriter:
     """Writes batches of minhash data."""
     def __init__(self, batch_size, out_dir, zeroes=4):
@@ -112,9 +141,9 @@ class BatchWriter:
               file=self.filef)
         for mh in results['minhash']:
             self.mh_offset += self.minhashf.write(pickle.dumps(mh))
-        for doc, p in results['id']:
+        for id_fields in results['id']:
             self.di_offset += self.doc_idf.write(
-                '{}\t{}\n'.format(doc, p).encode('utf-8'))
+                '{}\n'.format('\t'.join(str(f) for f in id_fields)).encode('utf-8'))
         self.p_written += len(results['minhash'])
 
     def new_file(self):
@@ -169,7 +198,8 @@ def main():
     logging.info('Found a total of {} input files.'.format(len(files)))
     writer = BatchWriter(args.batch_size, args.output_dir, args.zeroes)
     with Pool(args.processes) as pool:
-        f = partial(process_file, permutations=args.permutations, n=args.n)
+        minhash_fun = minhash_ps if args.unit == 'p' else minhash_docs
+        f = partial(minhash_fun, permutations=args.permutations, n=args.n)
         for input_file, results in pool.imap(f, files):
             logging.debug('Got results for {}: {}'.format(
                 input_file, len(results['minhash'])))
