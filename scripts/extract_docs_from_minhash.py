@@ -18,77 +18,85 @@ from cc_corpus.utils import openall
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
-    parser.add_argument('--line', '-l', action='append', default=[],
+    parser.add_argument('--line', '-l', dest='lines', action='append',
+                        default=[],
                         help='A line in the doc_ids file to extract. It '
                              'corresponds to a single document / paragraph. '
-                             'Can be specify more than once.')
+                             'Can be specified more than once.')
     parser.add_argument('--line-file', '-L',
                         help='An lsh.py result file. It extracts all line '
                              'file that contains a single document ID per '
                              'line. See -i.')
-    parser.add_argument('--minhash_file', '-m', action='append', default=[],
+    parser.add_argument('--head', '-H', metavar='NUM', type=int, default=100,
+                        help='To be used in conjunction with -L. Only collect '
+                             'the first NUM documents from the file. Usually '
+                             'slightly more than NUM documents will be '
+                             'collected, as the script will always keep groups '
+                             'of similar documents together. '
+                             'The default is 100.')
+    parser.add_argument('--minhash_file', '-m',
                         help='A minhash file prefix (e.g. dir/01 if there are '
-                             'files 01.files and 01.doc_ids in dir). '
-                             'Can be specify more than once.')
-    parser.add_argument('--minhash-dir', '-M',
-                        help='A minhash directory. All files in it are scanned '
-                             'for the documents requested. See -m.')
+                             'files 01.files and 01.doc_ids in dir).')
     return parser.parse_args()
 
 
-def collect_minhash_dir(minhash_dir):
-    """Collects minhash data files from the specified directory."""
-    return sorted([op.join(minhash_dir, f)[:-8]
-                   for f in os.listdir(minhash_dir) in f.endswith('.doc_ids')])
+def collect_lines_from_file(line_file, head):
+    """Collects approximately the first head line numbers from the file."""
+    lines = set()
+    with openall(line_file) as inf:
+        for docs in (line.strip().split() for line in inf):
+            lines.union(map(int, docs))
+            if len(lines) >= head:
+                break
+    return lines
 
 
-def urls_from_file(urls_file):
-    with openall(urls) as inf:
-        return [u for u in inf.read().split('\n') if u]
+def extract_documents(docs_to_extract, doc_file):
+    """
+    Extracts the documents specified (by a url: line number dictionary) from
+    the corpus file doc_file. The line number is only for display.
+    """
+    for doc in parse_file(doc_file, meta=False):
+        url = doc.attrs.get('url')
+        if url in docs_to_extract:
+            print('{}\t{}\n{}\n\n\n'.format(
+                url, docs_to_extract[url], doc.content()))
 
-def urls_from_log(log_file, warc_file):
-    warc_m = re.match(r'(.+?)_\d+\.warc(\.gz)$', warc_file)
-    if warc_m:
-        warc_name = warc_m.group(1) + warc_m.group(2)
-    else:
-        warc_name = warc_file
 
-    urls = []
-    start_p = re.compile(r' - (\d+) - INFO - Processing (.+?)...$')
-    url_p = re.compile(r" - (\d+) - INFO - Nothing's left of (.+?) after "
-                       r"boilerplate removal")
-    end_p = re.compile(r' - (\d+) - INFO - Processed (.+?)...$')
-
-    catching = False
-    with openall(log_file) as inf:
-        for line in inf:
-            if not catching:
-                ms = start_p.search(line)
-                if ms and ms.group(2) == warc_name:
-                    catching = ms.group(1)
-            else:
-                mu = url_p.search(line)
-                if mu and mu.group(1) == catching:
-                    urls.append(mu.group(2))
-                else:
-                    me = end_p.search(line)
-                    if me and me.group(1) == catching:
-                        catching = False
-                        break
-
-    return urls
+def collect_documents(minhash_prefix, lines):
+    block_lines = 0  # The first line that falls in the current document file
+    next_line = 0  # The index of the next line in the list lines
+    with openall(minhash_prefix + '.files') as filef:
+        with openall(minhash_prefix + '.doc_ids') as linef:
+            for doc_file, num_lines, _, offset in (l.strip().split() for l in filef):
+                # Let's find the last line that is still in the current file
+                last_line = next_line
+                while block_lines <= lines[last_line] < block_lines + num_lines:
+                    last_line += 1
+                if last_line != next_line:
+                    docs_to_extract = {}
+                    # There are such lines. Let's read them!
+                    linef.seek(offset)
+                    for i, url in enumerate(linef, start=block_lines + 1):
+                        if i == lines[next_line]:
+                            docs_to_extract[url] = i
+                            next_line += 1
+                    assert next_line == last_line
+                    extract_documents(docs_to_extract, doc_file)
+                block_lines += num_lines
+    assert next_line == len(lines)
 
 
 def main():
     args = parse_arguments()
 
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
+    os.nice(20)
 
-    if args.urls:
-        urls = urls_from_file(args.urls)
-    else:
-        urls = urls_from_log(args.log_file, args.warc)
+    # Collect all lines we want to extract
+    if args.line_file:
+        lines = collect_lines_from_file(args.line_file)
+    lines.union(args.lines)
+    lines = sorted(lines)
 
     for record in warc.open(args.warc):
         url = record.header['WARC-Target-URI']
@@ -107,4 +115,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
