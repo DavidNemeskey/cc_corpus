@@ -79,7 +79,7 @@ def find_duplicates(minhashes, threshold, permutations, name_hashes):
             # Remove matches that occur in the same document
             similar = [s for s in similar if name_hashes[i - 1] != name_hashes[int(s) - 1]]
         if similar:
-            print(i, similar)
+            print('{}\t{}'.format(i, ' '.join(similar)))
 
 
 def main():

@@ -18,12 +18,13 @@ from cc_corpus.utils import openall
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
-    parser.add_argument('--ids', '-i', action='append', default=[],
-                        help='A document/paragraph ID to extract. Paragraphs '
-                             'should be specified as url:p_index (1-based). '
+    parser.add_argument('--line', '-l', action='append', default=[],
+                        help='A line in the doc_ids file to extract. It '
+                             'corresponds to a single document / paragraph. '
                              'Can be specify more than once.')
-    parser.add_argument('--id-file', '-I',
-                        help='A file that contains a single document ID per '
+    parser.add_argument('--line-file', '-L',
+                        help='An lsh.py result file. It extracts all line '
+                             'file that contains a single document ID per '
                              'line. See -i.')
     parser.add_argument('--minhash_file', '-m', action='append', default=[],
                         help='A minhash file prefix (e.g. dir/01 if there are '
