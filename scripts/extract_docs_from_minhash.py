@@ -94,7 +94,7 @@ def main():
 
     # Collect all lines we want to extract
     if args.line_file:
-        lines = collect_lines_from_file(args.line_file)
+        lines = collect_lines_from_file(args.line_file, args.head)
     lines.union(args.lines)
     lines = sorted(lines)
 
