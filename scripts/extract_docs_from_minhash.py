@@ -8,11 +8,9 @@ makes sense to check the documents...)
 """
 
 from argparse import ArgumentParser
-import io
 import os
-import os.path as op
-import re
 
+from cc_corpus.corpus import parse_file
 from cc_corpus.utils import openall
 
 
@@ -59,8 +57,7 @@ def extract_documents(docs_to_extract, doc_file):
     for doc in parse_file(doc_file, meta=False):
         url = doc.attrs.get('url')
         if url in docs_to_extract:
-            print('{}\t{}\n{}\n\n\n'.format(
-                url, docs_to_extract[url], doc.content()))
+            yield doc, docs_to_extract[url]
 
 
 def collect_documents(minhash_prefix, lines):
@@ -82,7 +79,7 @@ def collect_documents(minhash_prefix, lines):
                             docs_to_extract[url] = i
                             next_line += 1
                     assert next_line == last_line
-                    extract_documents(docs_to_extract, doc_file)
+                    yield from extract_documents(docs_to_extract, doc_file)
                 block_lines += num_lines
     assert next_line == len(lines)
 
@@ -98,19 +95,9 @@ def main():
     lines.union(args.lines)
     lines = sorted(lines)
 
-    for record in warc.open(args.warc):
-        url = record.header['WARC-Target-URI']
-        if url in urls:
-            page = record.payload.read().split(b'\r\n\r\n', maxsplit=1)[1]
-            file_name = os.path.join(
-                args.output_dir,
-                url.rstrip(os.path.sep).replace(os.path.sep, '_')
-            )
-            if args.output_dir:
-                with openall(file_name, 'wb') as outf:
-                    outf.write(page)
-            else:
-                print(page)
+    for doc, line in collect_documents(args.minhash_file, lines):
+        print('{}\t{}\n{}\n\n\n'.format(
+            doc.attrs['url'], line, doc.content()))
 
 
 if __name__ == '__main__':
