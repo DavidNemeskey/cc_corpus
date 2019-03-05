@@ -38,14 +38,21 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def collect_lines_from_file(line_file, head):
-    """Collects approximately the first head line numbers from the file."""
-    lines = set()
+def collect_lines_from_file(line_file, head, *extra_lines):
+    """
+    Collects approximately the first head line numbers from the file.
+    Also appends to the returned list all additional lines in *extra_lines.
+    """
+    lines = []
+    lines_set = set()
     with openall(line_file) as inf:
-        for docs in (line.strip().split() for line in inf):
-            lines.union(map(int, docs))
+        for new_lines in ([int(e) for e in l.strip().split()] for l in inf):
+            new_lines = [line for line in new_lines if line not in lines_set]
+            lines += new_lines
+            lines_set.update(new_lines)
             if len(lines) >= head:
                 break
+    lines += [int(line) for line in extra_lines if line not in lines_set]
     return lines
 
 
@@ -66,19 +73,24 @@ def collect_documents(minhash_prefix, lines):
     with openall(minhash_prefix + '.files') as filef:
         with openall(minhash_prefix + '.doc_ids') as linef:
             for doc_file, num_lines, _, offset in (l.strip().split() for l in filef):
+                num_lines, offset = int(num_lines), int(offset)
                 # Let's find the last line that is still in the current file
                 last_line = next_line
-                while block_lines <= lines[last_line] < block_lines + num_lines:
+                while (
+                    last_line < len(lines) and
+                    block_lines <= lines[last_line] < block_lines + num_lines
+                ):
                     last_line += 1
                 if last_line != next_line:
                     docs_to_extract = {}
                     # There are such lines. Let's read them!
-                    linef.seek(offset)
+                    linef.seek(int(offset))
                     for i, url in enumerate(linef, start=block_lines + 1):
                         if i == lines[next_line]:
-                            docs_to_extract[url] = i
+                            docs_to_extract[url.strip()] = i
                             next_line += 1
-                    assert next_line == last_line
+                            if next_line == last_line:
+                                break
                     yield from extract_documents(docs_to_extract, doc_file)
                 block_lines += num_lines
     assert next_line == len(lines)
@@ -91,12 +103,11 @@ def main():
 
     # Collect all lines we want to extract
     if args.line_file:
-        lines = collect_lines_from_file(args.line_file, args.head)
-    lines.union(args.lines)
+        lines = collect_lines_from_file(args.line_file, args.head, *args.lines)
     lines = sorted(lines)
 
     for doc, line in collect_documents(args.minhash_file, lines):
-        print('{}\t{}\n{}\n\n\n'.format(
+        print('{}\t{}\n\n{}\n\n'.format(
             doc.attrs['url'], line, doc.content()))
 
 
