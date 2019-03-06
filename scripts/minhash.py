@@ -12,6 +12,7 @@ directory, with consecutively numbered files:
 """
 
 from argparse import ArgumentParser
+from contextlib import closing
 from functools import partial
 import logging
 from multiprocessing import Pool
@@ -134,20 +135,22 @@ def main():
 
     files = sorted(collect_inputs(args.inputs))
     logging.info('Found a total of {} input files.'.format(len(files)))
-    writer = BatchWriter(args.batch_size, args.output_dir, args.zeroes)
-    with Pool(args.processes) as pool:
-        minhash_fun = minhash_ps if args.unit == 'p' else minhash_docs
-        f = partial(minhash_fun, permutations=args.permutations, n=args.n)
-        for input_file, results in pool.imap(f, files):
-            logging.debug('Got results for {}: {}'.format(
-                input_file, len(results['minhash'])))
-            writer.write_results(input_file, results)
 
-        pool.close()
-        pool.join()
-    logging.info('Done.')
+    with closing(
+        BatchWriter(args.batch_size, args.output_dir, args.zeroes)
+    ) as writer:
+        with Pool(args.processes) as pool:
+            minhash_fun = minhash_ps if args.unit == 'p' else minhash_docs
+            f = partial(minhash_fun, permutations=args.permutations, n=args.n)
+            for input_file, results in pool.imap(f, files):
+                logging.debug('Got results for {}: {}'.format(
+                    input_file, len(results['minhash'])))
+                writer.write_results(input_file, results)
 
-    writer.close()
+            pool.close()
+            pool.join()
+        logging.info('Done.')
+
     logging.info('Hashed in total {} paragraphs.'.format(writer.total_written))
 
 

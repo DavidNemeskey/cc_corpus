@@ -77,6 +77,9 @@ def read_batch(batch_file_prefix):
     """
     Reads a single batch written previously with BatchWriter. Yields a (document
     name, results) tuple for each input file in the batch.
+
+    Kind of sluggish because of the unpickling, but that's how usually we need
+    the result.
     """
     with open(batch_file_prefix + '.minhashes', 'rb') as minhashf, \
          open(batch_file_prefix + '.doc_ids', 'rt', encoding='utf-8') as doc_idf, \

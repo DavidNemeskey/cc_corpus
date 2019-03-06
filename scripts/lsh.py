@@ -3,17 +3,20 @@
 
 """
 Deduplicates the documents with Locality Sensitive Hashing, based on the files
-written by minhash.py. 
+written by minhash.py.
 """
 
 from argparse import ArgumentParser
+from contextlib import closing
 import logging
 import os
-import pickle
+import os.path as op
+import sys
 
-from datasketch import MinHashLSH, LeanMinHash
+from datasketch import MinHashLSH
 
 from cc_corpus.utils import openall, unpickle_stream
+from cc_corpus.deduplication import BatchWriter, read_batch
 
 
 def parse_arguments():
@@ -33,7 +36,8 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
-    parser.add_subparsers(help='The "modus operandi" (lit.) of the script.')
+    subparsers = parser.add_subparsers(
+        help='The "modus operandi" (lit.) of the script.')
     parser_print = subparsers.add_parser(
         'print',
         help='Just print the matching line groups.'
@@ -54,9 +58,9 @@ def parse_arguments():
 def load_minhashes(minhash_file):
     """Loads the minhash objects into a list."""
     with open(minhash_file, 'rb') as inf:
-        obj = pickle.load(inf)
-        step = len(pickle.dumps(obj))
-        inf.seek(0)
+        # obj = pickle.load(inf)
+        # step = len(pickle.dumps(obj))
+        # inf.seek(0)
         return list(unpickle_stream(inf))
 
 
@@ -94,6 +98,36 @@ def find_duplicates(minhashes, threshold, permutations, name_hashes):
             similar = [s for s in similar if name_hashes[i - 1] != name_hashes[int(s) - 1]]
         if similar:
             print('{}\t{}'.format(i, ' '.join(similar)))
+
+
+def deduplicate_file(file_prefix, output_dir, threshold, permutations):
+    """
+    Deduplicates a set of minhashed documents (3 files with the same minhash
+    prefix) and writes them to output_dir.
+
+    Warning: only works for full documents at this point!
+    """
+    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+    file_base = op.basename(file_prefix)
+    logging.info('Processing batch {}...'.format(file_base))
+    total_read = 0
+    with closing(BatchWriter(sys.maxsize, output_dir,
+                             len(file_base), int(file_base))) as bw:
+        for input_file, results in read_batch(file_prefix):
+            minhashes, new_minhashes = results['minhash'], []
+            doc_ids, new_doc_ids = results['id'], []
+            total_read += len(doc_ids)
+            for i, minhash in enumerate(minhashes):
+                if not lsh.query(minhash):
+                    lsh.insert(doc_ids[i], minhash)
+                    new_minhashes.append(minhash)
+                    new_doc_ids.append(doc_ids[i])
+            bw.write_results(input_file,
+                             {'id': new_doc_ids, 'minhash': new_minhashes})
+            logging.debug('Kept {} documents out of {}'.format(
+                len(new_doc_ids), len(doc_ids)))
+        logging.info('Processed batch {}; kept {} documents out of {}.'.format(
+            file_base, bw.total_written, total_read))
 
 
 def main():
