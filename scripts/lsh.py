@@ -119,15 +119,15 @@ def deduplicate_file(file_prefix, output_dir, threshold, permutations):
             total_read += len(doc_ids)
             for i, minhash in enumerate(minhashes):
                 if not lsh.query(minhash):
-                    lsh.insert(doc_ids[i], minhash)
+                    lsh.insert('_'.join(doc_ids[i]), minhash)
                     new_minhashes.append(minhash)
                     new_doc_ids.append(doc_ids[i])
             bw.write_results(input_file,
                              {'id': new_doc_ids, 'minhash': new_minhashes})
             logging.debug('Kept {} documents out of {}'.format(
                 len(new_doc_ids), len(doc_ids)))
-        logging.info('Processed batch {}; kept {} documents out of {}.'.format(
-            file_base, bw.total_written, total_read))
+    logging.info('Processed batch {}; kept {} documents out of {}.'.format(
+        file_base, bw.total_written, total_read))
 
 
 def main():
