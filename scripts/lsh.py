@@ -26,7 +26,7 @@ def parse_arguments():
     parser.add_argument('--input', '-i', required=True,
                         help='the input file prefix.')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
-                        help='the number of permutations per paragraph (256).')
+                        help='the Jaccard similarity threshold (0.9).')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     # TODO maybe to a threshold number > the regular threshold?
@@ -138,14 +138,20 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    minhashes = load_minhashes(args.input + '.minhashes')
-    if args.skip_same_doc:
-        name_hashes = read_names(args.input + '.doc_ids')
-    else:
-        name_hashes = []
-    find_duplicates(minhashes, args.threshold, args.permutations, name_hashes)
-
     os.nice(20)
+
+    if args.command == 'print':
+        minhashes = load_minhashes(args.input + '.minhashes')
+        if args.skip_same_doc:
+            name_hashes = read_names(args.input + '.doc_ids')
+        else:
+            name_hashes = []
+        find_duplicates(minhashes, args.threshold, args.permutations, name_hashes)
+    elif args.command == 'deduplicate':
+        if not os.path.isdir(args.output_dir):
+            os.makedirs(args.output_dir)
+        deduplicate_file(args.input, args.output_dir,
+                         args.threshold, args.permutations)
 
 
 if __name__ == '__main__':
