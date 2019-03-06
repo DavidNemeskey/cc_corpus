@@ -33,6 +33,20 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
+    parser.add_subparsers(help='The "modus operandi" (lit.) of the script.')
+    parser_print = subparsers.add_parser(
+        'print',
+        help='Just print the matching line groups.'
+    )
+    parser_print.set_defaults(command='print')
+    parser_dedup = subparsers.add_parser(
+        'deduplicate', aliases=['dedup'],
+        help='Deduplicate the documents and writes a new set of minhash files.'
+    )
+    parser_dedup.set_defaults(command='deduplicate')
+    parser_dedup.add_argument('--output-dir', '-o', required=True,
+                              help='the directory to which the updated minhash '
+                                   'files are written.')
     args = parser.parse_args()
     return args
 
@@ -53,7 +67,7 @@ def read_names(names_file):
     consumption; for checking equality, a hash should suffice.
     """
     with openall(names_file) as inf:
-        return [hash(line.split('\t', 1)[0]) for line in inf]
+        return [hash(line.strip().split('\t', 1)[0]) for line in inf]
 
 
 def find_duplicates(minhashes, threshold, permutations, name_hashes):
