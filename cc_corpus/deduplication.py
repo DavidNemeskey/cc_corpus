@@ -85,4 +85,4 @@ def read_batch(batch_file_prefix):
             doc_ids = [doc_id.strip().split('\t') for doc_id in
                        islice(doc_idf, int(num_lines))]
             minhashes = [pickle.load(minhashf) for _ in range(int(num_lines))]
-            yield doc_file, {'minhashes': minhashes, 'doc_ids': doc_ids}
+            yield doc_file, {'minhash': minhashes, 'id': doc_ids}
