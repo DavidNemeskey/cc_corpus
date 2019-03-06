@@ -5,6 +5,7 @@
 Stuff common to all deduplication scripts (minhash.py, lsh.py, etc.)
 """
 
+from itertools import islice
 import logging
 import os
 import pickle
@@ -12,11 +13,11 @@ import pickle
 
 class BatchWriter:
     """Writes batches of minhash data."""
-    def __init__(self, batch_size, out_dir, zeroes=4):
+    def __init__(self, batch_size, out_dir, zeroes=4, first_batch=1):
         self.batch_size = batch_size
         self.out_dir = out_dir
         self.zeroes = zeroes
-        self.batch = 0
+        self.batch = first_batch - 1
         self.minhashf = self.doc_idf = self.filef = None
         self.mh_offset = self.di_offset = 0
         self.p_written = self.batch_size + 1  # so that we invoke new_file
@@ -47,7 +48,7 @@ class BatchWriter:
                               '{{:0{}}}'.format(self.zeroes).format(self.batch))
         self.minhashf = open(prefix + '.minhashes', 'wb')
         self.doc_idf = open(prefix + '.doc_ids', 'wb')
-        self.filef = open(prefix + '.files', 'wt')
+        self.filef = open(prefix + '.files', 'wt', encoding='utf-8')
 
     def close(self):
         """
@@ -70,3 +71,18 @@ class BatchWriter:
     def __del__(self):
         """Just calls close()."""
         self.close()
+
+
+def read_batch(batch_file_prefix):
+    """
+    Reads a single batch written previously with BatchWriter. Yields a (document
+    name, results) tuple for each input file in the batch.
+    """
+    with open(batch_file_prefix + '.minhashes', 'rb') as minhashf, \
+         open(batch_file_prefix + '.doc_ids', 'rt', encoding='utf-8') as doc_idf, \
+         open(batch_file_prefix + '.files', 'rt', encoding='utf-8') as filef:
+        for doc_file, num_lines, _, _ in (l.strip().split() for l in filef):
+            doc_ids = [doc_id.strip().split('\t') for doc_id in
+                       islice(doc_idf, int(num_lines))]
+            minhashes = [pickle.load(minhashf) for _ in range(int(num_lines))]
+            yield doc_file, {'minhashes': minhashes, 'doc_ids': doc_ids}
