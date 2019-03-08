@@ -11,6 +11,7 @@ from contextlib import closing
 import logging
 import os
 import os.path as op
+import re
 import sys
 
 from datasketch import MinHashLSH
@@ -53,11 +54,17 @@ def parse_arguments():
     return args
 
 
-def find_all_batches(input_dir):
-    """Returns all minhash batches file prefixes in the specified directory."""
-    return [op.join(input_dir, f) for f in
-            sorted([f[:-6] for f in os.listdir(input_dir) if f.endswith('.files')],
-                   key=int)]
+def find_all_batches(input_dir, greater_than=None):
+    """
+    Returns all minhash batches file prefixes in the specified directory. If
+    greater_than is specified, only those batches are returned that are
+    numerically greater than the specified number.
+    """
+    batches = [f[:-6] for f in os.listdir(input_dir)
+               if re.match('[0-9]+.files', f)]
+    if greater_than is not None:
+        batches = [b for b in batches if int(b) > greater_than]
+    return [op.join(input_dir, b) for b in sorted(batches, key=int)]
 
 
 def deduplicate_self(file_prefix, output_dir, threshold, permutations):
@@ -97,33 +104,49 @@ def deduplicate_other(file_prefix, working_dir, threshold, permutations):
     batches whose number is higher than the batch in question are considered
     (i.e. upper triangular matrix).
 
+    We do not overwrite the original batch files, because that might cause
+    concurrency-related problems. So we just save batches named 1_, 2_, etc.
+
     Warning: only works for full documents at this point!
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
     file_base = op.basename(file_prefix)
     logging.info('Processing batch {}...'.format(file_base))
+
     # First, load the (already deduplicated) batch...
     for input_file, results in read_batch(file_prefix):
         for doc_id, minhash in zip(results['id'], results['minhash']):
             lsh.insert('\t'.join(doc_id), minhash)
 
-    with closing(BatchWriter(sys.maxsize, output_dir,
-                             len(file_base), int(file_base))) as bw:
+    initial_len = len(lsh.keys)
+    to_match_with = find_all_batches(working_dir,
+                                     int(working_dir.rpartition(os.sep)[-1]))
+
+    # Now, remove all documents in it that are contained in other batches
+    # to the "right" of it (with greater batch numbers)
+    for batch in to_match_with:
+        initial_batch_len = len(lsh.keys)
+        for _, results in read_batch(batch):
+            for i, minhash in enumerate(results['minhash']):
+                for duplicate in lsh.query(minhash):
+                    lsh.remove(duplicate)
+        logging.info('Cross-deduplicated with batch {}: {} -> {} documents.'.format(
+            os.basename(batch), initial_batch_len, len(lsh.keys)))
+
+    # Finally, we print the documents left. Unfortunately, in order to
+    # keep the format, we have to read the original batch again.
+    with closing(BatchWriter(sys.maxsize, output_dir, len(file_base),
+                             int(file_base), batch_format='{}_')) as bw:
+        # OK, we need to re-read the batch unfortunately
         for input_file, results in read_batch(file_prefix):
-            minhashes, new_minhashes = results['minhash'], []
-            doc_ids, new_doc_ids = results['id'], []
-            total_read += len(doc_ids)
-            for i, minhash in enumerate(minhashes):
-                if not lsh.query(minhash):
-                    lsh.insert('_'.join(doc_ids[i]), minhash)
-                    new_minhashes.append(minhash)
-                    new_doc_ids.append(doc_ids[i])
-            bw.write_results(input_file,
-                             {'id': new_doc_ids, 'minhash': new_minhashes})
-            logging.debug('Kept {} documents out of {}'.format(
-                len(new_doc_ids), len(doc_ids)))
-    logging.info('Processed batch {}; kept {} documents out of {}.'.format(
-        file_base, bw.total_written, total_read))
+            doc_ids, minhashes = [], []
+            for doc_id, minhash in zip(results['id'], results['minhash']):
+                if doc_id in lsh:
+                    doc_ids.append(doc_id)
+                    minhashes.append(minhash)
+            bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
+    logging.info('Processed batch {}; kept {} out of {} documents.'.format(
+        file_base, len(lsh.keys), initial_len))
 
 
 def main():
@@ -154,13 +177,19 @@ def main():
     # also present in any of the other batches (more precisely, we only need to
     # do the upper triangle matrix).
     # At this point, we do all work in output_dir.
-    # TODO
     with Pool(args.processes) as pool:
         f = partial(deduplicate_other, output_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
         pool.map(f, batch_prefixes)
     pool.close()
     pool.join()
+
+    # The last step created batches names 1_, 2_, etc. Let's get rid of the
+    # underscore (and the partial results).
+    for f in os.listdir(args.output_dir):
+        if re.match('(\d+)_[.](doc_ids|files|minhashes)$', f):
+            os.replace(op.join(args.output_dir, f),
+                       op.join(args.output_dir, f.replace('_', '')))
 
 
 if __name__ == '__main__':

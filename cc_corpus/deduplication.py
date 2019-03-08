@@ -13,11 +13,25 @@ import pickle
 
 class BatchWriter:
     """Writes batches of minhash data."""
-    def __init__(self, batch_size, out_dir, zeroes=4, first_batch=1):
+    def __init__(self, batch_size, out_dir, zeroes=4, first_batch=1,
+                 batch_format='{}'):
+        """
+        Parameters:
+        - batch_size: the number of documents after which a new batch file is
+                      opened (with consecutive numbering)
+        - out_dir: the output directory
+        - zeroes: the number of zeroes in the batch files' name (e.g. if 2,
+                  the first batches will be called 01, 02, etc.)
+        - first_batch: what should be the number (name) of the first batch
+        - batch_format: a Python-style format string if the output file name
+                        should contain anything apart from the batch number.
+                        E.g. '_{}_' will make batches called _1_, _2_, etc.
+        """
         self.batch_size = batch_size
         self.out_dir = out_dir
         self.zeroes = zeroes
         self.batch = first_batch - 1
+        self.batch_format = batch_format
         self.minhashf = self.doc_idf = self.filef = None
         self.mh_offset = self.di_offset = 0
         self.p_written = self.batch_size + 1  # so that we invoke new_file
@@ -44,8 +58,9 @@ class BatchWriter:
 
         self.batch += 1
         logging.info('Opening file {}...'.format(self.batch))
-        prefix = os.path.join(self.out_dir,
-                              '{{:0{}}}'.format(self.zeroes).format(self.batch))
+        prefix = os.path.join(
+            self.out_dir, self.batch_format.format(
+                '{{:0{}}}'.format(self.zeroes).format(self.batch)))
         self.minhashf = open(prefix + '.minhashes', 'wb')
         self.doc_idf = open(prefix + '.doc_ids', 'wb')
         self.filef = open(prefix + '.files', 'wt', encoding='utf-8')
