@@ -95,6 +95,7 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
                 len(new_doc_ids), len(doc_ids)))
     logging.info('Processed batch {}; kept {} documents out of {}.'.format(
         file_base, bw.total_written, total_read))
+    return bw.total_written, total_read
 
 
 def deduplicate_other(file_prefix, working_dir, threshold, permutations):
@@ -147,6 +148,7 @@ def deduplicate_other(file_prefix, working_dir, threshold, permutations):
             bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
     logging.info('Processed batch {}; kept {} out of {} documents.'.format(
         file_base, len(lsh.keys), initial_len))
+    return len(lsh.keys), initial_len
 
 
 def main():
@@ -165,12 +167,19 @@ def main():
     logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
 
     # First, deduplicate documents _within_ the same batch
+    original_doc_num, diagonal_doc_num, final_doc_num = 0, 0, 0
     with Pool(args.processes) as pool:
         f = partial(deduplicate_self, output_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
-        pool.map(f, batch_prefixes)
+        new_num, old_num = pool.map(f, batch_prefixes)
+        original_doc_num += old_num
+        diagonal_doc_num += new_num
     pool.close()
     pool.join()
+
+    logging.info('Self deduplication done; in all, kept '
+                 '{} documents out of {}.'.format(diagonal_doc_num,
+                                                  original_doc_num))
 
     # Now, we need to do the deduplication between batches. The idea here is
     # to load one batch into memory, and delete all documents from it that are
@@ -180,9 +189,14 @@ def main():
     with Pool(args.processes) as pool:
         f = partial(deduplicate_other, output_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
-        pool.map(f, batch_prefixes)
+        new_num, old_num = pool.map(f, batch_prefixes)
+        final_doc_num += new_num
     pool.close()
     pool.join()
+
+    logging.info('Full deduplication done; in all, kept '
+                 '{} documents out of {}.'.format(final_doc_num,
+                                                  original_doc_num))
 
     # The last step created batches names 1_, 2_, etc. Let's get rid of the
     # underscore (and the partial results).
