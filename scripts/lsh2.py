@@ -8,7 +8,9 @@ written by minhash.py.
 
 from argparse import ArgumentParser
 from contextlib import closing
+from functools import partial
 import logging
+from multiprocessing import Pool
 import os
 import os.path as op
 import re
@@ -121,7 +123,7 @@ def deduplicate_other(file_prefix, working_dir, threshold, permutations):
 
     initial_len = len(lsh.keys)
     to_match_with = find_all_batches(working_dir,
-                                     int(working_dir.rpartition(os.sep)[-1]))
+                                     int(file_prefix.rpartition(os.sep)[-1]))
 
     # Now, remove all documents in it that are contained in other batches
     # to the "right" of it (with greater batch numbers)
@@ -136,13 +138,13 @@ def deduplicate_other(file_prefix, working_dir, threshold, permutations):
 
     # Finally, we print the documents left. Unfortunately, in order to
     # keep the format, we have to read the original batch again.
-    with closing(BatchWriter(sys.maxsize, output_dir, len(file_base),
+    with closing(BatchWriter(sys.maxsize, working_dir, len(file_base),
                              int(file_base), batch_format='{}_')) as bw:
         # OK, we need to re-read the batch unfortunately
         for input_file, results in read_batch(file_prefix):
             doc_ids, minhashes = [], []
             for doc_id, minhash in zip(results['id'], results['minhash']):
-                if doc_id in lsh:
+                if '\t'.join(doc_id) in lsh:
                     doc_ids.append(doc_id)
                     minhashes.append(minhash)
             bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
@@ -171,9 +173,9 @@ def main():
     with Pool(args.processes) as pool:
         f = partial(deduplicate_self, output_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
-        new_num, old_num = pool.map(f, batch_prefixes)
-        original_doc_num += old_num
-        diagonal_doc_num += new_num
+        for new_num, old_num in pool.map(f, batch_prefixes):
+            original_doc_num += old_num
+            diagonal_doc_num += new_num
     pool.close()
     pool.join()
 
@@ -187,10 +189,9 @@ def main():
     # do the upper triangle matrix).
     # At this point, we do all work in output_dir.
     with Pool(args.processes) as pool:
-        f = partial(deduplicate_other, output_dir=args.output_dir,
+        f = partial(deduplicate_other, working_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
-        new_num, old_num = pool.map(f, batch_prefixes)
-        final_doc_num += new_num
+        final_doc_num = sum(num for num, _ in pool.map(f, batch_prefixes))
     pool.close()
     pool.join()
 
