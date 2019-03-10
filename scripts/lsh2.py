@@ -14,6 +14,7 @@ from multiprocessing import Pool
 import os
 import os.path as op
 import re
+import shutil
 import sys
 
 from datasketch import MinHashLSH
@@ -35,7 +36,6 @@ def parse_arguments():
                         help='the Jaccard similarity threshold (0.9).')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
-    # TODO maybe to a threshold number > the regular threshold?
     parser.add_argument('--skip-same-doc', '-s', action='store_true',
                         help='if true, does not deduplicate paragraphs from '
                              'the same document.')
@@ -100,15 +100,13 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
     return bw.total_written, total_read
 
 
-def deduplicate_other(file_prefix, working_dir, threshold, permutations):
+def deduplicate_other(file_prefix, input_dir, output_dir,
+                      threshold, permutations):
     """
     Removes all documents from a set of minhashed documents (3 files with the
-    same minhash prefix) that occur in other batches in working_dir. Only
+    same minhash prefix) that occur in other batches in input_dir. Only
     batches whose number is higher than the batch in question are considered
     (i.e. upper triangular matrix).
-
-    We do not overwrite the original batch files, because that might cause
-    concurrency-related problems. So we just save batches named 1_, 2_, etc.
 
     Warning: only works for full documents at this point!
     """
@@ -122,7 +120,7 @@ def deduplicate_other(file_prefix, working_dir, threshold, permutations):
             lsh.insert('\t'.join(doc_id), minhash)
 
     initial_len = len(lsh.keys)
-    to_match_with = find_all_batches(working_dir,
+    to_match_with = find_all_batches(input_dir,
                                      int(file_prefix.rpartition(os.sep)[-1]))
 
     # Now, remove all documents in it that are contained in other batches
@@ -138,8 +136,8 @@ def deduplicate_other(file_prefix, working_dir, threshold, permutations):
 
     # Finally, we print the documents left. Unfortunately, in order to
     # keep the format, we have to read the original batch again.
-    with closing(BatchWriter(sys.maxsize, working_dir, len(file_base),
-                             int(file_base), batch_format='{}_')) as bw:
+    with closing(BatchWriter(sys.maxsize, output_dir,
+                             len(file_base), int(file_base))) as bw:
         # OK, we need to re-read the batch unfortunately
         for input_file, results in read_batch(file_prefix):
             doc_ids, minhashes = [], []
@@ -162,25 +160,26 @@ def main():
     )
 
     os.nice(20)
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
+    working_dir = op.join(args.output_dir, 'self')
+    if not os.path.isdir(args.working_dir):
+        os.makedirs(working_dir)
 
     batch_prefixes = find_all_batches(args.input_dir)
     logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
 
     # First, deduplicate documents _within_ the same batch
-    original_doc_num, diagonal_doc_num, final_doc_num = 0, 0, 0
+    original_doc_num, self_doc_num, final_doc_num = 0, 0, 0
     with Pool(args.processes) as pool:
-        f = partial(deduplicate_self, output_dir=args.output_dir,
+        f = partial(deduplicate_self, output_dir=working_dir,
                     threshold=args.threshold, permutations=args.permutations)
         for new_num, old_num in pool.map(f, batch_prefixes):
             original_doc_num += old_num
-            diagonal_doc_num += new_num
+            self_doc_num += new_num
     pool.close()
     pool.join()
 
     logging.info('Self deduplication done; in all, kept '
-                 '{} documents out of {}.'.format(diagonal_doc_num,
+                 '{} documents out of {}.'.format(self_doc_num,
                                                   original_doc_num))
 
     # Now, we need to do the deduplication between batches. The idea here is
@@ -188,10 +187,13 @@ def main():
     # also present in any of the other batches (more precisely, we only need to
     # do the upper triangle matrix).
     # At this point, we do all work in output_dir.
+    # Yes, there is no need to send the last batch through this round, except
+    # for counting final_doc_num.
     with Pool(args.processes) as pool:
-        f = partial(deduplicate_other, working_dir=args.output_dir,
+        f = partial(deduplicate_other,
+                    input_dir=working_dir, output_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
-        final_doc_num = sum(num for num, _ in pool.map(f, batch_prefixes[:-1]))
+        final_doc_num = sum(num for num, _ in pool.map(f, batch_prefixes))
     pool.close()
     pool.join()
 
@@ -199,12 +201,8 @@ def main():
                  '{} documents out of {}.'.format(final_doc_num,
                                                   original_doc_num))
 
-    # The last step created batches names 1_, 2_, etc. Let's get rid of the
-    # underscore (and the partial results).
-    for f in os.listdir(args.output_dir):
-        if re.match('(\d+)_[.](doc_ids|files|minhashes)$', f):
-            os.replace(op.join(args.output_dir, f),
-                       op.join(args.output_dir, f.replace('_', '')))
+    # Let's delete the intermediate directory.
+    shutil.rmtree(working_dir)
 
 
 if __name__ == '__main__':
