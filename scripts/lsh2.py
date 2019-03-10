@@ -134,7 +134,7 @@ def deduplicate_other(file_prefix, working_dir, threshold, permutations):
                 for duplicate in lsh.query(minhash):
                     lsh.remove(duplicate)
         logging.info('Cross-deduplicated with batch {}: {} -> {} documents.'.format(
-            os.basename(batch), initial_batch_len, len(lsh.keys)))
+            op.basename(batch), initial_batch_len, len(lsh.keys)))
 
     # Finally, we print the documents left. Unfortunately, in order to
     # keep the format, we have to read the original batch again.
@@ -191,7 +191,7 @@ def main():
     with Pool(args.processes) as pool:
         f = partial(deduplicate_other, working_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
-        final_doc_num = sum(num for num, _ in pool.map(f, batch_prefixes))
+        final_doc_num = sum(num for num, _ in pool.map(f, batch_prefixes[:-1]))
     pool.close()
     pool.join()
 
