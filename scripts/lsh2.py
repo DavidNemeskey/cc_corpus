@@ -95,7 +95,7 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
                              {'id': new_doc_ids, 'minhash': new_minhashes})
             logging.debug('Kept {} documents out of {}'.format(
                 len(new_doc_ids), len(doc_ids)))
-    logging.info('Processed batch {}; kept {} documents out of {}.'.format(
+    logging.info('Deduplicated batch {}; kept {} documents out of {}.'.format(
         file_base, bw.total_written, total_read))
     return bw.total_written, total_read
 
@@ -131,8 +131,10 @@ def deduplicate_other(file_prefix, input_dir, output_dir,
             for i, minhash in enumerate(results['minhash']):
                 for duplicate in lsh.query(minhash):
                     lsh.remove(duplicate)
-        logging.info('Cross-deduplicated with batch {}: {} -> {} documents.'.format(
-            op.basename(batch), initial_batch_len, len(lsh.keys)))
+        logging.info(
+            'Cross-deduplicated batch {} with batch {}: {} -> {} documents.'.format(
+                file_base, op.basename(batch), initial_batch_len, len(lsh.keys))
+        )
 
     # Finally, we print the documents left. Unfortunately, in order to
     # keep the format, we have to read the original batch again.
