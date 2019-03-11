@@ -163,7 +163,7 @@ def main():
 
     os.nice(20)
     working_dir = op.join(args.output_dir, 'self')
-    if not os.path.isdir(args.working_dir):
+    if not os.path.isdir(working_dir):
         os.makedirs(working_dir)
 
     batch_prefixes = find_all_batches(args.input_dir)
@@ -191,6 +191,7 @@ def main():
     # At this point, we do all work in output_dir.
     # Yes, there is no need to send the last batch through this round, except
     # for counting final_doc_num.
+    batch_prefixes = find_all_batches(working_dir)
     with Pool(args.processes) as pool:
         f = partial(deduplicate_other,
                     input_dir=working_dir, output_dir=args.output_dir,
