@@ -45,6 +45,10 @@ def parse_arguments():
                         help='the minimum number of characters / words in a '
                              'document. Activates length filtering. Values '
                              'are accepted in the format of e.g. 500c and 100w.')
+    parser.add_argument('--keep-urls', '-k', action='append', default=[],
+                        help='keeps only the URLs in the specified url file(s).')
+    parser.add_argument('--drop-urls', '-d', action='append', default=[],
+                        help='drop all URLs in the specified url file(s).')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -52,6 +56,7 @@ def parse_arguments():
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
+
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
@@ -149,8 +154,8 @@ def filter_length(doc_iter, min_len_str, stats):
     stats['length'] = kept
 
 
-def process_file(filename, input_dir, output_dir,
-                 languages, language_unit, min_len_str):
+def process_file(filename, input_dir, output_dir, languages,
+                 language_unit, min_len_str, keep_urls, drop_urls):
     input_file = os.path.join(input_dir, filename)
     output_file = os.path.join(output_dir, filename)
     logging.info('Processing file {}...'.format(filename))
@@ -165,6 +170,10 @@ def process_file(filename, input_dir, output_dir,
             it = filter_languages_p(it, languages, stats)
     if min_len_str:
         it = filter_length(it, min_len_str, stats)
+    if keep_urls:
+        pass
+    if drop_urls:
+        pass
     try:
         with openall(output_file, 'wt') as outf:
             for doc in it:
