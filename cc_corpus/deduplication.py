@@ -98,3 +98,16 @@ def read_batch(batch_file_prefix):
                        islice(doc_idf, int(num_lines))]
             minhashes = [pickle.load(minhashf) for _ in range(int(num_lines))]
             yield doc_file, {'minhash': minhashes, 'id': doc_ids}
+
+
+def find_all_batches(input_dir, greater_than=None):
+    """
+    Returns all minhash batches file prefixes in the specified directory. If
+    greater_than is specified, only those batches are returned that are
+    numerically greater than the specified number.
+    """
+    batches = [f[:-6] for f in os.listdir(input_dir)
+               if re.match('[0-9]+.files', f)]
+    if greater_than is not None:
+        batches = [b for b in batches if int(b) > greater_than]
+    return [op.join(input_dir, b) for b in sorted(batches, key=int)]

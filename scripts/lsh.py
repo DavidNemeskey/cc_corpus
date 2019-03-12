@@ -19,7 +19,7 @@ import sys
 
 from datasketch import MinHashLSH
 
-from cc_corpus.deduplication import BatchWriter, read_batch
+from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
 
 
 def parse_arguments():
@@ -52,19 +52,6 @@ def parse_arguments():
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
     return args
-
-
-def find_all_batches(input_dir, greater_than=None):
-    """
-    Returns all minhash batches file prefixes in the specified directory. If
-    greater_than is specified, only those batches are returned that are
-    numerically greater than the specified number.
-    """
-    batches = [f[:-6] for f in os.listdir(input_dir)
-               if re.match('[0-9]+.files', f)]
-    if greater_than is not None:
-        batches = [b for b in batches if int(b) > greater_than]
-    return [op.join(input_dir, b) for b in sorted(batches, key=int)]
 
 
 def deduplicate_self(file_prefix, output_dir, threshold, permutations):
