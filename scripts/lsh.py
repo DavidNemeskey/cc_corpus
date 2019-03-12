@@ -23,9 +23,7 @@ from cc_corpus.deduplication import BatchWriter, read_batch
 
 
 def parse_arguments():
-    parser = ArgumentParser('Deduplicates the documents with Locality '
-                            'Sensitive Hashing, based on the files written '
-                            'by minhash.py.')
+    parser = ArgumentParser(__doc__)
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the input directory that contains the minhash '
                              'batches to deduplicate.')
