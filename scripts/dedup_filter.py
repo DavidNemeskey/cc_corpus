@@ -67,7 +67,7 @@ def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None):
     kept, total = 0, 0
     for input_file, results in read_batch(batch_prefix):
         file_base = op.basename(input_file)
-        url_set = set(results['id'])
+        url_set = set('_'.join(doc_id) for doc_id in results['id'])
         input_file = op.join(input_dir, file_base) if input_dir else input_file
         with notempty(openall(op.join(output_dir, file_base), 'wt')) as outf:
             for doc_no, doc in enumerate(parse_file(input_file), start=1):
@@ -93,7 +93,7 @@ def main():
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    batch_prefixes = find_all_batches(args.input_dir)
+    batch_prefixes = find_all_batches(args.minhash_dir)
     logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
 
     with Pool(args.processes) as pool:

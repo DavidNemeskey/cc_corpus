@@ -13,7 +13,6 @@ import logging
 from multiprocessing import Pool
 import os
 import os.path as op
-import re
 import shutil
 import sys
 

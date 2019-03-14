@@ -8,7 +8,9 @@ Stuff common to all deduplication scripts (minhash.py, lsh.py, etc.)
 from itertools import islice
 import logging
 import os
+import os.path as op
 import pickle
+import re
 
 
 class BatchWriter:

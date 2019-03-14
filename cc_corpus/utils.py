@@ -5,6 +5,7 @@
 
 import bz2
 import gzip
+import io
 import os
 import os.path as op
 import pickle
@@ -32,6 +33,30 @@ def openall(
                     closefd, opener)
 
 
+def file_mode(f):
+    """
+    Returns the mode in which the file has been opened (with e.g. openall).
+
+    Unfortunately, this is only reliable for streams opened by io.open();
+    gzip and bz2 objects only differentiate between read and write modes.
+    """
+    mode = getattr(f, 'mode', None)
+    if mode and isinstance(mode, str):
+        return mode
+    else:
+        if isinstance(f, io.TextIOWrapper):
+            mode = 't'
+            f = f.buffer
+        else:
+            mode = 'b'
+        if isinstance(f, gzip.GzipFile):
+            return ('w' if f.mode == gzip.WRITE else 'r') + mode
+        elif isinstance(f, bz2.BZ2File):
+            return ('w' if f._mode == bz2._MODE_WRITE else 'r') + mode
+        else:
+            raise ValueError('Unknown file object type {}'.format(type(f)))
+            
+
 def unpickle_stream(inf):
     """
     Wraps the while loop of loading stuff with pickle from a stream so that
@@ -52,6 +77,9 @@ class NoEmptyWriteWrapper:
     Truth be told, instead of this, a lazy file object (that only creates the
     actual file on the first write()) would be much better, but it is much
     more difficult to implement, due to the complexity of the io classes.
+    
+    Note that ATM it is only possible to differentiate between 'w' and 'a'
+    modes for regular (not gzip or bz2) files.
     """
     def __init__(self, f):
         self._f = f
@@ -65,7 +93,7 @@ class NoEmptyWriteWrapper:
     def close(self):
         self._f.close()
         if self._written == 0:
-            if 'w' in self._f.mode:
+            if 'w' in file_mode(self._f):
                 os.remove(self._f.name)
 
     def __enter__(self):
