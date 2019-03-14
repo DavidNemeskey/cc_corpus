@@ -90,7 +90,7 @@ def check_language(text, languages):
     try:
         _, _, lang = cld2.detect(text)
         return lang[0].language_code in languages
-    except Exception as cld_ex:
+    except Exception as cld_ex:  # noqa
         # cld2 cannot handle some UTF-8 characters that Python can. See
         # https://github.com/mikemccand/chromium-compact-language-detector/issues/22
         # There is a workaround, but I'd rather just call langid in this case
@@ -154,6 +154,39 @@ def filter_length(doc_iter, min_len_str, stats):
     stats['length'] = kept
 
 
+def filter_urls(doc_iter, urls_to_drop, stats):
+    doc_no, kept = 0, 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
+        if not doc.attrs['url'] in urls_to_drop:
+            kept += 1
+            yield doc
+    if doc_no:
+        logging.info('Filtered {} documents with a URL blacklist, kept {}'.format(
+            doc_no, kept))
+    stats['drop_urls'] = kept
+
+
+def retain_urls(doc_iter, urls_to_keep, stats):
+    doc_no, kept = 0, 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
+        if doc.attrs['url'] in urls_to_keep:
+            kept += 1
+            yield doc
+    if doc_no:
+        logging.info('Filtered {} documents with a URL whitelist, kept {}'.format(
+            doc_no, kept))
+    stats['keep_urls'] = kept
+
+
+def read_files_into_set(files):
+    ret = set()
+    for f in files:
+        with openall(f, 'rt') as inf:
+            for line in map(str.strip, inf):
+                ret.add(line)
+    return ret
+
+
 def process_file(filename, input_dir, output_dir, languages,
                  language_unit, min_len_str, keep_urls=None, drop_urls=None):
     input_file = os.path.join(input_dir, filename)
@@ -170,10 +203,14 @@ def process_file(filename, input_dir, output_dir, languages,
             it = filter_languages_p(it, languages, stats)
     if min_len_str:
         it = filter_length(it, min_len_str, stats)
-    if keep_urls:
-        pass
     if drop_urls:
-        pass
+        urls_to_drop = read_files_into_set(drop_urls)
+        logging.info('Loaded {} urls to drop.'.format(urls_to_drop))
+        it = filter_urls(it, urls_to_drop, stats)
+    if keep_urls:
+        urls_to_keep = read_files_into_set(keep_urls)
+        logging.info('Loaded {} urls to keep.'.format(urls_to_keep))
+        it = retain_urls(it, urls_to_keep, stats)
     try:
         with openall(output_file, 'wt') as outf:
             for doc in it:
