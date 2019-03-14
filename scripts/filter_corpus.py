@@ -63,7 +63,7 @@ def parse_arguments():
             num_procs))
     if args.min_len and not re.match(r'^\d+[w|c]$', args.min_len):
         parser.error('Invalid value for the minimum length parameter.')
-    if not args.languages and not args.min_len:
+    if not (args.languages or args.min_len or args.keep_urls or args.drop_urls):
         parser.error('At least one filter must be specified.')
     if args.languages:
         try:
