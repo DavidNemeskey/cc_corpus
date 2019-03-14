@@ -155,7 +155,7 @@ def filter_length(doc_iter, min_len_str, stats):
 
 
 def process_file(filename, input_dir, output_dir, languages,
-                 language_unit, min_len_str, keep_urls, drop_urls):
+                 language_unit, min_len_str, keep_urls=None, drop_urls=None):
     input_file = os.path.join(input_dir, filename)
     output_file = os.path.join(output_dir, filename)
     logging.info('Processing file {}...'.format(filename))
