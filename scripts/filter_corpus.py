@@ -49,6 +49,15 @@ def parse_arguments():
                         help='keeps only the URLs in the specified url file(s).')
     parser.add_argument('--drop-urls', '-d', action='append', default=[],
                         help='drop all URLs in the specified url file(s).')
+    parser.add_argument('--use-manager', '-M', action='store_true',
+                        help='by default, with -k and -d, the url list is '
+                             'loaded by each worker process. This might be '
+                             'problematic if the list is huge and the size '
+                             'of the memory available is small. -M aims to '
+                             'alleviate this problem by only loading the list '
+                             'once. However, due to the network communication '
+                             'cost, execution time increases by a factor of '
+                             '1.5-2.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -181,7 +190,7 @@ def filter_urls(doc_iter, urls_to_drop, stats):
     stats['drop_urls'] = kept
 
 
-def retain_urls(doc_iter, stats):
+def retain_urls(doc_iter, urls_to_keep, stats):
     doc_no, kept = 0, 0
     for doc_no, doc in enumerate(doc_iter, start=1):
         if doc.attrs['url'] in urls_to_keep:
@@ -219,9 +228,15 @@ def process_file(filename, input_dir, output_dir, languages,
     if min_len_str:
         it = filter_length(it, min_len_str, stats)
     if drop_urls:
-        it = filter_urls(it, drop_urls, stats)
+        # Get the right list: from the Manager or the local one
+        url_list = drop_urls if drop_urls.__class__.__name__ == 'DictProxy' \
+                             else urls_to_drop  # noqa
+        it = filter_urls(it, url_list, stats)
     if keep_urls:
-        it = retain_urls(it, stats)
+        # Get the right list: from the Manager or the local one
+        url_list = keep_urls if keep_urls.__class__.__name__ == 'DictProxy' \
+                             else urls_to_keep  # noqa
+        it = retain_urls(it, url_list, stats)
     try:
         with openall(output_file, 'wt') as outf:
             for doc in it:
@@ -249,18 +264,20 @@ def main():
     logging.info('Scheduled {} files for filtering.'.format(len(files)))
 
     with Manager() as manager:
-        urls_to_drop = manager.dict()
-        urls_to_drop.update({k: None for k in read_files_into_set(args.drop_urls)})
-        logging.info('Loaded {} urls to drop.'.format(len(urls_to_drop)))
-
-        # p = Pool(args.processes, initializer=initialize_url_filters,
-        #          initargs=[args.drop_urls, args.keep_urls])
-        p = Pool(args.processes)
+        if args.manager:
+            initialize_url_filters(args.drop_urls, args.keep_urls)
+            drop_urls = manager.dict(urls_to_drop)
+            keep_urls = manager.dict(urls_to_keep)
+            p = Pool(args.processes)
+        else:
+            p = Pool(args.processes, initializer=initialize_url_filters,
+                     initargs=[args.drop_urls, args.keep_urls])
+            drop_urls = args.drop_urls
+            keep_urls = args.keep_urls
         f = partial(process_file, input_dir=args.input_dir,
                     output_dir=args.output_dir, languages=set(args.languages),
                     language_unit=args.language_unit, min_len_str=args.min_len,
-                    # keep_urls=args.keep_urls, drop_urls=args.drop_urls)
-                    drop_urls=urls_to_drop)
+                    keep_urls=keep_urls, drop_urls=drop_urls)
         # Note: + / sum() do not keep keys with 0 values here, hence update()
         stats = Counter()
         for sub_stats in p.map(f, files):
