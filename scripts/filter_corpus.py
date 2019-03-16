@@ -23,11 +23,7 @@ from cc_corpus.utils import openall
 
 
 def parse_arguments():
-    parser = ArgumentParser('Filters documents in a corpus. Currently two '
-                            'filters are supported:'
-                            '- a language filter that discards documents not '
-                            'in one of the accepted languages'
-                            '- length filter that discards too short documents')
+    parser = ArgumentParser(__doc__)
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the corpus directory')
     parser.add_argument('--output-dir', '-o', required=True,
