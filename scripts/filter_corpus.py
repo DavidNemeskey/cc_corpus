@@ -264,10 +264,10 @@ def main():
     logging.info('Scheduled {} files for filtering.'.format(len(files)))
 
     with Manager() as manager:
-        if args.manager:
+        if args.use_manager:
             initialize_url_filters(args.drop_urls, args.keep_urls)
-            drop_urls = manager.dict(urls_to_drop)
-            keep_urls = manager.dict(urls_to_keep)
+            drop_urls = manager.dict({url: None for url in urls_to_drop or {}})
+            keep_urls = manager.dict({url: None for url in urls_to_keep or {}})
             p = Pool(args.processes)
         else:
             p = Pool(args.processes, initializer=initialize_url_filters,
