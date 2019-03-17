@@ -63,10 +63,10 @@ def main():
     install_mp_handler()
 
     os.nice(20)
-    files = sorted(collect_inputs(args.input_dir))
+    files = sorted(collect_inputs([args.input_dir]))
     logging.info('Found a total of {} input files.'.format(len(files)))
 
-    out = openall(args.output_file) if args.output_file else sys.stdout
+    out = openall(args.output_file, 'wt') if args.output_file else sys.stdout
 
     attributes = list(map(str.lower, args.attributes))
     print('\t'.join(attributes), file=out)
