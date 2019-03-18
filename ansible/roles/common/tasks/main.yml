@@ -3,7 +3,7 @@
 - name: assemble per-host process count
   local_action:
     module: set_fact
-    host_weights: "{{ host_weights|default({}) | combine({host: hostvars[host]['processes']|default(1) }) }}"
+    host_weights: "{{ host_weights|default({}) | combine({host: hostvars[host]['host_weight']|default(1) }) }}"
   loop: "{{ groups['slaves'] }}"
   loop_control:
       loop_var: host
