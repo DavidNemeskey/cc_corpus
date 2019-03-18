@@ -46,6 +46,21 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
+    subparsers = parser.add_subparsers(
+        help='Choose between two deduplication tasks.')
+    parser_self = subparsers.add_parser(
+        'self', aliases=['auto'], help='Fully deduplicate a corpus.')
+    parser_self.set_defaults(command='self')
+    parser_other = subparsers.add_parser(
+        'other', aliases=['cross'],
+        help='Remove all documents from a corpus that are found in another.'
+    )
+    parser_other.set_defaults(command='other')
+    parser_other.add_argument('--cross-dir', '-c', required=True,
+                              help='the directory that contains the minhash '
+                                   'values for the corpus to cross-deduplicate '
+                                   'with.')
+
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
@@ -187,15 +202,8 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
     return len(lsh.keys), initial_len
 
 
-def main():
-    args = parse_arguments()
-
-    logging.basicConfig(
-        level=getattr(logging, args.log_level.upper()),
-        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
-    )
-
-    os.nice(20)
+def self_main(args):
+    """The "real" main function of the "self" mode."""
     working_dir = op.join(args.output_dir, 'self')
     if not os.path.isdir(working_dir):
         os.makedirs(working_dir)
@@ -237,8 +245,6 @@ def main():
                     threshold=args.threshold, permutations=args.permutations)
         final_doc_num = sum(num for num, _ in
                             executor.map(f, batch_prefixes, batches_to_subtract))
-    pool.close()
-    pool.join()
 
     logging.info('Full deduplication done; in all, kept '
                  '{} documents out of {}.'.format(final_doc_num,
@@ -246,6 +252,45 @@ def main():
 
     # Let's delete the intermediate directory.
     shutil.rmtree(working_dir)
+
+
+def other_main(args):
+    """The "real" main function of the "other" mode."""
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
+    batch_prefixes = find_all_batches(args.input_dir)
+    logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
+
+    batches_to_subtract = find_all_batches(args.cross_dir)
+    logging.info('Found a total of {} batches to deduplicate against.'.format(
+        len(batches_to_subtract)))
+
+    with ProcessPoolExecutor(max_workers=args.processes) as executor:
+        f = partial(deduplicate_other, batches_to_subtract=batches_to_subtract,
+                    output_dir=args.output_dir,
+                    threshold=args.threshold, permutations=args.permutations)
+        original_doc_num, final_doc_num = 0, 0
+        for new_num, old_num in sum(num for num, _ in
+                                    executor.map(f, batch_prefixes)):
+            original_doc_num += old_num
+            final_doc_num += new_num
+
+    logging.info('Cross deduplication done; in all, kept '
+                 '{} documents out of {}.'.format(final_doc_num,
+                                                  original_doc_num))
+
+
+def main():
+    args = parse_arguments()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
+    )
+    os.nice(20)
+
+    self_main(args) if args.command == 'self' else other_main(args)
 
 
 if __name__ == '__main__':
