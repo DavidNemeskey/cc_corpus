@@ -7,6 +7,7 @@ written by minhash.py.
 """
 
 from argparse import ArgumentParser
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import closing
 from functools import partial
 import logging
@@ -84,8 +85,8 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
     return bw.total_written, total_read
 
 
-def deduplicate_other(file_prefix, input_dir, output_dir,
-                      threshold, permutations):
+def deduplicate_other_old(file_prefix, input_dir, output_dir,
+                          threshold, permutations):
     """
     Removes all documents from a set of minhashed documents (3 files with the
     same minhash prefix) that occur in other batches in input_dir. Only
@@ -137,6 +138,55 @@ def deduplicate_other(file_prefix, input_dir, output_dir,
     return len(lsh.keys), initial_len
 
 
+def deduplicate_other(main_batch, batches_to_subtract, output_dir,
+                      threshold, permutations):
+    """
+    Removes all documents from a set of minhashed documents (3 files with the
+    same minhash prefix) that occur in other batches. Both main_batch and
+    batches_to_subtract should be batch prefixes.
+
+    Warning: only works for full documents at this point!
+    """
+    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+    main_base = op.basename(main_batch)
+    logging.info('Processing batch {}...'.format(main_base))
+
+    # First, load the (already deduplicated) batch...
+    for input_file, results in read_batch(main_batch):
+        for doc_id, minhash in zip(results['id'], results['minhash']):
+            lsh.insert('\t'.join(doc_id), minhash)
+    initial_len = len(lsh.keys)
+
+    # Now, remove all documents in it that are contained in other batches
+    # to the "right" of it (with greater batch numbers)
+    for batch in batches_to_subtract:
+        initial_batch_len = len(lsh.keys)
+        for _, results in read_batch(batch):
+            for i, minhash in enumerate(results['minhash']):
+                for duplicate in lsh.query(minhash):
+                    lsh.remove(duplicate)
+        logging.info(
+            'Cross-deduplicated batch {} with batch {}: {} -> {} documents.'.format(
+                main_base, op.basename(batch), initial_batch_len, len(lsh.keys))
+        )
+
+    # Finally, we print the documents left. Unfortunately, in order to
+    # keep the format, we have to read the original batch again.
+    with closing(BatchWriter(sys.maxsize, output_dir,
+                             len(main_base), int(main_base))) as bw:
+        # OK, we need to re-read the batch unfortunately
+        for input_file, results in read_batch(main_batch):
+            doc_ids, minhashes = [], []
+            for doc_id, minhash in zip(results['id'], results['minhash']):
+                if '\t'.join(doc_id) in lsh:
+                    doc_ids.append(doc_id)
+                    minhashes.append(minhash)
+            bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
+    logging.info('Processed batch {}; kept {} out of {} documents.'.format(
+        main_base, len(lsh.keys), initial_len))
+    return len(lsh.keys), initial_len
+
+
 def main():
     args = parse_arguments()
 
@@ -171,16 +221,22 @@ def main():
     # Now, we need to do the deduplication between batches. The idea here is
     # to load one batch into memory, and delete all documents from it that are
     # also present in any of the other batches (more precisely, we only need to
-    # do the upper triangle matrix).
+    # do the upper triangle matrix: batch b_i is deduplicated with batches b_j,
+    # where j > i).
     # At this point, we do all work in output_dir.
     # Yes, there is no need to send the last batch through this round, except
     # for counting final_doc_num.
     batch_prefixes = find_all_batches(working_dir)
-    with Pool(args.processes) as pool:
-        f = partial(deduplicate_other,
-                    input_dir=working_dir, output_dir=args.output_dir,
+    batches_to_subtract = [
+        find_all_batches(working_dir, int(op.basename(file_prefix)))
+        for file_prefix in batch_prefixes
+    ]
+
+    with ProcessPoolExecutor(max_workers=args.processes) as executor:
+        f = partial(deduplicate_other, output_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
-        final_doc_num = sum(num for num, _ in pool.map(f, batch_prefixes))
+        final_doc_num = sum(num for num, _ in
+                            executor.map(f, batch_prefixes, batches_to_subtract))
     pool.close()
     pool.join()
 
