@@ -66,6 +66,8 @@ def parse_arguments():
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
+    if args.command == 'other' and not op.isdir(args.cross_dir):
+        parser.error('The minhash directory for the other corpus (-c) must exist.')
     return args
 
 
