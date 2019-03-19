@@ -34,7 +34,7 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory.')
     parser.add_argument('--batch-size', '-b', type=int, default=1000000,
-                        help='the number of paragraphs in a single batch. '
+                        help='the number of units in a single batch. '
                              'This is not an exact number, as documents in '
                              'the same data files are always put into the same '
                              'batch.')
