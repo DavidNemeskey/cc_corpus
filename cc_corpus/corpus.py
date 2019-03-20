@@ -6,10 +6,10 @@
 from collections import OrderedDict
 import concurrent.futures as cf
 import io
+import logging
+import os
 from queue import Empty, Queue
 import re
-import sys
-import threading
 
 from cc_corpus.utils import openall
 
@@ -279,3 +279,61 @@ def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
     """
     yield from _parse(corpus_file, SAXParser.parseFile,
                       attrs, meta, content, **meta_fields)
+
+
+class BatchWriter:
+    """Writes Documents into a batch of files with consecutive numbering."""
+    def __init__(self, batch_size, out_dir, zeroes=4):
+        """
+        Parameters:
+        - batch_size: the number of documents after which a new batch file is
+                      opened (with consecutive numbering)
+        - out_dir: the output directory
+        - zeroes: the number of zeroes in the batch files' name (e.g. if 2,
+                  the first batches will be called 01, 02, etc.)
+        """
+        self.batch_size = batch_size
+        self.out_dir = out_dir
+        self.zeroes = zeroes
+        self.batch = 0
+        self.outf = None
+        self.doc_written = self.batch_size + 1  # so that we invoke new_file
+        self.total_written = 0
+
+    def write(self, document):
+        """
+        Writes a single document to the currently open file. Opens a new file
+        when the current one is full.
+        """
+        if self.doc_written >= self.batch_size:
+            self.new_file()
+
+        print(document, file=self.outf)
+        self.doc_written += 1
+
+    def new_file(self):
+        """Closes the old file and opens a new one."""
+        self.close()
+
+        self.batch += 1
+        new_file = os.path.join(
+            self.out_dir, '{{:0{}}}.txt.gz'.format(self.zeroes).format(self.batch))
+        logging.debug('Opening file {}...'.format(new_file))
+        self.outf = openall(new_file, 'wt')
+
+    def close(self):
+        """
+        Closes the currently written file handle. Called automatically when
+        the batch counter increases, but should also be called when processing
+        ends to close the files of the last batch.
+        """
+        if self.outf is not None:
+            self.outf.close()
+            self.outf = None
+
+            self.total_written += self.doc_written
+        self.doc_written = 0
+
+    def __del__(self):
+        """Just calls close()."""
+        self.close()
