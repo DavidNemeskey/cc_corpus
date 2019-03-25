@@ -1,0 +1,45 @@
+---
+# Runs a python script in a tmux session
+#
+# The script's parameters must be specified in a variable called script_args.
+# All key: value pairs in it will be turned into arguments to the script in the
+# form --key value_hostname. The only exception is the common_args key, whose
+# value will be appended to the command line as-is.
+
+# Some checks first
+
+# First check if the log_file and script_args variables exist.
+- fail:
+    msg: The log_file and script_args variables must exist.
+  when: log_file is undefined or script_args is undefined
+# Also check if the name of the log file is valid.
+# Having a log file is very important, as that's the only output we will ever
+# get.
+- fail:
+    msg: The name of the log file must either end with '.log' or it must be /dev/null
+  when: not (log_file|regex_search('.log$') or log_file == '/dev/null')
+
+# Now we can do the argument setup...
+- name: initializing per-host arguments...
+  set_fact:
+    per_host_args: "{{ per_host_args|default('') }} {{ '--' if item.key|length > 1 else '-' }}{{ item.key }} {{ item.value }}_{{ inventory_hostname }}"
+  loop: "{{ script_args|dict2items }}"
+  when: item.key != "common_args"
+- name: setting arguments common to processes on all hosts and the log file
+  set_fact:
+    common_args: "{{ script_args['common_args']|default('') }}"
+    per_host_log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
+- name: upload the tmuxp configuration template
+  template:
+    src: tmuxp.yml.j2
+    dest: "{{ github_repo_dir }}/ansible/tmuxp.yml"
+- name: start the tmux session
+  shell: "{{ virtualenv_dir }}/bin/tmuxp load -d {{ github_repo_dir }}/ansible/tmuxp.yml"
+
+# Task that kills the running tmux sessions. Use if you want to stop
+# script execution.
+- name: kill the tmux session
+  shell: "tmux kill-session -t {{ tmux_session_name }}"
+  tags:
+    - never
+    - kill_tmux

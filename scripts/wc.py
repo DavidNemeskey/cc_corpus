@@ -11,12 +11,12 @@ from functools import partial
 import logging
 from multiprocessing import Pool
 import os
-import os.path as op
 
 from multiprocessing_logging import install_mp_handler
 import warc
 
 from cc_corpus.corpus import parse_file
+from cc_corpus.utils import collect_inputs
 
 
 def parse_arguments():
@@ -57,21 +57,6 @@ def parse_arguments():
     if args.warc and not (args.documents or args.characters):
         parser.error('Can only count documents and characters in WARC format.')
     return args
-
-
-def collect_inputs(inputs):
-    """
-    Collects all files to be counted from the files and directories specified.
-    """
-    files = []
-    for input in inputs:
-        if op.isfile(input):
-            files.append(input)
-        elif op.isdir(input):
-            files.extend([op.join(input, f) for f in os.listdir(input)])
-        else:
-            raise ValueError('{} is neither a file nor a directory'.format(input))
-    return files
 
 
 def count_file(filename, docs, ps, words, chars):

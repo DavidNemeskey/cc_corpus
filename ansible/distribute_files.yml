@@ -1,0 +1,35 @@
+---
+# Run assertions about the ansible environment
+- hosts: localhost
+  roles:
+    - assert
+
+# Everything here runs on the controller
+- hosts: controller
+  gather_facts: no
+  roles:
+    - common
+
+- hosts: controller
+  gather_facts: no
+  tasks:
+    # Assembles the hosts command-line argument for distribute_files.py 
+    - name: hosts argument for distribute_files.py
+      local_action:
+        module: set_fact
+        hosts_argument: "
+          {{ (hosts_argument|default('') + 
+             ' -H ' + item.key + ':' + item.value|string)|trim }}
+        "
+      loop: "{{ host_weights | dict2items }}"
+    - local_action:
+        module: debug
+        msg: "This is the dictionary I collected: {{ host_weights }}: {{ hosts_argument }}"
+      run_once: True
+    # Runs the python script distribute_files.py
+    - name: runs distribute_files.py on the first host
+      shell: "
+        {{ virtualenv_dir }}/bin/python
+        {{ github_repo_dir }}/scripts/distribute_files.py
+        -i {{ input_dir }} -o {{ output_dir }} {{ hosts_argument }} > ~/dist.log 2>&1
+      "

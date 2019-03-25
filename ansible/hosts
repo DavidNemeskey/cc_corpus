@@ -1,0 +1,13 @@
+[slaves]
+nessie
+ginny
+ron
+percy
+charlie
+store
+
+[controller]
+nessie
+
+[test_slaves]
+george

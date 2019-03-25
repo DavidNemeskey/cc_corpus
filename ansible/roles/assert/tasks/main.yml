@@ -1,0 +1,18 @@
+---
+# These assertions must / should be run on localhost
+
+# Group-related asserts
+- name: check group setup 1 -- slaves
+  assert:
+    that: groups['slaves']|default([])|length > 0
+    msg: The 'slaves' host group must exist and have at least one element.
+- name: check group setup 2 -- controller
+  assert:
+    that: groups['controller']|default([])|length == 1
+    msg: The 'controller' host group must exist and have exactly one element.
+
+# Version check
+- name: check ansible version
+  assert:
+    that: (ansible_version.major, ansible_version.minor) >= (2, 0)
+    msg: require ansible >= 2.0, found {{ansible_version.full}}
