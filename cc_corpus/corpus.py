@@ -57,6 +57,14 @@ class Document:
         else:
             return 0 if p or w or c else (0, 0, 0)
 
+    def stream_size(self):
+        """
+        The size of the document in a stream. This is the number of bytes it
+        takes up in a file.
+        """
+        # +: str() doesn't add a newline after the document, so we have to
+        return len(str(self).encode('utf-8')) + len(os.linesep)
+
     def __len__(self):
         """
         The length (in characters) of the document. Same as len(self.content()).
