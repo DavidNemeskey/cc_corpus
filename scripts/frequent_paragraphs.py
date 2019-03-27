@@ -19,6 +19,8 @@ from cc_corpus.utils import openall
 def parse_arguments():
     parser = ArgumentParser(__doc__)
     parser.add_argument('input_dir', help='the corpus directory.')
+    parser.add_argument('--index', '-i', required=True,
+                        help='the output index file.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
@@ -36,8 +38,6 @@ def parse_arguments():
              'domain and corpus location.'
     )
     parser_index.set_defaults(command='index_docs')
-    parser_index.add_argument('--index-file', '-i', required=True,
-                              help='the output index file.')
 
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
@@ -78,7 +78,6 @@ def main_index_documents(args):
         for input_file, urls_poss_lens in pool.imap(f, input_files):
             for doc_url, doc_pos, doc_len in urls_poss_lens:
                 index.append((doc_url, input_file, doc_pos, doc_len))
-                # print(doc_url, input_file, doc_pos, doc_len, sep='\t')
     pool.close()
     pool.join()
 
@@ -90,6 +89,8 @@ def main_index_documents(args):
 
 def main():
     args = parse_arguments()
+    os.nice(20)
+
     if args.command == 'index_docs':
         main_index_documents(args)
 
