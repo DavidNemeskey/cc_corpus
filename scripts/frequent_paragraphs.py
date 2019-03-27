@@ -94,7 +94,7 @@ def main_index_documents(args):
     pool.join()
 
     index.sort(key=index_key)
-    with openall(args.index_file, 'wt') as outf:
+    with openall(args.index, 'wt') as outf:
         for doc_tuple in index:
             print('\t'.join(doc_tuple), file=outf)
 
@@ -102,7 +102,7 @@ def main_index_documents(args):
 def main_distribute(args):
     """The main function for distributing the index file."""
     weights = [weight for _, weight in args.hosts]
-    hosts = [openall(host_to_path(args.index_file, host)) for host, _ in args.hosts]
+    hosts = [openall(host_to_path(args.index, host)) for host, _ in args.hosts]
     print(weights, hosts)
 
 
