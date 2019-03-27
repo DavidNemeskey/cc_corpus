@@ -156,3 +156,16 @@ def host_weight(value):
     else:
         weight = 1
     return host, weight
+
+
+def host_to_path(path, host):
+    """
+    Adds the host name to the path. If path has a file extension (such as .gz),
+    the host name is appended before that; otherwise, it is appended at the
+    end of the file / directory name.
+    """
+    root, ext = op.splitext(path.rstrip(os.sep))
+    hosty_path = root + '_{}'.format(host)
+    if ext:
+        hosty_path += ext
+    return hosty_path

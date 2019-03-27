@@ -13,7 +13,7 @@ import os.path as op
 from urllib.parse import urlsplit
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import openall
+from cc_corpus.utils import host_to_path, host_weight, openall
 
 
 def parse_arguments():
@@ -38,6 +38,15 @@ def parse_arguments():
              'domain and corpus location.'
     )
     parser_index.set_defaults(command='index_docs')
+    parser_distribute = subparsers.add_parser(
+        'distribute_index', aliases=['distribute', 'dist'],
+        help='Distributes the index file into separate files for running on'
+             'separate machines. Each host can have their own weight.'
+    )
+    parser_distribute.set_defaults(command='distribute')
+    parser_distribute.add_argument('--host', '-H', action='append',
+                                   type=host_weight, dest='hosts',
+                                   help='a host:weight pair.')
 
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
@@ -69,6 +78,9 @@ def index_key(url_file_pos_len):
     return (urlsplit(url).netloc.split('.')[::-1], input_file, input_pos)
 
 
+# ---------------------------- The main functions ------------------------------
+
+
 def main_index_documents(args):
     """The main function for indexing documents."""
     input_files = os.listdir(args.input_dir)
@@ -87,12 +99,21 @@ def main_index_documents(args):
             print('\t'.join(doc_tuple), file=outf)
 
 
+def main_distribute(args):
+    """The main function for distributing the index file."""
+    weights = [weight for _, weight in args.hosts]
+    hosts = [openall(host_to_path(args.index_file, host)) for host, _ in args.hosts]
+    print(weights, hosts)
+
+
 def main():
     args = parse_arguments()
     os.nice(20)
 
     if args.command == 'index_docs':
         main_index_documents(args)
+    elif args.command == 'distribute':
+        main_distribute(args)
 
 
 if __name__ == '__main__':
