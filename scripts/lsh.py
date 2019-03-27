@@ -82,23 +82,33 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
     file_base = op.basename(file_prefix)
     logging.info('Processing batch {}...'.format(file_base))
     total_read = 0
+    duplicate_urls = 0
     with closing(BatchWriter(sys.maxsize, output_dir,
                              len(file_base), int(file_base))) as bw:
         for input_file, results in read_batch(file_prefix):
             minhashes, new_minhashes = results['minhash'], []
             doc_ids, new_doc_ids = results['id'], []
             total_read += len(doc_ids)
-            for i, minhash in enumerate(minhashes):
+            input_duplicate_urls = 0
+            for doc_id, minhash in zip(results['id'], results['minhash']):
+                key = '_'.join(doc_id)
+                if key in lsh:
+                    input_duplicate_urls += 1
+                    continue
                 if not lsh.query(minhash):
-                    lsh.insert('_'.join(doc_ids[i]), minhash)
+                    lsh.insert(key, minhash)
                     new_minhashes.append(minhash)
-                    new_doc_ids.append(doc_ids[i])
+                    new_doc_ids.append(doc_id)
             bw.write_results(input_file,
                              {'id': new_doc_ids, 'minhash': new_minhashes})
-            logging.debug('Kept {} documents out of {}'.format(
-                len(new_doc_ids), len(doc_ids)))
-    logging.info('Deduplicated batch {}; kept {} documents out of {}.'.format(
-        file_base, bw.total_written, total_read))
+            duplicate_urls += input_duplicate_urls
+            logging.debug('Kept {} documents out of {} in file {}; '
+                          '{} duplicate urls.'.format(
+                              len(new_doc_ids), len(doc_ids),
+                              input_file, input_duplicate_urls))
+    logging.info('Deduplicated batch {}; kept {} documents out of {}; '
+                 '{} duplicate urls.'.format(
+                 file_base, bw.total_written, total_read, duplicate_urls))
     return bw.total_written, total_read
 
 
@@ -174,18 +184,30 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
             lsh.insert('\t'.join(doc_id), minhash)
     initial_len = len(lsh.keys)
 
-    # Now, remove all documents in it that are contained in other batches
-    # to the "right" of it (with greater batch numbers)
+    # Now, remove all documents in it that are contained in th batches
+    # to subtract
+    content_duplicates, url_duplicates = 0, 0
     for batch in batches_to_subtract:
+        batch_content_duplicates, batch_url_duplicates = 0, 0
         initial_batch_len = len(lsh.keys)
         for _, results in read_batch(batch):
-            for i, minhash in enumerate(results['minhash']):
-                for duplicate in lsh.query(minhash):
-                    lsh.remove(duplicate)
+            for doc_id, minhash in zip(results['id'], results['minhash']):
+                key = '_'.join(doc_id)
+                if key in lsh:
+                    batch_url_duplicates += 1
+                    lsh.remove(key)
+                else:
+                    for duplicate in lsh.query(minhash):
+                        lsh.remove(duplicate)
+                        batch_content_duplicates += 1
         logging.info(
-            'Cross-deduplicated batch {} with batch {}: {} -> {} documents.'.format(
-                main_base, op.basename(batch), initial_batch_len, len(lsh.keys))
+            'Cross-deduplicated batch {} with batch {}: {} -> {} documents '
+            '(removed {} by url, {} by content).'.format(
+                main_base, op.basename(batch), initial_batch_len, len(lsh.keys),
+                batch_url_duplicates, batch_content_duplicates)
         )
+        content_duplicates += batch_content_duplicates
+        url_duplicates += batch_url_duplicates
 
     # Finally, we print the documents left. Unfortunately, in order to
     # keep the format, we have to read the original batch again.
@@ -199,8 +221,10 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
                     doc_ids.append(doc_id)
                     minhashes.append(minhash)
             bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
-    logging.info('Processed batch {}; kept {} out of {} documents.'.format(
-        main_base, len(lsh.keys), initial_len))
+    logging.info('Processed batch {}; kept {} out of {} documents '
+                 '(removed {} by url, {} by content).'.format(
+                     main_base, len(lsh.keys), initial_len,
+                     url_duplicates, content_duplicates))
     return len(lsh.keys), initial_len
 
 
