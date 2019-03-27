@@ -5,12 +5,14 @@
 
 from argparse import ArgumentParser
 from functools import partial
-from itertools import accumulate
+from itertools import accumulate, groupby
 import logging
 from multiprocessing import Pool
 import os
 import os.path as op
 from urllib.parse import urlsplit
+
+from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.utils import host_to_path, host_weight, openall
@@ -84,6 +86,8 @@ def index_key(url_file_pos_len):
 def main_index_documents(args):
     """The main function for indexing documents."""
     input_files = os.listdir(args.input_dir)
+
+    logging.info('Found a total of {} input files.'.format(len(input_files)))
     index = []
     with Pool(args.processes) as pool:
         f = partial(index_file, input_dir=args.input_dir)
@@ -99,20 +103,58 @@ def main_index_documents(args):
             print('\t'.join(doc_tuple), file=outf)
 
 
+def read_grouped_index(index_file):
+    """Reads the index file domain group by group."""
+    with openall(index_file) as inf:
+        for _, group in groupby(map(str.strip, inf),
+                                key=lambda l: urlsplit(l.split('\t', 1)[0]).netloc):
+            yield list(group)
+
+
 def main_distribute(args):
     """The main function for distributing the index file."""
+    def add_group(group, i, weights, hosts, lens, max_len):
+        """Writes a group to one of the files. Updates the state."""
+        for line in group:
+            print(line, file=hosts[i])
+        lens[i] += len(group) * weights[i]
+        return max(max_len, lens[i])
+
     weights = [weight for _, weight in args.hosts]
     hosts = [openall(host_to_path(args.index, host), 'wt') for host, _ in args.hosts]
+    lens = [0 for _ in weights]
+    max_len = 0
+    try:
+        for group in read_grouped_index(args.index):
+            for i in range(len(weights)):
+                if lens[i] < max_len:
+                    max_len = add_group(group, i, weights, hosts, lens, max_len)
+                    break
+            else:
+                # Everything is at max_len: unlikely apart from 0, but still
+                max_len = add_group(group, i, weights, hosts, lens, max_len)
+    finally:
+        for host in hosts:
+            host.close()
 
 
 def main():
     args = parse_arguments()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
+    )
+    install_mp_handler()
+
     os.nice(20)
 
     if args.command == 'index_docs':
         main_index_documents(args)
     elif args.command == 'distribute':
         main_distribute(args)
+
+    logging.info('Done.')
 
 
 if __name__ == '__main__':
