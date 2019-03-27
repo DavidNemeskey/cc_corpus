@@ -18,8 +18,7 @@ from cc_corpus.utils import openall
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
-    parser.add_argument('input_dir', required=True,
-                        help='the corpus directory.')
+    parser.add_argument('input_dir', help='the corpus directory.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
