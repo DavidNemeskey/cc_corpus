@@ -99,8 +99,8 @@ def main_index_documents(args):
 
     index.sort(key=index_key)
     with openall(args.index, 'wt') as outf:
-        for doc_tuple in index:
-            print('\t'.join(doc_tuple), file=outf)
+        for doc_url, doc_file, doc_pos, doc_len in index:
+            print(doc_url, doc_file, doc_pos, doc_len, sep='\t', file=outf)
 
 
 def read_grouped_index(index_file):
