@@ -102,8 +102,7 @@ def main_index_documents(args):
 def main_distribute(args):
     """The main function for distributing the index file."""
     weights = [weight for _, weight in args.hosts]
-    hosts = [openall(host_to_path(args.index, host)) for host, _ in args.hosts]
-    print(weights, hosts)
+    hosts = [openall(host_to_path(args.index, host), 'wt') for host, _ in args.hosts]
 
 
 def main():
