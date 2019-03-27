@@ -3,6 +3,7 @@
 
 """Utility functions."""
 
+from argparse import ArgumentTypeError
 import bz2
 import gzip
 import io
@@ -55,7 +56,7 @@ def file_mode(f):
             return ('w' if f._mode == bz2._MODE_WRITE else 'r') + mode
         else:
             raise ValueError('Unknown file object type {}'.format(type(f)))
-            
+
 
 def unpickle_stream(inf):
     """
@@ -77,7 +78,7 @@ class NoEmptyWriteWrapper:
     Truth be told, instead of this, a lazy file object (that only creates the
     actual file on the first write()) would be much better, but it is much
     more difficult to implement, due to the complexity of the io classes.
-    
+
     Note that ATM it is only possible to differentiate between 'w' and 'a'
     modes for regular (not gzip or bz2) files.
     """
@@ -140,3 +141,18 @@ def collect_inputs(inputs):
         else:
             raise ValueError('{} is neither a file nor a directory'.format(input))
     return files
+
+
+def host_weight(value):
+    """Implements an argument type for argparse that is a string:float tuple."""
+    host, _, weight = value.partition(':')
+    if weight:
+        try:
+            weight = float(weight)
+        except:
+            raise ArgumentTypeError(
+                'Must be in the form of host:weight, where weight is a number. '
+                'It is optional, though.')
+    else:
+        weight = 1
+    return host, weight
