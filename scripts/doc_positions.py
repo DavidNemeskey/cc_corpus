@@ -16,8 +16,7 @@ from cc_corpus.corpus import parse_file
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
-    parser.add_argument('input_dir', required=True,
-                        help='the corpus directory.')
+    parser.add_argument('input_dir', help='the corpus directory.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
@@ -47,6 +46,7 @@ def process_file(input_file, input_dir):
 
 def main():
     args = parse_arguments()
+    os.nice(20)
 
     input_files = os.listdir(args.input_dir)
     # result = []
