@@ -39,7 +39,7 @@ def parse_arguments():
              'domain and corpus location.'
     )
     parser_index.set_defaults(command='index_docs')
-    parser.add_argument('input_dir', help='the corpus directory.')
+    parser_index.add_argument('input_dir', help='the corpus directory.')
     parser_distribute = subparsers.add_parser(
         'distribute_index', aliases=['distribute', 'dist'],
         help='Distributes the index file into separate files for running on'
@@ -113,28 +113,22 @@ def read_grouped_index(index_file):
 
 def main_distribute(args):
     """The main function for distributing the index file."""
-    def add_group(group, i, weights, hosts, lens, max_len):
-        """Writes a group to one of the files. Updates the state."""
-        for line in group:
-            print(line, file=hosts[i])
-        lens[i] += len(group) * weights[i]
-        return max(max_len, lens[i])
-
     weights = [weight for _, weight in args.hosts]
     hosts = [openall(host_to_path(args.index, host), 'wt') for host, _ in args.hosts]
     lens = [0 for _ in weights]
-    max_len = 0
     try:
         for group in read_grouped_index(args.index):
-            for i in range(len(weights)):
-                if lens[i] < max_len:
-                    max_len = add_group(group, i, weights, hosts, lens, max_len)
-                    break
-            else:
-                # Everything is at max_len: unlikely apart from 0, but still
-                max_len = add_group(group, i, weights, hosts, lens, max_len)
+            i = lens.index(min(lens))  # argmin
+            logging.debug('Adding {} items to host {} ({}).'.format(
+                len(group), i, hosts[i].name))
+            for line in group:
+                print(line, file=hosts[i])
+            # Higher weight means "I need more documents"
+            lens[i] += len(group) / weights[i]
     finally:
-        for host in hosts:
+        for i, host in enumerate(hosts):
+            logging.info('Wrote {} lines to {}.'.format(
+                round(lens[i] * weights[i]), host.name))
             host.close()
 
 
