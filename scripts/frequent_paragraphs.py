@@ -184,10 +184,37 @@ def read_group_documents(group, input_dir):
 def main_filter(args):
     """The main function for filtering the documents."""
     minhasher = MinHasher(args.permutations, args.n)
-    lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
     for group in read_grouped_index(args.index):
+        domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+        lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
+        ps = {}  # key -> [score, num, text]
         for doc in read_group_documents(group, args.input_dir):
-            print(doc.attrs['url'])
+            # Step 1: decrease score of all paragraphs
+            for p_data in ps.values():
+                p_data[0] *= 0.99
+            # Step 2: add new paragraphs to the roster
+            for p, text in enumerate(doc.paragraphs, start=1):
+                mh = minhasher.minhash(text)
+                if mh in lsh:
+                    for duplicate in lsh.query(mh):
+                        ps[duplicate][0] += 1
+                        ps[duplicate][1] += 1
+                else:
+                    key = '_'.join(doc.attrs['url'], p)
+                    lsh.insert(key, mh)
+                    ps[key] = [1, 1, text]
+            # Step 3: drop paragraphs with low score
+            to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
+            for key in to_drop:
+                ps.pop(key)
+                lsh.remove(key)
+
+        # Get rid of paragraphs that only occured once
+        ps = {key: p_data for key, p_data in ps.items() if p_data[1] > 1}
+        logging.info('Found {} frequent paragraphs in domain {}'.format(
+            len(ps), domain))
+        for key, p_data in ps.items():
+            logging.debug('{}: {} {} {}'.format(key, p_data[0], p_data[1], p_data[2]))
 
 
 def main():
