@@ -12,15 +12,17 @@ import os
 import os.path as op
 from urllib.parse import urlsplit
 
+from datasketch import MinhashLSH
 from multiprocessing_logging import install_mp_handler
 
-from cc_corpus.corpus import parse_file
+from cc_corpus.corpus import parse_file, parse
+from cc_corpus.deduplication import MinHasher
 from cc_corpus.utils import host_to_path, host_weight, openall
 
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
-    parser.add_argument('--index', '-i', required=True,
+    parser.add_argument('--index', required=True,
                         help='the output index file.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
@@ -33,13 +35,16 @@ def parse_arguments():
                         help='the logging level.')
     subparsers = parser.add_subparsers(
         help='The steps of frequent paragraph detection.')
+
     parser_index = subparsers.add_parser(
         'index_docs', aliases=['index'],
         help='Indexes the documents in the corpus and sorts the index by '
              'domain and corpus location.'
     )
     parser_index.set_defaults(command='index_docs')
-    parser_index.add_argument('input_dir', help='the corpus directory.')
+    parser_index.add_argument('--input-dir', '-i', required=True,
+                              help='the corpus directory.')
+
     parser_distribute = subparsers.add_parser(
         'distribute_index', aliases=['distribute', 'dist'],
         help='Distributes the index file into separate files for running on'
@@ -50,12 +55,32 @@ def parse_arguments():
                                    type=host_weight, dest='hosts',
                                    help='a host:weight pair.')
 
+    parser_filter = subparsers.add_parser(
+        'filter_paragraphs', aliases=['filter'],
+        help='Filters frequent paragraphs within a domain.'
+    )
+    parser_filter.add_argument('--input-dir', '-i', required=True,
+                               help='the corpus directory.')
+    parser_filter.add_argument(
+        '--permutations', '-p', type=int, default=256,
+        help='the number of permutations per paragraph (256).'
+    )
+    parser_filter.add_argument(
+        '--n', '-n', type=int, default=5,
+        help='the number of permutations per paragraph (5).'
+    )
+    parser_filter.add_argument('--threshold', '-t', type=float, default=0.9,
+                               help='the Jaccard similarity threshold (0.9).')
+
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
     return args
+
+
+# --------------------------------- Indexing -----------------------------------
 
 
 def index_file(input_file, input_dir):
@@ -80,9 +105,6 @@ def index_key(url_file_pos_len):
     return (urlsplit(url).netloc.split('.')[::-1], input_file, input_pos)
 
 
-# ---------------------------- The main functions ------------------------------
-
-
 def main_index_documents(args):
     """The main function for indexing documents."""
     input_files = os.listdir(args.input_dir)
@@ -103,11 +125,14 @@ def main_index_documents(args):
             print(doc_url, doc_file, doc_pos, doc_len, sep='\t', file=outf)
 
 
+# ------------------------------- Distribution ---------------------------------
+
+
 def read_grouped_index(index_file):
     """Reads the index file domain group by group."""
     with openall(index_file) as inf:
         for _, group in groupby(map(str.strip, inf),
-                                key=lambda l: urlsplit(l.split('\t', 1)[0]).netloc):
+                                key=lambda l: urlsplit(l[0:l.find('\t')]).netloc):
             yield list(group)
 
 
@@ -132,6 +157,37 @@ def main_distribute(args):
             host.close()
 
 
+# -------------------------------- Filtering ----------------------------------
+
+
+def read_group_documents(group):
+    """Returns an iterator of the documents in a group."""
+    last_file = None
+    f = None
+    try:
+        for line in group:
+            _, doc_file, doc_pos, doc_len = line.split('\t')
+            if doc_file != last_file:
+                f.close()
+                f = openall(doc_file, 'rb')
+                last_file = doc_file
+            f.seek(doc_pos)
+            yield parse(f.read(doc_len).decode('utf-8').split('\n'))
+
+    finally:
+        if f:
+            f.close()
+
+
+def main_filter(args):
+    """The main function for filtering the documents."""
+    minhasher = MinHasher(args.permutations, args.n)
+    lsh = MinhashLSH(threshold=args.threshold, num_perm=args.permutations)
+    for group in read_grouped_index(args.index):
+        for doc in read_group_documents(group):
+            print(doc.attrs['url'])
+
+
 def main():
     args = parse_arguments()
 
@@ -147,6 +203,8 @@ def main():
         main_index_documents(args)
     elif args.command == 'distribute':
         main_distribute(args)
+    elif args.command == 'filter':
+        main_filter(args)
 
     logging.info('Done.')
 
