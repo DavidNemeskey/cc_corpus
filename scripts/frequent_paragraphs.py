@@ -20,7 +20,6 @@ from cc_corpus.utils import host_to_path, host_weight, openall
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
-    parser.add_argument('input_dir', help='the corpus directory.')
     parser.add_argument('--index', '-i', required=True,
                         help='the output index file.')
     parser.add_argument('--processes', '-P', type=int, default=1,
@@ -40,6 +39,7 @@ def parse_arguments():
              'domain and corpus location.'
     )
     parser_index.set_defaults(command='index_docs')
+    parser.add_argument('input_dir', help='the corpus directory.')
     parser_distribute = subparsers.add_parser(
         'distribute_index', aliases=['distribute', 'dist'],
         help='Distributes the index file into separate files for running on'
