@@ -12,7 +12,7 @@ import os
 import os.path as op
 from urllib.parse import urlsplit
 
-from datasketch import MinhashLSH
+from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file, parse
@@ -59,6 +59,7 @@ def parse_arguments():
         'filter_paragraphs', aliases=['filter'],
         help='Filters frequent paragraphs within a domain.'
     )
+    parser_filter.set_defaults(command='filter')
     parser_filter.add_argument('--input-dir', '-i', required=True,
                                help='the corpus directory.')
     parser_filter.add_argument(
@@ -160,7 +161,7 @@ def main_distribute(args):
 # -------------------------------- Filtering ----------------------------------
 
 
-def read_group_documents(group):
+def read_group_documents(group, input_dir):
     """Returns an iterator of the documents in a group."""
     last_file = None
     f = None
@@ -168,11 +169,12 @@ def read_group_documents(group):
         for line in group:
             _, doc_file, doc_pos, doc_len = line.split('\t')
             if doc_file != last_file:
-                f.close()
-                f = openall(doc_file, 'rb')
+                if f:
+                    f.close()
+                f = openall(op.join(input_dir, doc_file), 'rb')
                 last_file = doc_file
-            f.seek(doc_pos)
-            yield parse(f.read(doc_len).decode('utf-8').split('\n'))
+            f.seek(int(doc_pos))
+            yield from parse(f.read(int(doc_len)).decode('utf-8').split('\n'))
 
     finally:
         if f:
@@ -182,9 +184,9 @@ def read_group_documents(group):
 def main_filter(args):
     """The main function for filtering the documents."""
     minhasher = MinHasher(args.permutations, args.n)
-    lsh = MinhashLSH(threshold=args.threshold, num_perm=args.permutations)
+    lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
     for group in read_grouped_index(args.index):
-        for doc in read_group_documents(group):
+        for doc in read_group_documents(group, args.input_dir):
             print(doc.attrs['url'])
 
 
