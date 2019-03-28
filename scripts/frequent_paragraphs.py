@@ -193,16 +193,22 @@ def main_filter(args):
             for p_data in ps.values():
                 p_data[0] *= 0.99
             # Step 2: add new paragraphs to the roster
+            already_increased = set()  # See below
             for p, text in enumerate(doc.paragraphs, start=1):
                 mh = minhasher.minhash(text)
                 if mh in lsh:
                     for duplicate in lsh.query(mh):
-                        ps[duplicate][0] += 1
-                        ps[duplicate][1] += 1
+                        # Ensure that the paragraph counter is increased by
+                        # at most one per document
+                        if duplicate not in already_increased:
+                            ps[duplicate][0] += 1
+                            ps[duplicate][1] += 1
+                            already_increased.add(duplicate)
                 else:
                     key = '_'.join(doc.attrs['url'], p)
                     lsh.insert(key, mh)
                     ps[key] = [1, 1, text]
+                    already_increased.add(key)
             # Step 3: drop paragraphs with low score
             to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
             for key in to_drop:
