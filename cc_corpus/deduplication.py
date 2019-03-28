@@ -12,6 +12,8 @@ import os.path as op
 import pickle
 import re
 
+from datasketch import MinHash, LeanMinHash
+
 
 class BatchWriter:
     """Writes batches of minhash data."""
@@ -113,3 +115,21 @@ def find_all_batches(input_dir, greater_than=None):
     if greater_than is not None:
         batches = [b for b in batches if int(b) > greater_than]
     return [op.join(input_dir, b) for b in sorted(batches, key=int)]
+
+
+class MinHasher:
+    """Minhashes text."""
+    def __init__(self, permutations, n):
+        self.permutations = permutations
+        self.n = n
+
+    def shinglize(self, text):
+        """Creates character n-grams from the text."""
+        for i in range(len(text) - self.n + 1):
+            yield text[i:i+self.n]
+
+    def minhash(self, text):
+        mh = MinHash(num_perm=self.permutations)
+        for shingle in self.shinglize(text):
+            mh.update(shingle.encode('utf-8'))
+        return LeanMinHash(mh)
