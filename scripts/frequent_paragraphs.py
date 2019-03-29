@@ -186,6 +186,7 @@ def main_filter(args):
     minhasher = MinHasher(args.permutations, args.n)
     for group in read_grouped_index(args.index):
         domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+        logging.info('Starting domain {}...'.format(domain))
         lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
         ps = {}  # key -> [score, num, text]
         for doc in read_group_documents(group, args.input_dir):
@@ -196,30 +197,36 @@ def main_filter(args):
             already_increased = set()  # See below
             for p, text in enumerate(doc.paragraphs, start=1):
                 mh = minhasher.minhash(text)
-                if mh in lsh:
-                    for duplicate in lsh.query(mh):
-                        # Ensure that the paragraph counter is increased by
-                        # at most one per document
-                        if duplicate not in already_increased:
-                            ps[duplicate][0] += 1
-                            ps[duplicate][1] += 1
-                            already_increased.add(duplicate)
-                else:
-                    key = '_'.join(doc.attrs['url'], p)
+                found = False
+                for duplicate in lsh.query(mh):
+                    # Ensure that the paragraph counter is increased by
+                    # at most one per document
+                    if duplicate not in already_increased:
+                        ps[duplicate][0] += 1
+                        ps[duplicate][1] += 1
+                        already_increased.add(duplicate)
+                    found = True
+                if not found:
+                    key = doc.attrs['url'] + '_' + str(p)
                     lsh.insert(key, mh)
                     ps[key] = [1, 1, text]
                     already_increased.add(key)
+            logging.info('After doc {}: {}'.format(doc.attrs['url'], ps))
             # Step 3: drop paragraphs with low score
             to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
             for key in to_drop:
                 ps.pop(key)
                 lsh.remove(key)
+        logging.info('Ending domain {}...'.format(domain))
 
         # Get rid of paragraphs that only occured once
+        logging.info('Before')
         ps = {key: p_data for key, p_data in ps.items() if p_data[1] > 1}
+        logging.info('After')
+        logging.info('After all: {}'.format(ps))
         logging.info('Found {} frequent paragraphs in domain {}'.format(
             len(ps), domain))
-        for key, p_data in ps.items():
+        for key, p_data in sorted(ps.items(), key=lambda kv: -kv[1][1]):
             logging.debug('{}: {} {} {}'.format(key, p_data[0], p_data[1], p_data[2]))
 
 
