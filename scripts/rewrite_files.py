@@ -10,6 +10,10 @@ from multiprocessing import Pool
 import os
 import os.path as op
 
+from multiprocessing_logging import install_mp_handler
+
+from cc_corpus.utils import openall
+
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
@@ -35,9 +39,10 @@ def parse_arguments():
     return args
 
 
-def rewrite_file(input_file, input_dir, output_dir):
+def rewrite_file(input_file, input_dir, output_dir, extension):
     ipath = op.join(input_dir, input_file)
-    opath = op.join(output_dir, input_file)
+    opath = op.join(output_dir, '{}.{}'.format(
+        op.splitext(input_file)[0], extension))
     with openall(ipath, 'rt') as inf, openall(opath, 'wt') as outf:
         for line in inf:
             outf.write(line)
@@ -52,12 +57,16 @@ def main():
     )
     install_mp_handler()
 
+    os.nice(20)
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
     input_files = os.listdir(args.input_dir)
     logging.info('Found a total of {} input files.'.format(len(input_files)))
 
     with Pool(args.processes) as pool:
-        f = partial(rewrite_file,
-                    input_dir=args.input_dir, output_dir=args.output_dir)
+        f = partial(rewrite_file, input_dir=args.input_dir,
+                    output_dir=args.output_dir, extension=args.format)
         pool.map(f, input_files)
     pool.close()
     pool.join()
