@@ -11,6 +11,11 @@ import os
 import os.path as op
 import pickle
 
+try:
+    import idzip
+except ImportError:
+    idzip = None
+
 def openall(
     filename, mode='rt', encoding=None, errors=None, newline=None,
     buffering=-1, closefd=True, opener=None,  # for open()
@@ -23,7 +28,16 @@ def openall(
     - the default compresslevel is 5, because e.g. gzip does not benefit a lot
       from higher values, only becomes slower.
     """
-    if filename.endswith('.gz'):
+    if filename.endswith('.dz') and idzip:
+        # Unfortunately idzip's API is not very good
+        f = idzip.open(filename, mode)
+        if 't' in mode:
+            return io.TextIOWrapper(f, encoding, errors,
+                                    newline, write_through=True)
+        else:
+            return f
+    elif filename.endswith('.gz') or filename.endswith('.dz'):
+        # .dz is .gz, so if we don't have idzip installed, we can still read it
         return gzip.open(filename, mode, compresslevel,
                          encoding, errors, newline)
     elif filename.endswith('.bz2'):
@@ -54,6 +68,8 @@ def file_mode(f):
             return ('w' if f.mode == gzip.WRITE else 'r') + mode
         elif isinstance(f, bz2.BZ2File):
             return ('w' if f._mode == bz2._MODE_WRITE else 'r') + mode
+        elif idzip and isinstance(f, idzip.IdzipFile):
+            return ('w' if 'w' in f.mode else 'r') + mode
         else:
             raise ValueError('Unknown file object type {}'.format(type(f)))
 
