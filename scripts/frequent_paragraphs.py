@@ -42,8 +42,9 @@ def parse_arguments():
              'domain and corpus location.'
     )
     parser_index.set_defaults(command='index_docs')
-    parser_index.add_argument('--input-dir', '-i', required=True,
-                              help='the corpus directory.')
+    parser_index.add_argument('--input-dir', '-i', required=True, action='append',
+                              help='the corpus directory. Can be specified '
+                                   'more than once.')
 
     parser_distribute = subparsers.add_parser(
         'distribute_index', aliases=['distribute', 'dist'],
@@ -84,7 +85,7 @@ def parse_arguments():
 # --------------------------------- Indexing -----------------------------------
 
 
-def index_file(input_file, input_dir):
+def index_file(input_file):
     """
     Indexes an input file. Returns two items:
     - the input file: since this function is called (kind of) asynchronously,
@@ -92,9 +93,8 @@ def index_file(input_file, input_dir):
     - a list of tuples for each document: its url, position and length in the
       file.
     """
-    input_path = op.join(input_dir, input_file)
     urls, lens = [], []
-    for doc in parse_file(input_path):
+    for doc in parse_file(input_file):
         urls.append(doc.attrs['url'])
         lens.append(doc.stream_size())
     return input_file, list(zip(urls, accumulate([0] + lens[:-1]), lens))
@@ -108,12 +108,12 @@ def index_key(url_file_pos_len):
 
 def main_index_documents(args):
     """The main function for indexing documents."""
-    input_files = os.listdir(args.input_dir)
+    input_files = (op.join(args.input_dir, f) for f in os.listdir(args.input_dir))
 
     logging.info('Found a total of {} input files.'.format(len(input_files)))
     index = []
     with Pool(args.processes) as pool:
-        f = partial(index_file, input_dir=args.input_dir)
+        f = partial(index_file)
         for input_file, urls_poss_lens in pool.imap(f, input_files):
             for doc_url, doc_pos, doc_len in urls_poss_lens:
                 index.append((doc_url, input_file, doc_pos, doc_len))
