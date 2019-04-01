@@ -62,8 +62,6 @@ def parse_arguments():
         help='Filters frequent paragraphs within a domain.'
     )
     parser_filter.set_defaults(command='filter')
-    parser_filter.add_argument('--input-dir', '-i', required=True,
-                               help='the corpus directory.')
     parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
         help='the number of permutations per paragraph (256).'
@@ -163,7 +161,7 @@ def main_distribute(args):
 # -------------------------------- Filtering ----------------------------------
 
 
-def read_group_documents(group, input_dir):
+def read_group_documents(group):
     """Returns an iterator of the documents in a group."""
     last_file = None
     f = None
@@ -173,7 +171,7 @@ def read_group_documents(group, input_dir):
             if doc_file != last_file:
                 if f:
                     f.close()
-                f = openall(op.join(input_dir, doc_file), 'rb')
+                f = openall(doc_file, 'rb')
                 last_file = doc_file
             f.seek(int(doc_pos))
             yield from parse(f.read(int(doc_len)).decode('utf-8').split('\n'))
