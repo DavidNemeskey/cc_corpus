@@ -42,7 +42,8 @@ def parse_arguments():
              'domain and corpus location.'
     )
     parser_index.set_defaults(command='index_docs')
-    parser_index.add_argument('--input-dir', '-i', required=True, action='append',
+    parser_index.add_argument('--input-dir', '-i', required=True,
+                              dest='input_dirs', action='append',
                               help='the corpus directory. Can be specified '
                                    'more than once.')
 
@@ -108,7 +109,8 @@ def index_key(url_file_pos_len):
 
 def main_index_documents(args):
     """The main function for indexing documents."""
-    input_files = (op.join(args.input_dir, f) for f in os.listdir(args.input_dir))
+    input_files = [op.join(input_dir, f) for input_dir in args.input_dirs
+                                         for f in os.listdir(input_dir)]
 
     logging.info('Found a total of {} input files.'.format(len(input_files)))
     index = []
