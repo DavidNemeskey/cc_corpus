@@ -30,7 +30,7 @@ def openall(
     """
     if filename.endswith('.dz') and idzip:
         # Unfortunately idzip's API is not very good
-        f = idzip.open(filename, mode)
+        f = idzip.open(filename, mode.replace('t', '').replace('b', '') + 'b')
         if 't' in mode:
             return io.TextIOWrapper(f, encoding, errors,
                                     newline, write_through=True)
