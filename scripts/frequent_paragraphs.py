@@ -102,7 +102,8 @@ def index_file(input_file):
 def index_key(url_file_pos_len):
     """The key function for index list sorting."""
     url, input_file, input_pos, _ = url_file_pos_len
-    return (urlsplit(url).netloc.split('.')[::-1], input_file, input_pos)
+    return (urlsplit(url).netloc.split('.')[::-1],
+            url[url.find('://') + 3:], input_file, input_pos)
 
 
 def main_index_documents(args):
