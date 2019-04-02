@@ -102,6 +102,8 @@ def index_file(input_file):
 def index_key(url_file_pos_len):
     """The key function for index list sorting."""
     url, input_file, input_pos, _ = url_file_pos_len
+    # Protocolless URL, so that http:// and https:// variants are put next to
+    # each other. This allows us to uniq' them in main_index or during filtering
     return (urlsplit(url).netloc.split('.')[::-1],
             url[url.find('://') + 3:], input_file, input_pos)
 
@@ -126,13 +128,14 @@ def main_index_documents(args):
         for _, group in groupby(index, lambda record: urlsplit(record[0]).netloc):
             urls_written = set()
             for doc_url, doc_file, doc_pos, doc_len in group:
-                if doc_url not in urls_written:
-                    urls_written.add(doc_url)
+                # This also filters http:// + https:// variants
+                pure_url = url[url.find('://') + 3:]
+                if pure_url not in urls_written:
+                    urls_written.add(pure_url)
                     print(doc_url, doc_file, doc_pos, doc_len, sep='\t', file=outf)
 
 
 # ------------------------------- Distribution ---------------------------------
-
 
 def read_grouped_index(index_file):
     """Reads the index file domain group by group."""
