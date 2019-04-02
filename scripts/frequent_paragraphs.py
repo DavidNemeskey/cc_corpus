@@ -10,6 +10,7 @@ import logging
 from multiprocessing import Pool
 import os
 import os.path as op
+import time
 from urllib.parse import urlsplit
 
 from datasketch import MinHashLSH
@@ -167,6 +168,7 @@ def read_group_documents(group):
     f = None
     try:
         for line in group:
+            st = time.time()
             _, doc_file, doc_pos, doc_len = line.split('\t')
             if doc_file != last_file:
                 if f:
@@ -186,10 +188,10 @@ def main_filter(args):
     minhasher = MinHasher(args.permutations, args.n)
     for group in read_grouped_index(args.index):
         domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
-        logging.info('Starting domain {}...'.format(domain))
+        logging.debug('Starting domain {}...'.format(domain))
         lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
         ps = {}  # key -> [score, num, text]
-        for doc in read_group_documents(group, args.input_dir):
+        for doc_no, doc in enumerate(read_group_documents(group)):
             # Step 1: decrease score of all paragraphs
             for p_data in ps.values():
                 p_data[0] *= 0.99
@@ -211,23 +213,20 @@ def main_filter(args):
                     lsh.insert(key, mh)
                     ps[key] = [1, 1, text]
                     already_increased.add(key)
-            logging.info('After doc {}: {}'.format(doc.attrs['url'], ps))
             # Step 3: drop paragraphs with low score
             to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
             for key in to_drop:
                 ps.pop(key)
                 lsh.remove(key)
-        logging.info('Ending domain {}...'.format(domain))
+        logging.debug('Ending domain {}...'.format(domain))
 
         # Get rid of paragraphs that only occured once
-        logging.info('Before')
         ps = {key: p_data for key, p_data in ps.items() if p_data[1] > 1}
-        logging.info('After')
-        logging.info('After all: {}'.format(ps))
-        logging.info('Found {} frequent paragraphs in domain {}'.format(
-            len(ps), domain))
-        for key, p_data in sorted(ps.items(), key=lambda kv: -kv[1][1]):
-            logging.debug('{}: {} {} {}'.format(key, p_data[0], p_data[1], p_data[2]))
+        logging.info(
+            'Found {} frequent paragraphs in domain {} ({} documents).'.format(
+                len(ps), domain, doc_no))
+        # for key, p_data in sorted(ps.items(), key=lambda kv: -kv[1][1]):
+        #     logging.debug('{}: {} {} {}'.format(key, p_data[0], p_data[1], p_data[2]))
 
 
 def main():
