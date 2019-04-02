@@ -242,8 +242,9 @@ def main_filter(args):
             # Step 3: drop paragraphs with low score
             to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
             for key in to_drop:
-                ps.pop(key)
+                _, _, _, text_hash = ps.pop(key)
                 lsh.remove(key)
+                del text_ps[text_hash]
         logging.debug('Ending domain {}...'.format(domain))
 
         # Get rid of paragraphs that only occured once
