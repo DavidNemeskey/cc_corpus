@@ -191,42 +191,54 @@ def main_filter(args):
     for group in read_grouped_index(args.index):
         domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
         logging.debug('Starting domain {}...'.format(domain))
+
         lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
-        ps = {}  # key -> [score, num, text]
-        text_ps = {}  # text -> key
+        ps = {}  # key -> [score, num, text, text_hash]
+        text_ps = {}  # text hash -> key
+        dup_by_text, dup_by_hash = 0, 0
         for doc_no, doc in enumerate(read_group_documents(group)):
             # Step 1: decrease score of all paragraphs
             for p_data in ps.values():
                 p_data[0] *= 0.99
+
             # Step 2: add new paragraphs to the roster
             already_increased = set()  # See below
             for p, text in enumerate(doc.paragraphs, start=1):
+                text_hash = hash(text)
+                dup_key = text_ps.get(text_hash)
+
+                # First try with text agreement (need to re-check the
+                # approximate hash equality), because it's much faster
+                if dup_key and ps[dup_key][2] == text:
+                    # Ensure that the paragraph counter is increased by
+                    # at most one per document
+                    if dup_key not in already_increased:
+                        ps[dup_key][0] += 1
+                        ps[dup_key][1] += 1
+                        already_increased.add(dup_key)
+                        dup_by_text += 1
+                    continue
+
+                # Then on a minhash basis
                 mh = minhasher.minhash(text)
-                found = False
-                dup_key = text_ps.get(text)
-                if dup_key:
-                    ps[dup_key][0] += 1
-                    ps[dup_key][1] += 1
-                    already_increased.add(dup_key)
-                    logging.debug('Found duplicate for {} -> {} by text'.format(
-                        doc.attrs['url'] + '_' + str(p), dup_key))
-                else:
-                    for duplicate in lsh.query(mh):
-                        # Ensure that the paragraph counter is increased by
-                        # at most one per document
-                        if duplicate not in already_increased:
-                            ps[duplicate][0] += 1
-                            ps[duplicate][1] += 1
-                            already_increased.add(duplicate)
-                            logging.debug('Found duplicate for {} -> {} by text'.format(
-                                doc.attrs['url'] + '_' + str(p), duplicate))
-                        found = True
-                    if not found:
-                        key = doc.attrs['url'] + '_' + str(p)
-                        lsh.insert(key, mh)
-                        text_ps[text] = key
-                        ps[key] = [1, 1, text]
-                        already_increased.add(key)
+                for duplicate in lsh.query(mh):
+                    # Ensure that the paragraph counter is increased by
+                    # at most one per document
+                    if duplicate not in already_increased:
+                        ps[duplicate][0] += 1
+                        ps[duplicate][1] += 1
+                        already_increased.add(duplicate)
+                        dup_by_hash += 1
+                    # There will be at most one matching paragraph
+                    continue
+
+                # OK, this is a new paragraph
+                key = doc.attrs['url'] + '_' + str(p)
+                lsh.insert(key, mh)
+                text_ps[text_hash] = key
+                ps[key] = [1, 1, text, text_hash]
+                already_increased.add(key)
+
             # Step 3: drop paragraphs with low score
             to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
             for key in to_drop:
