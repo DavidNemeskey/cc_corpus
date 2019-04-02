@@ -122,8 +122,12 @@ def main_index_documents(args):
 
     index.sort(key=index_key)
     with openall(args.index, 'wt') as outf:
-        for doc_url, doc_file, doc_pos, doc_len in index:
-            print(doc_url, doc_file, doc_pos, doc_len, sep='\t', file=outf)
+        for _, group in groupby(index, lambda record: urlsplit(record[0]).netloc):
+            urls_written = set()
+            for doc_url, doc_file, doc_pos, doc_len in group:
+                if doc_url not in urls_written:
+                    urls_written.add(doc_url)
+                    print(doc_url, doc_file, doc_pos, doc_len, sep='\t', file=outf)
 
 
 # ------------------------------- Distribution ---------------------------------
