@@ -249,9 +249,11 @@ def main_filter(args):
 
         # Get rid of paragraphs that only occured once
         ps = {key: p_data for key, p_data in ps.items() if p_data[1] > 1}
-        logging.info(
-            'Found {} frequent paragraphs in domain {} ({} documents).'.format(
-                len(ps), domain, doc_no))
+        if ps:
+            logging.info(
+                'Found {} frequent paragraphs (duplicates: {} by text / '
+                '{} by lsh) in domain {} ({} documents).'.format(
+                    len(ps), dup_by_text, dup_by_hash, domain, doc_no))
         # for key, p_data in sorted(ps.items(), key=lambda kv: -kv[1][1]):
         #     logging.debug('{}: {} {} {}'.format(key, p_data[0], p_data[1], p_data[2]))
 
