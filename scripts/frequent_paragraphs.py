@@ -125,14 +125,20 @@ def main_index_documents(args):
 
     index.sort(key=index_key)
     with openall(args.index, 'wt') as outf:
-        for _, group in groupby(index, lambda record: urlsplit(record[0]).netloc):
+        for domain, group in groupby(index, lambda record: urlsplit(record[0]).netloc):
             urls_written = set()
             for doc_url, doc_file, doc_pos, doc_len in group:
                 # This also filters http:// + https:// variants
-                pure_url = url[url.find('://') + 3:]
-                if pure_url not in urls_written:
-                    urls_written.add(pure_url)
-                    print(doc_url, doc_file, doc_pos, doc_len, sep='\t', file=outf)
+                try:
+                    pure_url = doc_url[doc_url.find('://') + 3:]
+                    if pure_url not in urls_written:
+                        urls_written.add(pure_url)
+                        print(doc_url, doc_file, doc_pos, doc_len, sep='\t', file=outf)
+                        logging.debug('Printed URL {}.'.format(doc_url))
+                    else:
+                        logging.debug('Skipped duplicate URL {}.'.format(doc_url))
+                except:
+                    logging.exception('Error somewhere!!!')
 
 
 # ------------------------------- Distribution ---------------------------------
@@ -191,6 +197,8 @@ def read_group_documents(group):
 
 def main_filter(args):
     """The main function for filtering the documents."""
+    install_mp_handler()
+
     minhasher = MinHasher(args.permutations, args.n)
     for group in read_grouped_index(args.index):
         domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
@@ -269,7 +277,7 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    install_mp_handler()
+    # install_mp_handler()
 
     os.nice(20)
 
