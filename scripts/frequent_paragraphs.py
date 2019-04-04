@@ -195,6 +195,57 @@ def read_group_documents(group):
             f.close()
 
 
+def collect_frequent(group):
+    """Collects the frequent paragraphs in a domain."""
+    minhasher = MinHasher(args.permutations, args.n)
+    lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
+    ps = {}  # key -> [score, num, text]
+    num_dup = 0
+
+    for doc_no, doc in enumerate(read_group_documents(group)):
+        # Step 1: decrease score of all paragraphs
+        for p_data in ps.values():
+            p_data[0] *= 0.99
+
+        # Step 2: add new paragraphs to the roster
+        already_increased = set()  # See below
+        for p, text in enumerate(doc.paragraphs, start=1):
+            mh = minhasher.minhash(text)
+            found_dup = False
+            for duplicate in lsh.query(mh):
+                # Ensure that the paragraph counter is increased by
+                # at most one per document
+                if duplicate not in already_increased:
+                    ps[duplicate][0] += 1
+                    ps[duplicate][1] += 1
+                    already_increased.add(duplicate)
+                    if not found_dup:
+                        found_dup = True
+                        num_dup += 1
+            if not found_dup:
+                # OK, this is a new paragraph
+                key = doc.attrs['url'] + '_' + str(p)
+                lsh.insert(key, mh)
+                ps[key] = [1, 1, text]
+                already_increased.add(key)
+
+        # Step 3: drop paragraphs with low score
+        to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
+        for key in to_drop:
+            ps.pop(key)
+            lsh.remove(key)
+    logging.debug('Ending domain {}...'.format(domain))
+
+    # Get rid of paragraphs that only occured once
+    ps = {key: p_data for key, p_data in ps.items() if p_data[1] > 1}
+    if ps:
+        logging.info(
+            'Found {} frequent paragraphs (duplicates: {}) '
+            'in domain {} ({} documents).'.format(
+                len(ps), num_dup, domain, doc_no))
+    return ps
+
+
 def main_filter(args):
     """The main function for filtering the documents."""
     install_mp_handler()
