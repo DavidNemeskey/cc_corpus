@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 from functools import partial
 from itertools import accumulate, groupby
 import logging
-from multiprocessing import Pool
+from multiprocessing import Pool, Queue
 import os
 import os.path as op
 from urllib.parse import urlsplit
@@ -63,6 +63,18 @@ def parse_arguments():
     )
     parser_filter.set_defaults(command='filter')
     parser_filter.add_argument(
+        '--output-dir', '-o', required=True,
+        help='the output directory. The *last directory* of the input path '
+             'is replaced with the output directory; not all of it. This is '
+             'because we expect that all corpus directories are next to each '
+             'other; also, if the year is the path element before that, it '
+             'will be kept intact.')
+    parser.add_argument('--documents', '-d', type=int, default=1000,
+                        help='the number of documents an output file should '
+                        'contain (1000).')
+    parser.add_argument('--zeroes', '-z', required=True,
+                        help='the number of zeroes in the output files\s name.')
+    parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
         help='the number of permutations per paragraph (256).'
     )
@@ -72,12 +84,27 @@ def parse_arguments():
     )
     parser_filter.add_argument('--threshold', '-t', type=float, default=0.9,
                                help='the Jaccard similarity threshold (0.9).')
+    parser_filter.add_argument('--min-freq', '-m', type=int, default=2,
+                               help='the minimum number of occurrence from '
+                                    'which a paragraph is deemed frequent (2).')
+    decay_group = parser_filter.add_mutually_exclusive_group()
+    decay_group.add_argument('--c', '-c', type=float, default=0.01,
+                             help='the decay (multiplication) constant used '
+                                  'for scoring paraphraphs (0.99).')
+    decay_group.add_argument('--keep-for', '-k', type=int,
+                             help='keep frequent paragraph candidates for this '
+                                  'many iterations. This argument is '
+                                  'another way to specify -c and is mutually '
+                                  'exclusive with it.')
 
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
+    # Compute c from keep_for
+    if args.command == 'filter' and args.keep_for:
+        args.c = 1 - pow(0.5, 1 / (args.keep_for - 0.5))
     return args
 
 
@@ -110,8 +137,9 @@ def index_key(url_file_pos_len):
 
 def main_index_documents(args):
     """The main function for indexing documents."""
-    input_files = [op.join(input_dir, f) for input_dir in args.input_dirs
-                                         for f in os.listdir(input_dir)]
+    input_files = [op.join(input_dir, f)
+                   for input_dir in args.input_dirs
+                   for f in os.listdir(input_dir)]
 
     logging.info('Found a total of {} input files.'.format(len(input_files)))
     index = []
@@ -195,17 +223,19 @@ def read_group_documents(group):
             f.close()
 
 
-def collect_frequent(group):
+def collect_frequent(group, minhasher, threshold, decay, min_freq):
     """Collects the frequent paragraphs in a domain."""
-    minhasher = MinHasher(args.permutations, args.n)
-    lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
-    ps = {}  # key -> [score, num, text]
+    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+    logging.debug('Collecting frequent paragraphs from {}...'.format(domain))
+
+    lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
+    ps = {}  # key -> [score, num, minhash]
     num_dup = 0
 
     for doc_no, doc in enumerate(read_group_documents(group)):
         # Step 1: decrease score of all paragraphs
         for p_data in ps.values():
-            p_data[0] *= 0.99
+            p_data[0] *= decay
 
         # Step 2: add new paragraphs to the roster
         already_increased = set()  # See below
@@ -226,7 +256,7 @@ def collect_frequent(group):
                 # OK, this is a new paragraph
                 key = doc.attrs['url'] + '_' + str(p)
                 lsh.insert(key, mh)
-                ps[key] = [1, 1, text]
+                ps[key] = [1, 1, mh]
                 already_increased.add(key)
 
         # Step 3: drop paragraphs with low score
@@ -234,16 +264,39 @@ def collect_frequent(group):
         for key in to_drop:
             ps.pop(key)
             lsh.remove(key)
-    logging.debug('Ending domain {}...'.format(domain))
+    logging.debug('Finished collecting frequent paragraphs from {}...'.format(
+        domain))
 
     # Get rid of paragraphs that only occured once
-    ps = {key: p_data for key, p_data in ps.items() if p_data[1] > 1}
+    ps = {key: p_data for key, p_data in ps.items() if p_data[1] > min_freq}
     if ps:
-        logging.info(
-            'Found {} frequent paragraphs (duplicates: {}) '
-            'in domain {} ({} documents).'.format(
-                len(ps), num_dup, domain, doc_no))
+        logging.info('Found {} frequent paragraphs (duplicates: {}) '
+                     'in domain {} ({} documents).'.format(
+                         len(ps), num_dup, domain, doc_no))
     return ps
+
+
+def filter_paragraphs(group, output_dir, freq_ps, minhasher):
+    """Filters the frequent paragraphs from documents."""
+    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+    logging.debug('Filtering frequent paragraphs from {}...'.format(domain))
+
+    frequents = set(mh for _, _, mh in freq_ps)
+    for doc_no, doc in enumerate(read_group_documents(group)):
+        doc.paragraphs = [
+            text for p, text in enumerate(doc.paragraphs)
+            if minhasher.minhash(doc.paragraphs[p]) not in frequents
+        ]
+
+    logging.debug('Filtered frequent paragraphs from {}...'.format(domain))
+
+
+def full_filter(group, args, queue):
+    """Groups collect_frequent() and filter_paragraphs()."""
+    freq_ps = collect_frequent(group, minhasher, args.threshold,
+                               1 - args.c, args.min_freq)
+    for doc in filter_paragraphs(group, args.output_dir, freq_ps, minhasher):
+        queue.put(doc)
 
 
 def main_filter(args):
@@ -251,74 +304,10 @@ def main_filter(args):
     install_mp_handler()
 
     minhasher = MinHasher(args.permutations, args.n)
-    for group in read_grouped_index(args.index):
-        domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
-        logging.debug('Starting domain {}...'.format(domain))
-
-        lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
-        ps = {}  # key -> [score, num, text, text_hash]
-        text_ps = {}  # text hash -> key
-        dup_by_text, dup_by_hash = 0, 0
-        for doc_no, doc in enumerate(read_group_documents(group)):
-            # Step 1: decrease score of all paragraphs
-            for p_data in ps.values():
-                p_data[0] *= 0.99
-
-            # Step 2: add new paragraphs to the roster
-            already_increased = set()  # See below
-            for p, text in enumerate(doc.paragraphs, start=1):
-                text_hash = hash(text)
-                dup_key = text_ps.get(text_hash)
-
-                # First try with text agreement (need to re-check the
-                # approximate hash equality), because it's much faster
-                if dup_key and ps[dup_key][2] == text:
-                    # Ensure that the paragraph counter is increased by
-                    # at most one per document
-                    if dup_key not in already_increased:
-                        ps[dup_key][0] += 1
-                        ps[dup_key][1] += 1
-                        already_increased.add(dup_key)
-                        dup_by_text += 1
-                    continue
-
-                # Then on a minhash basis
-                mh = minhasher.minhash(text)
-                for duplicate in lsh.query(mh):
-                    # Ensure that the paragraph counter is increased by
-                    # at most one per document
-                    if duplicate not in already_increased:
-                        ps[duplicate][0] += 1
-                        ps[duplicate][1] += 1
-                        already_increased.add(duplicate)
-                        dup_by_hash += 1
-                    # There will be at most one matching paragraph
-                    continue
-
-                # OK, this is a new paragraph
-                key = doc.attrs['url'] + '_' + str(p)
-                lsh.insert(key, mh)
-                text_ps[text_hash] = key
-                ps[key] = [1, 1, text, text_hash]
-                already_increased.add(key)
-
-            # Step 3: drop paragraphs with low score
-            to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
-            for key in to_drop:
-                _, _, _, text_hash = ps.pop(key)
-                lsh.remove(key)
-                del text_ps[text_hash]
-        logging.debug('Ending domain {}...'.format(domain))
-
-        # Get rid of paragraphs that only occured once
-        ps = {key: p_data for key, p_data in ps.items() if p_data[1] > 1}
-        if ps:
-            logging.info(
-                'Found {} frequent paragraphs (duplicates: {} by text / '
-                '{} by lsh) in domain {} ({} documents).'.format(
-                    len(ps), dup_by_text, dup_by_hash, domain, doc_no))
-        # for key, p_data in sorted(ps.items(), key=lambda kv: -kv[1][1]):
-        #     logging.debug('{}: {} {} {}'.format(key, p_data[0], p_data[1], p_data[2]))
+    with Pool(args.processes) as pool:
+        queue = Queue()
+        f = partial(full_filter, args=args, queue=queue)
+        pool.map(f, read_grouped_index(args.index))
 
 
 def main():
