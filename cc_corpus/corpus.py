@@ -291,7 +291,7 @@ def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
 
 class BatchWriter:
     """Writes Documents into a batch of files with consecutive numbering."""
-    def __init__(self, batch_size, out_dir, zeroes=4):
+    def __init__(self, batch_size, out_dir, zeroes=4, name_prefix=''):
         """
         Parameters:
         - batch_size: the number of documents after which a new batch file is
@@ -303,6 +303,7 @@ class BatchWriter:
         self.batch_size = batch_size
         self.out_dir = out_dir
         self.zeroes = zeroes
+        self.name_prefix = name_prefix
         self.batch = 0
         self.outf = None
         self.doc_written = self.batch_size + 1  # so that we invoke new_file
@@ -325,7 +326,8 @@ class BatchWriter:
 
         self.batch += 1
         new_file = os.path.join(
-            self.out_dir, '{{:0{}}}.txt.gz'.format(self.zeroes).format(self.batch))
+            self.out_dir, '{}{{:0{}}}.txt.gz'.format(
+                self.name_prefix, self.zeroes).format(self.batch))
         logging.debug('Opening file {}...'.format(new_file))
         self.outf = openall(new_file, 'wt')
 
