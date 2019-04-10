@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 from functools import partial
 from itertools import accumulate, groupby
 import logging
-from multiprocessing import Pool, Queue
+from multiprocessing import Manager, Pool
 import os
 import os.path as op
 from urllib.parse import urlsplit
@@ -73,7 +73,7 @@ def parse_arguments():
                         help='the number of documents an output file should '
                         'contain (1000).')
     parser.add_argument('--zeroes', '-z', default=4,
-                        help='the number of zeroes in the output files\s name.')
+                        help='the number of zeroes in the output files\' name.')
     parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
         help='the number of permutations per paragraph (256).'
@@ -291,6 +291,7 @@ def filter_paragraphs(group, output_dir, freq_ps, minhasher):
 
 def full_filter(group, args, queue):
     """Groups collect_frequent() and filter_paragraphs()."""
+    minhasher = MinHasher(args.permutations, args.n)
     freq_ps = collect_frequent(group, minhasher, args.threshold,
                                1 - args.c, args.min_freq)
     for doc in filter_paragraphs(group, args.output_dir, freq_ps, minhasher):
@@ -301,9 +302,9 @@ def main_filter(args):
     """The main function for filtering the documents."""
     install_mp_handler()
 
-    minhasher = MinHasher(args.permutations, args.n)
     with Pool(args.processes) as pool:
-        queue = Queue()
+        m = Manager()
+        queue = m.Queue()
         f = partial(full_filter, args=args, queue=queue)
         pool.map(f, read_grouped_index(args.index))
 
