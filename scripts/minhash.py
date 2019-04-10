@@ -42,7 +42,7 @@ def parse_arguments():
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--n', '-n', type=int, default=5,
-                        help='the number of permutations per paragraph (5).')
+                        help='the size of the n-grams (5).')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')

@@ -72,7 +72,7 @@ def parse_arguments():
     parser.add_argument('--documents', '-d', type=int, default=1000,
                         help='the number of documents an output file should '
                         'contain (1000).')
-    parser.add_argument('--zeroes', '-z', required=True,
+    parser.add_argument('--zeroes', '-z', default=4,
                         help='the number of zeroes in the output files\s name.')
     parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
@@ -80,7 +80,7 @@ def parse_arguments():
     )
     parser_filter.add_argument(
         '--n', '-n', type=int, default=5,
-        help='the number of permutations per paragraph (5).'
+        help='the size of the n-grams (5).'
     )
     parser_filter.add_argument('--threshold', '-t', type=float, default=0.9,
                                help='the Jaccard similarity threshold (0.9).')
