@@ -78,10 +78,8 @@ def parse_arguments():
         '--permutations', '-p', type=int, default=256,
         help='the number of permutations per paragraph (256).'
     )
-    parser_filter.add_argument(
-        '--n', '-n', type=int, default=5,
-        help='the size of the n-grams (5).'
-    )
+    parser_filter.add_argument('--n', '-n', type=int, default=5,
+                               help='the size of the n-grams (5).')
     parser_filter.add_argument('--threshold', '-t', type=float, default=0.9,
                                help='the Jaccard similarity threshold (0.9).')
     parser_filter.add_argument('--min-freq', '-m', type=int, default=2,
