@@ -185,3 +185,12 @@ def host_to_path(path, host):
     if ext:
         hosty_path += ext
     return hosty_path
+
+
+class Stats:
+    """A data class (for Python < 3.6 as well)."""
+    def __init__(self, *fields):
+        """Adds the specified fields to the object as attributes."""
+        # TODO a proper type() or metaclass-based solution
+        for field in fields:
+            setattr(self, field, 0)

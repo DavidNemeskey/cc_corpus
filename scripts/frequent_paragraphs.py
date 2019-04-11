@@ -18,7 +18,7 @@ from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file, parse
 from cc_corpus.deduplication import MinHasher
-from cc_corpus.utils import host_to_path, host_weight, openall
+from cc_corpus.utils import host_to_path, host_weight, openall, Stats
 
 
 def parse_arguments():
@@ -202,10 +202,6 @@ def main_distribute(args):
 # -------------------------------- Filtering ----------------------------------
 
 
-FilterStats = namedtuple('FilterStats',
-                         ['old_ps', 'new_ps', 'old_docs', 'new_docs'])
-
-
 def read_group_documents(group):
     """Returns an iterator of the documents in a group."""
     last_file = None
@@ -354,7 +350,7 @@ def full_filter(group, args, queue):
     minhasher = MinHasher(args.permutations, args.n)
     freq_ps = collect_frequent(group, minhasher, args.threshold,
                                1 - args.c, args.min_freq)
-    stats = FilterStats(0, 0, 0, 0)
+    stats = Stats('old_ps', 'new_ps', 'old_docs', 'new_docs')
     for doc in filter_paragraphs(group, freq_ps, minhasher, args.threshold, stats):
         queue.put(doc)
     return stats
