@@ -7,6 +7,7 @@ from argparse import ArgumentTypeError
 import bz2
 import gzip
 import io
+from itertools import zip_longest
 import os
 import os.path as op
 import pickle
@@ -188,9 +189,36 @@ def host_to_path(path, host):
 
 
 class Stats:
-    """A data class (for Python < 3.6 as well)."""
-    def __init__(self, *fields):
-        """Adds the specified fields to the object as attributes."""
-        # TODO a proper type() or metaclass-based solution
-        for field in fields:
-            setattr(self, field, 0)
+    """
+    Class that can be used to count various things. The class cannot be used
+    as-is; users should create subclasses with the create() class method.
+    """
+    __slots__ = ()  # So that we don't create a  __dict__
+
+    def __init__(self, *values):
+        """Initializes all fields to 0."""
+        if len(values) > len(self.__slots__):
+            raise ValueError('Too many arguments to {}(): at most {} '
+                             'supported, received {}'.format(
+                self.__class__.__name__, len(values), len(self.__slots__)))
+
+        for slot, value in zip_longest(self.__slots__, values, fillvalue=0):
+            setattr(self, slot, value)
+
+    def __iadd__(self, other):
+        """+= for all fields."""
+        for slot in self.__slots__:
+            setattr(self, slot, getattr(self, slot) + getattr(other, slot))
+        return self
+
+    def __repr__(self):
+        """Generic string representation."""
+        return '{}({})'.format(
+            self.__class__.__name__, ', '.join('{}: {}'.format(
+                slot, getattr(self, slot)) for slot in self.__slots__))
+
+    @classmethod
+    def create(cls, *fields):
+        """Creates a subclass of Stats with the specified fields."""
+        return type('Stats_' + '_'.join(map(str, fields)), (cls,),
+                    {'__slots__': fields})

@@ -345,12 +345,15 @@ def filter_paragraphs(group, freq_ps, minhasher, threshold, stats):
     logging.debug('Filtered frequent paragraphs from {}.'.format(domain))
 
 
+FilterStats = Stats.create('old_ps', 'new_ps', 'old_docs', 'new_docs')
+
+
 def full_filter(group, args, queue):
     """Groups collect_frequent() and filter_paragraphs()."""
     minhasher = MinHasher(args.permutations, args.n)
     freq_ps = collect_frequent(group, minhasher, args.threshold,
                                1 - args.c, args.min_freq)
-    stats = Stats('old_ps', 'new_ps', 'old_docs', 'new_docs')
+    stats = FilterStats()
     for doc in filter_paragraphs(group, freq_ps, minhasher, args.threshold, stats):
         queue.put(doc)
     return stats
