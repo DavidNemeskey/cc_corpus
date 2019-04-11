@@ -275,18 +275,53 @@ def collect_frequent(group, minhasher, threshold, decay, min_freq):
     return ps
 
 
-def filter_paragraphs(group, output_dir, freq_ps, minhasher):
+def filter_paragraphs(group, freq_ps, minhasher, threshold):
     """Filters the frequent paragraphs from documents."""
     domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
     logging.debug('Filtering frequent paragraphs from {}...'.format(domain))
 
-    frequents = set(mh for _, _, mh in freq_ps)
+    lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
+    for key, p_data in freq_ps.items():
+        lsh.insert(key, p_data[2])
+    # The LSH is, by itself, not enough for frequent p filtering, as we have to
+    # keep frequent ps the first time we see them. Hence, seen_frequents, which
+    # consists of frequent paragraphs we have already seen and thus can
+    # (should) be omitted.
+    seen_frequents = set()
+    logging.debug('LSH: {}'.format(len(lsh.keys)))
+
     for doc_no, doc in enumerate(read_group_documents(group)):
-        doc.paragraphs = [
-            text for p, text in enumerate(doc.paragraphs)
-            if minhasher.minhash(doc.paragraphs[p]) not in frequents
-        ]
-        if doc.paragraphs:
+        logging.debug('{}: {}'.format(doc_no, doc.attrs['url']))
+        new_paragraphs = []
+        new_seen_frequents = set()
+        for p, text in enumerate(doc.paragraphs):
+            mh = minhasher.minhash(text)
+            # sorted(), because I don't know if the order is fixed and
+            # it would be a bummer to "lose" two similar frequent paragraphs
+            # in the loop below when a document contains the same p multiple
+            # times
+            duplicates = sorted(lsh.query(mh))
+            if duplicates:
+                # There are (frequent) duplicates: this p is frequent
+                for dup in duplicates:
+                    # But this is the first time seeing it: keep it.
+                    if dup not in seen_frequents:
+                        new_seen_frequents.add(dup)
+                        new_paragraphs.append(text)
+                        break
+            else:
+                # No duplicates: this p is not frequent
+                new_paragraphs.append(text)
+        # Update seen_frequents. We are doing it here because a document
+        # can contain the same p multiple times, and (as in collect_frequent)
+        # we aim to keep all of them.
+        seen_frequents |= new_seen_frequents
+
+        logging.debug('Doc: {}, pars: {} -> {}'.format(
+            doc.attrs['url'], len(doc.paragraphs), len(new_paragraphs)))
+
+        if new_paragraphs:
+            doc.paragraphs = new_paragraphs
             yield doc
 
     logging.debug('Filtered frequent paragraphs from {}...'.format(domain))
@@ -297,7 +332,7 @@ def full_filter(group, args, queue):
     minhasher = MinHasher(args.permutations, args.n)
     freq_ps = collect_frequent(group, minhasher, args.threshold,
                                1 - args.c, args.min_freq)
-    for doc in filter_paragraphs(group, args.output_dir, freq_ps, minhasher):
+    for doc in filter_paragraphs(group, freq_ps, minhasher, args.threshold):
         queue.put(doc)
 
 
@@ -327,7 +362,11 @@ def main_filter(args):
         pool.close()
         pool.join()
 
-        logging.info('Done filtering {} documents.'.format(num_docs))
+        try:
+            res.get()
+            logging.info('Done filtering; written {} documents.'.format(num_docs))
+        except:
+            logging.exception('Error while filtering')
 
 
 def main():
