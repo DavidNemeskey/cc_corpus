@@ -10,6 +10,7 @@ import logging
 from multiprocessing import Manager, Pool
 import os
 import os.path as op
+import time
 from urllib.parse import urlsplit
 
 from datasketch import MinHashLSH
@@ -285,6 +286,8 @@ def filter_paragraphs(group, output_dir, freq_ps, minhasher):
             text for p, text in enumerate(doc.paragraphs)
             if minhasher.minhash(doc.paragraphs[p]) not in frequents
         ]
+        if doc.paragraphs:
+            yield doc
 
     logging.debug('Filtered frequent paragraphs from {}...'.format(domain))
 
@@ -306,7 +309,25 @@ def main_filter(args):
         m = Manager()
         queue = m.Queue()
         f = partial(full_filter, args=args, queue=queue)
-        pool.map(f, read_grouped_index(args.index))
+        res = pool.map_async(f, read_grouped_index(args.index))
+
+        num_docs = 0
+
+        while True:
+            if queue.empty():
+                if res.ready():
+                    break
+                time.sleep(1)  # I don't like Empty exceptions
+            else:
+                doc = queue.get()
+                num_docs += 1
+                queue.task_done()
+                print(doc.attrs['url'])
+
+        pool.close()
+        pool.join()
+
+        logging.info('Done filtering {} documents.'.format(num_docs))
 
 
 def main():
