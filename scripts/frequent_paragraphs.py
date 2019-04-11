@@ -202,6 +202,10 @@ def main_distribute(args):
 # -------------------------------- Filtering ----------------------------------
 
 
+FilterStats = namedtuple('FilterStats',
+                         ['old_ps', 'new_ps', 'old_docs', 'new_docs'])
+
+
 def read_group_documents(group):
     """Returns an iterator of the documents in a group."""
     last_file = None
@@ -275,8 +279,30 @@ def collect_frequent(group, minhasher, threshold, decay, min_freq):
     return ps
 
 
-def filter_paragraphs(group, freq_ps, minhasher, threshold):
+def write_through(group, stats):
+    """
+    Just enumerates all documents in the group / domain. Called by
+    filter_paragraphs() when there are no frequent paragraphs in the domain
+    and so no filtering is required.
+    """
+    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+    logging.debug(
+        'Domain {} does not require filtering, copying documents...'.format(
+            domain))
+
+    for doc_no, doc in enumerate(read_group_documents(group)):
+        yield doc
+
+    logging.debug('Copied {} documents from {}.'.format(doc_no, domain))
+
+
+def filter_paragraphs(group, freq_ps, minhasher, threshold, stats):
     """Filters the frequent paragraphs from documents."""
+    # Handle the case where no filtering is needed first
+    if len(freq_ps) == 0:
+        yield from write_through(group, stats)
+        return
+
     domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
     logging.debug('Filtering frequent paragraphs from {}...'.format(domain))
 
@@ -288,10 +314,8 @@ def filter_paragraphs(group, freq_ps, minhasher, threshold):
     # consists of frequent paragraphs we have already seen and thus can
     # (should) be omitted.
     seen_frequents = set()
-    logging.debug('LSH: {}'.format(len(lsh.keys)))
 
     for doc_no, doc in enumerate(read_group_documents(group)):
-        logging.debug('{}: {}'.format(doc_no, doc.attrs['url']))
         new_paragraphs = []
         new_seen_frequents = set()
         for p, text in enumerate(doc.paragraphs):
@@ -317,14 +341,12 @@ def filter_paragraphs(group, freq_ps, minhasher, threshold):
         # we aim to keep all of them.
         seen_frequents |= new_seen_frequents
 
-        logging.debug('Doc: {}, pars: {} -> {}'.format(
-            doc.attrs['url'], len(doc.paragraphs), len(new_paragraphs)))
-
+        # Keep only documents with at least 1 non-frequent paragraph
         if new_paragraphs:
             doc.paragraphs = new_paragraphs
             yield doc
 
-    logging.debug('Filtered frequent paragraphs from {}...'.format(domain))
+    logging.debug('Filtered frequent paragraphs from {}.'.format(domain))
 
 
 def full_filter(group, args, queue):
@@ -332,8 +354,10 @@ def full_filter(group, args, queue):
     minhasher = MinHasher(args.permutations, args.n)
     freq_ps = collect_frequent(group, minhasher, args.threshold,
                                1 - args.c, args.min_freq)
-    for doc in filter_paragraphs(group, freq_ps, minhasher, args.threshold):
+    stats = FilterStats(0, 0, 0, 0)
+    for doc in filter_paragraphs(group, freq_ps, minhasher, args.threshold, stats):
         queue.put(doc)
+    return stats
 
 
 def main_filter(args):
