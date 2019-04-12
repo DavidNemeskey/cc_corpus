@@ -69,6 +69,7 @@ setup(name='commoncrawl-downloader',
           'scripts/renumber_corpus_files.py',
           'scripts/frequent_paragraphs.py',
           'scripts/rewrite_files.py',
+          'scripts/test.py',
       ],
       install_requires=[
           'boto3',
