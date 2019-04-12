@@ -1,14 +1,15 @@
 ---
 
 # Installation
-- hosts: slaves
+- hosts: test_slaves
   tasks:
       - git:
           repo: git@github.com:DavidNemeskey/commoncrawl-downloader2.git
           dest: "{{ github_repo_dir }}"
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
-          version: ansible-test
+          version: ansible_test
+          force: yes
         tags:
             - install
       - name: initialize virtualenv + upgrade setuptools and pip
@@ -38,7 +39,7 @@
 
 # Cleanup
 
-- hosts: slaves
+- hosts: test_slaves
   tasks:
       - file:
           path: "{{ virtualenv_dir }}"

@@ -5,11 +5,11 @@
   roles:
     - assert
 
-- hosts: slaves
+- hosts: test_slaves
   vars:
     - tmux_session_name: cc_corpus_frequent
     - tmux_window_title: Frequent Paragraphs window
-    - python_script: frequent_paragraphs.py
+    - python_script: test.py
   roles:
     - python
 
