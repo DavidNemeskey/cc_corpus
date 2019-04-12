@@ -4,6 +4,7 @@
 """Writes the positions of all documents in each file."""
 
 from argparse import ArgumentParser
+from contextlib import closing
 from functools import partial
 from itertools import accumulate, groupby
 import logging
@@ -16,7 +17,7 @@ from urllib.parse import urlsplit
 from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
-from cc_corpus.corpus import parse_file, parse
+from cc_corpus.corpus import BatchWriter, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.utils import host_to_path, host_weight, openall, Stats
 
@@ -73,7 +74,7 @@ def parse_arguments():
     parser.add_argument('--documents', '-d', type=int, default=1000,
                         help='the number of documents an output file should '
                         'contain (1000).')
-    parser.add_argument('--zeroes', '-z', default=4,
+    parser.add_argument('--zeroes', '-z', type=int, default=4,
                         help='the number of zeroes in the output files\' name.')
     parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
@@ -369,18 +370,17 @@ def main_filter(args):
         f = partial(full_filter, args=args, queue=queue)
         res = pool.map_async(f, read_grouped_index(args.index))
 
-        num_docs = 0
-
-        while True:
-            if queue.empty():
-                if res.ready():
-                    break
-                time.sleep(1)  # I don't like Empty exceptions
-            else:
-                doc = queue.get()
-                num_docs += 1
-                queue.task_done()
-                print(doc.attrs['url'])
+        with closing(BatchWriter(args.documents,
+                                 args.output_dir, args.zeroes)) as bw:
+            while True:
+                if queue.empty():
+                    if res.ready():
+                        break
+                    time.sleep(1)  # I don't like Empty exceptions
+                else:
+                    doc = queue.get()
+                    bw.write(doc)
+                    queue.task_done()
 
         pool.close()
         pool.join()
