@@ -33,6 +33,105 @@ This repository also contains a massively fixed and overhauled version of [cdx-i
     # or grouped by files
     zcat "$1" | awk -v prefix="$1" '{print prefix,$0}' | ./download_pages.py -b 'Hungarian' -o out -s  --preprocessed
 
+## The new part
+
+### Technicalities
+
+Most of the tasks can be executed on a single server, albeit a little patience
+is in order. Others (mostly anything related to minhashing, especially
+paragraphs), however, are computationally intensive, and benefit from
+distributed execution. While there are several possible architecture options
+(MapReduce or Spark comes to mind), we opted for a much simpler design, based
+on Ansible.
+
+The next section explain how to run a task in a distributed fashion. In a
+nutshell, the exact same script that would be run on a single machine is run
+parallelly on multiple servers, each attending to a slice of the full data.
+
+Below, the word _Controller_ shall refer to the machine Ansible playbooks are
+executed from; _Slave_ shall refer to the machines doing running the actual
+task (Python script).
+
+#### Prerequisites
+
+In order for our code to work, we need the servers in the cluster to be able
+to see the same data disk. More specifically, the Slaves are not required to
+see each other's data, but Controller must be able to dispatch the data to
+the Slaves' disks. The easiest setup is a network drive that is shared to all
+machines.
+
+All machines must have Python 3.5 or newer installed. This is in addition to the
+following lists:
+
+Controller:
+- Ansible
+- a hosts file that lists the slave machines to be used
+
+Slaves:
+- git
+- tmux
+- virtualenv
+
+If these requirements are met, the Ansible playbook `configuration.yml` can be
+used to {un}install the code -- this is a prerequisite of the next steps:
+```
+ansible-playbook -i hosts configuration.yml --tags {install,cleanup}
+```
+
+#### Data distribution
+
+Most task take one (or more) input directories, process the files in them
+one-by-one, and write the result to an output directory. The script
+`distribute_files.py` apportions the input files into per-Slave directories,
+e.g.
+```
+distribute_files.py -i 2018/cc_corpus_hu/ -o working_dir/ -H host1:1 -H host2
+-H host3:0.5
+```
+The number after the host names are the _host weights_: the number of files
+assigned to each host will be proportional to these numbers.
+
+**Warning**: the script only sees files at this point, so if the number of
+documents is distributed unevenly, a machine might still end up with a
+disproportionately large or small amount of data. Use `renumber_corpus_files.py`
+to distribute documents evenly in the input files.
+
+#### Task execution
+
+The tasks are run via Ansible. Each Python script to be executed distributedly
+(is there such a word?) should have a corresponding playbook (see e.g.
+`minhash.yml` for `minhash.py`). Most of the work is done by the `python` role.
+
+What it does is:
+- it runs the script on all Slaves in a tmux session
+- calls it with the `-P processes` argument where `processes` is a host variable
+(so it can be set on a group or host basis)
+- appends the name of the slave to
+    - the name of the log file
+    - the values of all _per-host_ arguments
+- keeps the values of _common_ arguments as-is
+
+The script arguments can be specified in the `-e` (`--extra-args`) argument of
+`ansible-playbook`, in the following way. Note that per-host arguments are
+supplied in a dictionary (without the `-` or `--` in the keys), while common
+arguments are passed together in a string. Note that the value to `-e` must be
+in JSON (YAML) format.
+
+```
+ansible-playbook -i hosts minhash.yml -e
+'{"log_file": "minhash_2018.log",
+  "script_args": {"input": "2018/cc_corpus_hu",
+                  "o": "2018/cc_corpus_hu_minhashes",
+		  "common_args": "--unit doc -p 256 -n 5 -L info"}}'
+```
+
+#### Output collection
+
+If all Slaves operate on shared storage, the output dictionary can be a
+common parameter, and then all files will be written to it. If not, it must be
+a per-host parameter, and the contents of the per-host output directories must
+be merged by hand.
+
 ## Licence
 
 GNU LGPL 3.0 or any later version.
