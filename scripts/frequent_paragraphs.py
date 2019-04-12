@@ -4,7 +4,7 @@
 """Writes the positions of all documents in each file."""
 
 from argparse import ArgumentParser
-from functools import partial
+from functools import partial, reduce
 from itertools import accumulate, groupby
 import logging
 from multiprocessing import Manager, Pool
@@ -222,9 +222,8 @@ def read_group_documents(group):
             f.close()
 
 
-def collect_frequent(group, minhasher, threshold, decay, min_freq):
+def collect_frequent(group, domain, minhasher, threshold, decay, min_freq):
     """Collects the frequent paragraphs in a domain."""
-    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
     logging.debug('Collecting frequent paragraphs from {}...'.format(domain))
 
     lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
@@ -269,13 +268,13 @@ def collect_frequent(group, minhasher, threshold, decay, min_freq):
     # Get rid of paragraphs that only occured once
     ps = {key: p_data for key, p_data in ps.items() if p_data[1] > min_freq}
     if ps:
-        logging.info('Found {} frequent paragraphs (duplicates: {}) '
-                     'in domain {} ({} documents).'.format(
-                         len(ps), num_dup, domain, doc_no))
+        logging.debug('Found {} frequent paragraphs (duplicates: {}) '
+                      'in domain {} ({} documents).'.format(
+                          len(ps), num_dup, domain, doc_no))
     return ps
 
 
-def write_through(group, stats):
+def write_through(group, domain, stats):
     """
     Just enumerates all documents in the group / domain. Called by
     filter_paragraphs() when there are no frequent paragraphs in the domain
@@ -286,20 +285,23 @@ def write_through(group, stats):
         'Domain {} does not require filtering, copying documents...'.format(
             domain))
 
-    for doc_no, doc in enumerate(read_group_documents(group)):
+    for doc_no, doc in enumerate(read_group_documents(group), start=1):
+        stats.old_ps += len(doc.paragraphs)
+        stats.new_ps += len(doc.paragraphs)
         yield doc
+    stats.old_docs += doc_no
+    stats.new_docs += doc_no
 
     logging.debug('Copied {} documents from {}.'.format(doc_no, domain))
 
 
-def filter_paragraphs(group, freq_ps, minhasher, threshold, stats):
+def filter_paragraphs(group, domain, freq_ps, minhasher, threshold, stats):
     """Filters the frequent paragraphs from documents."""
     # Handle the case where no filtering is needed first
     if len(freq_ps) == 0:
-        yield from write_through(group, stats)
+        yield from write_through(group, domain, stats)
         return
 
-    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
     logging.debug('Filtering frequent paragraphs from {}...'.format(domain))
 
     lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
@@ -311,7 +313,8 @@ def filter_paragraphs(group, freq_ps, minhasher, threshold, stats):
     # (should) be omitted.
     seen_frequents = set()
 
-    for doc_no, doc in enumerate(read_group_documents(group)):
+    for doc_no, doc in enumerate(read_group_documents(group), start=1):
+        stats.old_ps += len(doc.paragraphs)
         new_paragraphs = []
         new_seen_frequents = set()
         for p, text in enumerate(doc.paragraphs):
@@ -339,23 +342,33 @@ def filter_paragraphs(group, freq_ps, minhasher, threshold, stats):
 
         # Keep only documents with at least 1 non-frequent paragraph
         if new_paragraphs:
+            stats.new_ps + len(new_paragraphs)
+            stats.new_docs += 1
             doc.paragraphs = new_paragraphs
             yield doc
 
+    stats.old_docs += doc_no
     logging.debug('Filtered frequent paragraphs from {}.'.format(domain))
 
 
-FilterStats = Stats.create('old_ps', 'new_ps', 'old_docs', 'new_docs')
+FilterStats = Stats.create(
+    'frequent', 'old_ps', 'new_ps', 'old_docs', 'new_docs')
 
 
 def full_filter(group, args, queue):
     """Groups collect_frequent() and filter_paragraphs()."""
     minhasher = MinHasher(args.permutations, args.n)
-    freq_ps = collect_frequent(group, minhasher, args.threshold,
+    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+    freq_ps = collect_frequent(group, domain, minhasher, args.threshold,
                                1 - args.c, args.min_freq)
-    stats = FilterStats()
-    for doc in filter_paragraphs(group, freq_ps, minhasher, args.threshold, stats):
+    stats = FilterStats(len(freq_ps))
+    for doc in filter_paragraphs(group, domain, freq_ps,
+                                 minhasher, args.threshold, stats):
         queue.put(doc)
+    logging.debug('Found {} frequent paragraphs in domain {}, resulting in '
+                  'documents {} -> {}, paragraphs {} -> {}.'.format(
+                      stats.frequent, domain, stats.old_docs, stats.new_docs,
+                      stats.old_ps, stats.new_ps))
     return stats
 
 
@@ -386,8 +399,12 @@ def main_filter(args):
         pool.join()
 
         try:
-            res.get()
-            logging.info('Done filtering; written {} documents.'.format(num_docs))
+            stats = reduce(lambda ss, s: ss + s, res.get())
+            logging.info(
+                'Done filtering; in total, found {} frequent paragraphs, '
+                'resulting in documents {} -> {}, paragraphs {} -> {}.'.format(
+                      stats.frequent, stats.old_docs, stats.new_docs,
+                      stats.old_ps, stats.new_ps))
         except:
             logging.exception('Error while filtering')
 
