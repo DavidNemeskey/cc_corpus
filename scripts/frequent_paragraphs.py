@@ -343,7 +343,7 @@ def filter_paragraphs(group, domain, freq_ps, minhasher, threshold, stats):
 
         # Keep only documents with at least 1 non-frequent paragraph
         if new_paragraphs:
-            stats.new_ps + len(new_paragraphs)
+            stats.new_ps += len(new_paragraphs)
             stats.new_docs += 1
             doc.paragraphs = new_paragraphs
             yield doc
@@ -376,6 +376,9 @@ def full_filter(group, args, queue):
 def main_filter(args):
     """The main function for filtering the documents."""
     install_mp_handler()
+
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
 
     with Pool(args.processes) as pool:
         m = Manager()
