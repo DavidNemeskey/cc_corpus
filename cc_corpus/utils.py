@@ -5,6 +5,7 @@
 
 from argparse import ArgumentTypeError
 import bz2
+import copy
 import gzip
 import inspect
 import io
@@ -211,6 +212,12 @@ class Stats:
         for slot in self.__slots__:
             setattr(self, slot, getattr(self, slot) + getattr(other, slot))
         return self
+
+    def __add__(self, other):
+        """+ for all fields."""
+        ret = copy.copy(self)
+        ret += other
+        return ret
 
     def __repr__(self):
         """Generic string representation."""
