@@ -219,6 +219,11 @@ class Stats:
 
     @classmethod
     def create(cls, *fields):
-        """Creates a subclass of Stats with the specified fields."""
-        return type('Stats_' + '_'.join(map(str, fields)), (cls,),
-                    {'__slots__': fields})
+        """
+        Creates a subclass of Stats with the specified fields. The name of the
+        new class is added to the current module, so that it is pickle-able.
+        """
+        subclass = type('Stats_' + '_'.join(map(str, fields)), (cls,),
+                        {'__slots__': fields})
+        setattr(cls.__module__, subclass.__name__, subclass)
+        return subclass
