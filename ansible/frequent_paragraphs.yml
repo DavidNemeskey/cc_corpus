@@ -1,0 +1,15 @@
+---
+# Runs frequent_paragraphs.py in a distributed way.
+
+- hosts: localhost
+  roles:
+    - assert
+
+- hosts: slaves
+  vars:
+    - tmux_session_name: cc_corpus_frequent
+    - tmux_window_title: Frequent Paragraphs window
+    - python_script: frequent_paragraphs.py
+  roles:
+    - python
+
