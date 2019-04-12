@@ -6,6 +6,7 @@
 from argparse import ArgumentTypeError
 import bz2
 import gzip
+import inspect
 import io
 from itertools import zip_longest
 import os
@@ -225,5 +226,5 @@ class Stats:
         """
         subclass = type('Stats_' + '_'.join(map(str, fields)), (cls,),
                         {'__slots__': fields})
-        setattr(cls.__module__, subclass.__name__, subclass)
+        setattr(inspect.getmodule(cls), subclass.__name__, subclass)
         return subclass
