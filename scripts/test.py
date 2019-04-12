@@ -14,6 +14,8 @@ def parse_arguments():
                         help='the content of the output file.')
     parser.add_argument('--file', '-f', required=True,
                         help='the output file.')
+    parser.add_argument('--processes', '-P', type=int, default=1,
+                        help='the number of parallel processes.')
     return parser.parse_args()
 
 
