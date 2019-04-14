@@ -35,6 +35,17 @@ This repository also contains a massively fixed and overhauled version of [cdx-i
 
 ## The new part
 
+### Type checking
+
+Some of the code I have annotated with
+[type annotations](https://docs.python.org/3/library/typing.html). To validate
+the annotations, you can install [mypy](http://mypy-lang.org/) via `pip` and
+run it on a file or directory. The following command also shows the recommended
+switches:
+```
+mypy --python-version 3.5 --no-strict-optional --ignore-missing-imports scripts/frequent_paragraphs.py
+```
+
 ### Technicalities
 
 Most of the tasks can be executed on a single server, albeit a little patience

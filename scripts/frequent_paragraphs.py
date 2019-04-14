@@ -12,12 +12,13 @@ from multiprocessing import Manager, Pool
 import os
 import os.path as op
 import time
+from typing import Any, Dict, Iterator, List, Set, Tuple
 from urllib.parse import urlsplit
 
-from datasketch import MinHashLSH
+from datasketch import LeanMinHash, MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
-from cc_corpus.corpus import BatchWriter, parse_file, parse
+from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.utils import host_to_path, host_weight, openall, Stats
 
@@ -58,6 +59,39 @@ def parse_arguments():
     parser_distribute.add_argument('--host', '-H', action='append',
                                    type=host_weight, dest='hosts',
                                    help='a host:weight pair.')
+
+    parser_collect = subparsers.add_parser(
+        'collect_frequent', aliases=['frequent'],
+        help='Collects the frequent paragraphs within domains.'
+    )
+    parser_collect.set_defaults(command='collect')
+    parser_collect.add_argument(
+        '--output-prefix', '-o', required=True,
+        help='the prefix of the output files. Two files will be written: a '
+             '.minhashes file for each frequent paragraph, that contains '
+             'three fields per file: the minhash, the score and the frequency '
+             'of the paragraph. The latter two can be used to continue '
+             'frequent document collection when new data becomes available.')
+    parser_collect.add_argument(
+        '--permutations', '-p', type=int, default=256,
+        help='the number of permutations per paragraph (256).'
+    )
+    parser_collect.add_argument('--n', '-n', type=int, default=5,
+                                help='the size of the n-grams (5).')
+    parser_collect.add_argument('--threshold', '-t', type=float, default=0.9,
+                                help='the Jaccard similarity threshold (0.9).')
+    parser_collect.add_argument('--min-freq', '-m', type=int, default=2,
+                                help='the minimum number of occurrence from '
+                                     'which a paragraph is deemed frequent (2).')
+    decay_group = parser_collect.add_mutually_exclusive_group()
+    decay_group.add_argument('--c', '-c', type=float, default=0.01,
+                             help='the decay (multiplication) constant used '
+                                  'for scoring paraphraphs (0.99).')
+    decay_group.add_argument('--keep-for', '-k', type=int,
+                             help='keep frequent paragraph candidates for this '
+                                  'many iterations. This argument is '
+                                  'another way to specify -c and is mutually '
+                                  'exclusive with it.')
 
     parser_filter = subparsers.add_parser(
         'filter_paragraphs', aliases=['filter'],
@@ -108,10 +142,25 @@ def parse_arguments():
     return args
 
 
+# ----------------------------------- Types -----------------------------------
+
+
+DocURL = str
+DocFile = str
+DocPos = int
+DocLen = int
+DocTuple = Tuple[DocURL, DocPos, DocLen]
+DocFileTuple = Tuple[DocURL, DocFile, DocPos, DocLen]
+
+Group = List[str]  # TODO: maybe change to DocFileTuple later?
+PData = List[Any]
+PDict = Dict[str, PData]
+
+
 # --------------------------------- Indexing -----------------------------------
 
 
-def index_file(input_file):
+def index_file(input_file: str) -> Tuple[str, List[DocTuple]]:
     """
     Indexes an input file. Returns two items:
     - the input file: since this function is called (kind of) asynchronously,
@@ -126,8 +175,14 @@ def index_file(input_file):
     return input_file, list(zip(urls, accumulate([0] + lens[:-1]), lens))
 
 
-def index_key(url_file_pos_len):
-    """The key function for index list sorting."""
+def index_key(url_file_pos_len: DocFileTuple) -> Tuple[List[str], str,
+                                                       DocFile, DocPos]:
+    """
+    The key function for index list sorting. Sorts by domain, the
+    (protocol-less) url, input file and position in the input file, in that
+    order. The latter two fields were added to reduce seeking, but with the
+    url added later, they kind of irrelevant now.
+    """
     url, input_file, input_pos, _ = url_file_pos_len
     # Protocolless URL, so that http:// and https:// variants are put next to
     # each other. This allows us to uniq' them in main_index or during filtering
@@ -171,8 +226,8 @@ def main_index_documents(args):
 
 # ------------------------------- Distribution ---------------------------------
 
-def read_grouped_index(index_file):
-    """Reads the index file domain group by group."""
+def read_grouped_index(index_file: str) -> Iterator[Group]:
+    """Reads the index file domain group (of lines) by group."""
     with openall(index_file) as inf:
         for _, group in groupby(map(str.strip, inf),
                                 key=lambda l: urlsplit(l[0:l.find('\t')]).netloc):
@@ -200,10 +255,10 @@ def main_distribute(args):
             host.close()
 
 
-# -------------------------------- Filtering ----------------------------------
+# -------------------------------- Collection ----------------------------------
 
 
-def read_group_documents(group):
+def read_group_documents(group: Group) -> Iterator[Document]:
     """Returns an iterator of the documents in a group."""
     last_file = None
     f = None
@@ -217,18 +272,18 @@ def read_group_documents(group):
                 last_file = doc_file
             f.seek(int(doc_pos))
             yield from parse(f.read(int(doc_len)).decode('utf-8').split('\n'))
-
     finally:
         if f:
             f.close()
 
 
-def collect_frequent(group, domain, minhasher, threshold, decay, min_freq):
+def collect_frequent(group: Group, domain: str, minhasher: MinHasher,
+                     threshold: float, decay: float, min_freq: int) -> PDict:
     """Collects the frequent paragraphs in a domain."""
     logging.debug('Collecting frequent paragraphs from {}...'.format(domain))
 
     lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
-    ps = {}  # key -> [score, num, minhash]
+    ps = {}  # type: Dict[str, PData]
     num_dup = 0
 
     for doc_no, doc in enumerate(read_group_documents(group)):
@@ -237,7 +292,7 @@ def collect_frequent(group, domain, minhasher, threshold, decay, min_freq):
             p_data[0] *= decay
 
         # Step 2: add new paragraphs to the roster
-        already_increased = set()  # See below
+        already_increased = set()  # type: Set[str]
         for p, text in enumerate(doc.paragraphs, start=1):
             mh = minhasher.minhash(text)
             found_dup = False
@@ -275,7 +330,54 @@ def collect_frequent(group, domain, minhasher, threshold, decay, min_freq):
     return ps
 
 
-def write_through(group, domain, stats):
+def main_collect(args):
+    """
+    The main function for collecting frequent paragraphs (and saving the
+    results to file).
+    """
+    install_mp_handler()
+
+    with Pool(args.processes) as pool:
+        m = Manager()
+        queue = m.Queue()
+        f = partial(full_filter, args=args, queue=queue)
+        res = pool.map_async(f, read_grouped_index(args.index))
+
+        with closing(BatchWriter(args.documents,
+                                 args.output_dir, args.zeroes)) as bw:
+            while True:
+                if queue.empty():
+                    if res.ready():
+                        break
+                    time.sleep(1)  # I don't like Empty exceptions
+                else:
+                    doc = queue.get()
+                    bw.write(doc)
+                    queue.task_done()
+
+        pool.close()
+        pool.join()
+
+        try:
+            stats = reduce(lambda ss, s: ss + s, res.get())
+            logging.info(
+                'Done filtering; in total, found {} frequent paragraphs, '
+                'resulting in documents {} -> {}, paragraphs {} -> {}.'.format(
+                    stats.frequent, stats.old_docs, stats.new_docs,
+                    stats.old_ps, stats.new_ps))
+        except:
+            logging.exception('Error while filtering')
+
+
+# -------------------------------- Filtering ----------------------------------
+
+
+FilterStats = Stats.create(
+    'frequent', 'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
+
+
+def write_through(group: Group, domain: str,
+                  stats: FilterStats) -> Iterator[Document]:
     """
     Just enumerates all documents in the group / domain. Called by
     filter_paragraphs() when there are no frequent paragraphs in the domain
@@ -296,7 +398,9 @@ def write_through(group, domain, stats):
     logging.debug('Copied {} documents from {}.'.format(doc_no, domain))
 
 
-def filter_paragraphs(group, domain, freq_ps, minhasher, threshold, stats):
+def filter_paragraphs(group: Group, domain: str, freq_ps: PDict,
+                      minhasher: MinHasher, threshold: float,
+                      stats: FilterStats) -> Iterator[Document]:
     """Filters the frequent paragraphs from documents."""
     # Handle the case where no filtering is needed first
     if len(freq_ps) == 0:
@@ -312,7 +416,7 @@ def filter_paragraphs(group, domain, freq_ps, minhasher, threshold, stats):
     # keep frequent ps the first time we see them. Hence, seen_frequents, which
     # consists of frequent paragraphs we have already seen and thus can
     # (should) be omitted.
-    seen_frequents = set()
+    seen_frequents = set()  # type: Set[str]
 
     for doc_no, doc in enumerate(read_group_documents(group), start=1):
         stats.old_ps += len(doc.paragraphs)
@@ -350,10 +454,6 @@ def filter_paragraphs(group, domain, freq_ps, minhasher, threshold, stats):
 
     stats.old_docs += doc_no
     logging.debug('Filtered frequent paragraphs from {}.'.format(domain))
-
-
-FilterStats = Stats.create(
-    'frequent', 'old_ps', 'new_ps', 'old_docs', 'new_docs')
 
 
 def full_filter(group, args, queue):
@@ -406,8 +506,8 @@ def main_filter(args):
             logging.info(
                 'Done filtering; in total, found {} frequent paragraphs, '
                 'resulting in documents {} -> {}, paragraphs {} -> {}.'.format(
-                      stats.frequent, stats.old_docs, stats.new_docs,
-                      stats.old_ps, stats.new_ps))
+                    stats.frequent, stats.old_docs, stats.new_docs,
+                    stats.old_ps, stats.new_ps))
         except:
             logging.exception('Error while filtering')
 
@@ -427,6 +527,8 @@ def main():
         main_index_documents(args)
     elif args.command == 'distribute':
         main_distribute(args)
+    elif args.command == 'collect':
+        main_collect(args)
     elif args.command == 'filter':
         main_filter(args)
 
