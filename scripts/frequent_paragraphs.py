@@ -15,11 +15,12 @@ import time
 from typing import Any, Dict, Iterator, List, Set, Tuple
 from urllib.parse import urlsplit
 
-from datasketch import LeanMinHash, MinHashLSH
+from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
+from cc_corpus.frequent import PData
 from cc_corpus.utils import host_to_path, host_weight, openall, Stats
 
 
@@ -153,7 +154,6 @@ DocTuple = Tuple[DocURL, DocPos, DocLen]
 DocFileTuple = Tuple[DocURL, DocFile, DocPos, DocLen]
 
 Group = List[str]  # TODO: maybe change to DocFileTuple later?
-PData = List[Any]
 PDict = Dict[str, PData]
 
 
@@ -289,7 +289,7 @@ def collect_frequent(group: Group, domain: str, minhasher: MinHasher,
     for doc_no, doc in enumerate(read_group_documents(group)):
         # Step 1: decrease score of all paragraphs
         for p_data in ps.values():
-            p_data[0] *= decay
+            p_data *= decay
 
         # Step 2: add new paragraphs to the roster
         already_increased = set()  # type: Set[str]
@@ -300,8 +300,7 @@ def collect_frequent(group: Group, domain: str, minhasher: MinHasher,
                 # Ensure that the paragraph counter is increased by
                 # at most one per document
                 if duplicate not in already_increased:
-                    ps[duplicate][0] += 1
-                    ps[duplicate][1] += 1
+                    ps[duplicate] += 1
                     already_increased.add(duplicate)
                     if not found_dup:
                         found_dup = True
@@ -310,11 +309,11 @@ def collect_frequent(group: Group, domain: str, minhasher: MinHasher,
                 # OK, this is a new paragraph
                 key = doc.attrs['url'] + '_' + str(p)
                 lsh.insert(key, mh)
-                ps[key] = [1, 1, mh]
+                ps[key] = PData(mh)
                 already_increased.add(key)
 
         # Step 3: drop paragraphs with low score
-        to_drop = [key for key, p_data in ps.items() if p_data[0] < 0.5]
+        to_drop = [key for key, p_data in ps.items() if p_data.score < 0.5]
         for key in to_drop:
             ps.pop(key)
             lsh.remove(key)
@@ -322,7 +321,7 @@ def collect_frequent(group: Group, domain: str, minhasher: MinHasher,
         domain))
 
     # Get rid of paragraphs that only occured once
-    ps = {key: p_data for key, p_data in ps.items() if p_data[1] > min_freq}
+    ps = {key: p_data for key, p_data in ps.items() if p_data.count > min_freq}
     if ps:
         logging.debug('Found {} frequent paragraphs (duplicates: {}) '
                       'in domain {} ({} documents).'.format(
