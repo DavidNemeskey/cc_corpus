@@ -62,7 +62,7 @@ def parse_arguments():
                                    help='a host:weight pair.')
 
     parser_collect = subparsers.add_parser(
-        'collect_frequent', aliases=['frequent'],
+        'collect_frequent', aliases=['collect', 'frequent'],
         help='Collects the frequent paragraphs within domains.'
     )
     parser_collect.set_defaults(command='collect')
@@ -349,16 +349,19 @@ def main_collect(args):
         with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
             index = []
             for domain, freq_ps in pool.imap(f, read_grouped_index(args.index)):
-                offset = dataf.tell()
-                for pdata in freq_ps.values():
-                    pdata.write_to(dataf)
-                length = dataf.tell() - offset
-                index.append((domain, offset, length))
+                if freq_ps:
+                    offset = dataf.tell()
+                    for pdata in sorted(freq_ps.values(),
+                                        key=lambda pd: -pd.count):
+                        pdata.write_to(dataf)
+                    length = dataf.tell() - offset
+                    index.append((domain, offset, length, len(freq_ps)))
 
         index.sort()
         with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
-            for domain, offset, length in index:
-                print('{}\t{}\t{}'.format(domain, offset, length), file=indexf)
+            for domain, offset, length, num in index:
+                print('{}\t{}\t{}\t{}'.format(
+                    domain, offset, length, num), file=indexf)
 
         pool.close()
         pool.join()
