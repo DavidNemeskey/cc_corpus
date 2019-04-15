@@ -68,11 +68,14 @@ def parse_arguments():
     parser_collect.set_defaults(command='collect')
     parser_collect.add_argument(
         '--output-prefix', '-o', required=True,
-        help='the prefix of the output files. Two files will be written: a '
-             '.minhashes file for each frequent paragraph, that contains '
-             'three fields per file: the minhash, the score and the frequency '
-             'of the paragraph. The latter two can be used to continue '
-             'frequent document collection when new data becomes available.')
+        help='the prefix of the output files. Two files will be written. '
+             'The first is the .pdata file for each frequent paragraph, which '
+             'contains three fields per file: the minhash, the score and the '
+             'frequency of the paragraph (the latter two can be used to '
+             'continue frequent document collection when more data becomes '
+             'available). The second is the .pdi file, which contains the '
+             'index of the former: for each domain, it specifies the offset '
+             'and length of the paragraph data.')
     parser_collect.add_argument(
         '--permutations', '-p', type=int, default=256,
         help='the number of permutations per paragraph (256).'
@@ -277,9 +280,10 @@ def read_group_documents(group: Group) -> Iterator[Document]:
             f.close()
 
 
-def collect_frequent(group: Group, domain: str, minhasher: MinHasher,
-                     threshold: float, decay: float, min_freq: int) -> PDict:
+def collect_frequent(group: Group, minhasher: MinHasher, threshold: float,
+                     decay: float, min_freq: int) -> Tuple[str, PDict]:
     """Collects the frequent paragraphs in a domain."""
+    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
     logging.debug('Collecting frequent paragraphs from {}...'.format(domain))
 
     lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
@@ -326,7 +330,8 @@ def collect_frequent(group: Group, domain: str, minhasher: MinHasher,
         logging.debug('Found {} frequent paragraphs (duplicates: {}) '
                       'in domain {} ({} documents).'.format(
                           len(ps), num_dup, domain, doc_no))
-    return ps
+    # The domain is returned as well, so that we know what the input was
+    return domain, ps
 
 
 def main_collect(args):
@@ -336,36 +341,27 @@ def main_collect(args):
     """
     install_mp_handler()
 
+    minhasher = MinHasher(args.permutations, args.n)
     with Pool(args.processes) as pool:
-        m = Manager()
-        queue = m.Queue()
-        f = partial(full_filter, args=args, queue=queue)
-        res = pool.map_async(f, read_grouped_index(args.index))
+        f = partial(collect_frequent, minhasher=minhasher,
+                    threshold=args.threshold, decay=1 - args.c,
+                    min_freq=args.min_freq)
+        with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
+            index = []
+            for domain, freq_ps in pool.imap(f, read_grouped_index(args.index)):
+                offset = dataf.tell()
+                for pdata in freq_ps.values():
+                    pdata.write_to(dataf)
+                length = dataf.tell() - offset
+                index.append((domain, offset, length))
 
-        with closing(BatchWriter(args.documents,
-                                 args.output_dir, args.zeroes)) as bw:
-            while True:
-                if queue.empty():
-                    if res.ready():
-                        break
-                    time.sleep(1)  # I don't like Empty exceptions
-                else:
-                    doc = queue.get()
-                    bw.write(doc)
-                    queue.task_done()
+        index.sort()
+        with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
+            for domain, offset, length in index:
+                print('{}\t{}\t{}'.format(domain, offset, length), file=indexf)
 
         pool.close()
         pool.join()
-
-        try:
-            stats = reduce(lambda ss, s: ss + s, res.get())
-            logging.info(
-                'Done filtering; in total, found {} frequent paragraphs, '
-                'resulting in documents {} -> {}, paragraphs {} -> {}.'.format(
-                    stats.frequent, stats.old_docs, stats.new_docs,
-                    stats.old_ps, stats.new_ps))
-        except:
-            logging.exception('Error while filtering')
 
 
 # -------------------------------- Filtering ----------------------------------
@@ -410,7 +406,7 @@ def filter_paragraphs(group: Group, domain: str, freq_ps: PDict,
 
     lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
     for key, p_data in freq_ps.items():
-        lsh.insert(key, p_data[2])
+        lsh.insert(key, p_data.minhash)
     # The LSH is, by itself, not enough for frequent p filtering, as we have to
     # keep frequent ps the first time we see them. Hence, seen_frequents, which
     # consists of frequent paragraphs we have already seen and thus can
