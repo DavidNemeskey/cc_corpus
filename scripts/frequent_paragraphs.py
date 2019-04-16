@@ -12,7 +12,7 @@ from multiprocessing import Manager, Pool
 import os
 import os.path as op
 import time
-from typing import Any, Dict, Iterator, List, Set, Tuple
+from cc_corpus.typing import Any, Dict, Iterator, List, Set, Tuple
 from urllib.parse import urlsplit
 
 from datasketch import MinHashLSH
