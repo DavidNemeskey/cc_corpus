@@ -5,9 +5,11 @@
 Replacement for the typing library that only became available in 3.5.
 """
 
+# TODO: there should be a better way to do this. Maybe a corpus-level
+# __getattr__ or something?
 try:
-    from typing import Any, Dict, Iterator, List, Set, Tuple
+    from typing import Any, BinaryIO, Dict, Iterator, List, Set, Tuple
 except ImportError:
-    Any, Dict, Iterator, List, Set, Tuple = [None] * 6
+    Any, BinaryIO, Dict, Iterator, List, Set, Tuple = [None] * 6
 
-__all__ = ['Any', 'Dict', 'Iterator', 'List', 'Set', 'Tuple']
+__all__ = ['Any', 'BinaryIO', 'Dict', 'Iterator', 'List', 'Set', 'Tuple']
