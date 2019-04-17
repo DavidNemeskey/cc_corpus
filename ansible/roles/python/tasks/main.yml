@@ -23,14 +23,15 @@
   when: not (log_file|regex_search('.log$') or log_file == '/dev/null')
 
 # Now we can do the argument setup...
-- name: initializing per-host arguments...
+- name: initializing arguments...
   set_fact:
-    per_host_args: "{{ per_host_args|default('') }} {{ '--' if item.key|length > 1 else '-' }}{{ item.key }} {{ item.value }}_{{ inventory_hostname }}"
-  loop: "{{ script_args|dict2items }}"
-  when: item.key != "common_args"
-- name: setting arguments common to processes on all hosts and the log file
+    full_argument_line: "{{ arguments|default('') }}"
+- name: replace values in the arguments
   set_fact:
-    common_args: "{{ script_args['common_args']|default('') }}"
+    full_argument_line: " {{ full_argument_line | replace('$' + item.key, item.value + '_' + inventory_hostname) }}"
+  loop: "{{ per_host_values|default({})|dict2items }}"
+- name: setting up the log file
+  set_fact:
     per_host_log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
 - name: upload the tmuxp configuration template
   template:
