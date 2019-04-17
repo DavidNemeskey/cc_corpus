@@ -8,10 +8,13 @@
 
 # Some checks first
 
-# First check if the log_file and script_args variables exist.
+# First check if all required variables exist.
 - fail:
-    msg: The log_file and script_args variables must exist.
-  when: log_file is undefined or script_args is undefined
+    msg: "The {{ pvar }} variable must exist."
+  when: pvar not in vars
+  loop: "{{ 'python_script,log_file,processes' }}"
+  loop_control:
+    loop_var: pvar
 # Also check if the name of the log file is valid.
 # Having a log file is very important, as that's the only output we will ever
 # get.

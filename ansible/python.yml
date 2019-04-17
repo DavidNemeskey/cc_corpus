@@ -1,0 +1,14 @@
+---
+# Runs Python scripts in a distributed way.
+
+- hosts: localhost
+  roles:
+    - assert
+
+- hosts: slaves
+  vars:
+    - tmux_session_name: "{{ tmux_session_name|default('cc_corpus_task') }}"
+    - tmux_window_title: "{{ tmux_window_title|default('CC Corpus Python Job') }}"
+    - working_dir: "{{ working_dir|default('.') }}"
+  roles:
+    - python
