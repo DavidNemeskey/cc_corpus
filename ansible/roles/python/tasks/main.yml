@@ -12,7 +12,7 @@
 - fail:
     msg: "The {{ pvar }} variable must exist."
   when: pvar not in vars
-  loop: "{{ 'python_script,log_file,processes' }}"
+  loop: "{{ 'python_script,log_file,processes'.split(',') }}"
   loop_control:
     loop_var: pvar
 # Also check if the name of the log file is valid.
