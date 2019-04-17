@@ -1,10 +1,13 @@
 ---
 # Runs a python script in a tmux session
 #
-# The script's parameters must be specified in a variable called script_args.
-# All key: value pairs in it will be turned into arguments to the script in the
-# form --key value_hostname. The only exception is the common_args key, whose
-# value will be appended to the command line as-is.
+# The script's parameters must be specified in a variable called arguments. It
+# should be the actual argument line as-is, with the exception that per-host
+# arguments should be "variables" like "output" below:
+# {"arguments": "-i input -o $output"}
+# The values of all "variables" must be given in a separate dict,
+# "per_host_args":
+# {"per_host_args": {"output": "output_prefix"}}
 
 # Some checks first
 
@@ -29,7 +32,7 @@
 - name: replace values in the arguments
   set_fact:
     full_argument_line: " {{ full_argument_line | replace('$' + item.key, item.value + '_' + inventory_hostname) }}"
-  loop: "{{ per_host_values|default({})|dict2items }}"
+  loop: "{{ per_host_args|default({})|dict2items }}"
 - name: setting up the log file
   set_fact:
     per_host_log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
