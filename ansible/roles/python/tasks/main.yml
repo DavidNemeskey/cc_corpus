@@ -31,11 +31,11 @@
     full_argument_line: "{{ arguments|default('') }}"
 - name: replace values in the arguments
   set_fact:
-    full_argument_line: " {{ full_argument_line | replace('$' + item.key, item.value + '_' + inventory_hostname) }}"
+    full_argument_line: " {{ full_argument_line | replace('$' + item.key, item.value|distribute(inventory_hostname)) }}"
   loop: "{{ per_host_args|default({})|dict2items }}"
 - name: setting up the log file
   set_fact:
-    per_host_log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
+    per_host_log_file: "{{ log_file|distribute(inventory_hostname) }}"
 - name: upload the tmuxp configuration template
   template:
     src: tmuxp.yml.j2
