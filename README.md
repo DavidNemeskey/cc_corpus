@@ -109,31 +109,34 @@ to distribute documents evenly in the input files.
 
 #### Task execution
 
-The tasks are run via Ansible. Each Python script to be executed distributedly
-(is there such a word?) should have a corresponding playbook (see e.g.
-`minhash.yml` for `minhash.py`). Most of the work is done by the `python` role.
+The tasks are run via Ansible. Each Python script can be executed distributedly
+(is there such a word?) by running the playbook `python.yml`. Most of the work
+is done by the `python` role.
 
 What it does is:
-- it runs the script on all Slaves in a tmux session
+- it runs the script specified in the `python_script` argument on all Slaves in
+a tmux session
 - calls it with the `-P processes` argument where `processes` is a host variable
 (so it can be set on a group or host basis)
-- appends the name of the slave to
-    - the name of the log file
-    - the values of all _per-host_ arguments
-- keeps the values of _common_ arguments as-is
+- passes the rest of the `arguments` to the script as-is
+- _except_ arguments whose value starts with a dollar sign (`$`). These are
+interpreted as keys in the `per_host_args` dictionary. When running the script,
+the values in the dictionary are copied into the argument line, _extended with
+the host name_
+- the script will be executed in the `working_dir` of the user's choosing.
 
 The script arguments can be specified in the `-e` (`--extra-args`) argument of
 `ansible-playbook`, in the following way. Note that per-host arguments are
-supplied in a dictionary (without the `-` or `--` in the keys), while common
-arguments are passed together in a string. Note that the value to `-e` must be
-in JSON (YAML) format.
+supplied in a dictionary (without the `-` or `--` in the keys).
+Note that the value to `-e` must be in JSON (YAML) format.
 
 ```
-ansible-playbook -i hosts minhash.yml -e
-'{"log_file": "minhash_2018.log",
-  "script_args": {"input": "2018/cc_corpus_hu",
-                  "o": "2018/cc_corpus_hu_minhashes",
-		  "common_args": "--unit doc -p 256 -n 5 -L info"}}'
+ansible-playbook -i hosts python.yml -e
+'{"python_script": "minhash.py", "log_file": "minhash_2018.log",
+  "working_dir": "/mnt/data/lang/Hungarian/cc_corpus",
+  "arguments": "--input $input -o $output --unit doc -p 256 -n 5 -L info",
+  "per_host_args": {"input": "2018/cc_corpus_hu",
+                    "o": "2018/cc_corpus_hu_minhashes"}}'
 ```
 
 #### Output collection
