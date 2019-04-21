@@ -336,7 +336,7 @@ def collect_frequent(group: Group, minhasher: MinHasher, threshold: float,
         logging.debug('Found {} frequent paragraphs (duplicates: {}) '
                       'in domain {} ({} documents).'.format(
                           len(ps), num_dup, domain, doc_no))
-    stats.frequent = len(ps)
+    stats.frequents = len(ps)
     # The domain is returned as well, so that we know what the input was
     return domain, ps, stats
 
