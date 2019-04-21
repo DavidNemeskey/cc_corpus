@@ -378,7 +378,7 @@ def main_collect(args):
         pool.close()
         pool.join()
 
-        logging.info('Collected frequent paragraphs from index {}:'
+        logging.info('Collected frequent paragraphs from index {} '
                      'with statistics {}.'.format(args.index, sum_stats))
 
 

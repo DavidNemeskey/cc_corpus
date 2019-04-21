@@ -197,7 +197,7 @@ class Stats:
     """
     __slots__ = ()  # So that we don't create a  __dict__
 
-    def __init__(self, *values):
+    def __init__(self, *values, **kwvalues):
         """Initializes all fields to 0."""
         if len(values) > len(self.__slots__):
             raise ValueError('Too many arguments to {}(): at most {} '
@@ -207,6 +207,12 @@ class Stats:
 
         for slot, value in zip_longest(self.__slots__, values, fillvalue=0):
             setattr(self, slot, value)
+        for slot, value in kwvalues:
+            if slot in self.__slots__:
+                setattr(self, slot, value)
+            else:
+                raise ValueError('{} does not have a slot {}'.format(
+                    self.__class__.__name__, slot))
 
     def __iadd__(self, other):
         """+= for all fields."""
