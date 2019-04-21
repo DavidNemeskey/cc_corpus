@@ -261,6 +261,9 @@ def main_distribute(args):
 # -------------------------------- Collection ----------------------------------
 
 
+CollectStats = Stats.create('docs', 'ps', 'frequents', 'domains')  # type: Any
+
+
 def read_group_documents(group: Group) -> Iterator[Document]:
     """Returns an iterator of the documents in a group."""
     last_file = None
@@ -284,13 +287,14 @@ def collect_frequent(group: Group, minhasher: MinHasher, threshold: float,
                      decay: float, min_freq: int) -> Tuple[str, PDict]:
     """Collects the frequent paragraphs in a domain."""
     domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+    stats = CollectStats()
     logging.debug('Collecting frequent paragraphs from {}...'.format(domain))
 
     lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
     ps = {}  # type: Dict[str, PData]
     num_dup = 0
 
-    for doc_no, doc in enumerate(read_group_documents(group)):
+    for doc_no, doc in enumerate(read_group_documents(group), start=1):
         # Step 1: decrease score of all paragraphs
         for p_data in ps.values():
             p_data *= decay
@@ -315,12 +319,14 @@ def collect_frequent(group: Group, minhasher: MinHasher, threshold: float,
                 lsh.insert(key, mh)
                 ps[key] = PData(mh)
                 already_increased.add(key)
+        stats.ps += p
 
         # Step 3: drop paragraphs with low score
         to_drop = [key for key, p_data in ps.items() if p_data.score < 0.5]
         for key in to_drop:
             ps.pop(key)
             lsh.remove(key)
+    stats.docs = doc_no
     logging.debug('Finished collecting frequent paragraphs from {}...'.format(
         domain))
 
@@ -330,8 +336,9 @@ def collect_frequent(group: Group, minhasher: MinHasher, threshold: float,
         logging.debug('Found {} frequent paragraphs (duplicates: {}) '
                       'in domain {} ({} documents).'.format(
                           len(ps), num_dup, domain, doc_no))
+    stats.frequent = len(ps)
     # The domain is returned as well, so that we know what the input was
-    return domain, ps
+    return domain, ps, stats
 
 
 def main_collect(args):
@@ -341,6 +348,9 @@ def main_collect(args):
     """
     install_mp_handler()
 
+    logging.info('Collecting frequent paragraphs from index {}...'.format(
+        args.index))
+
     minhasher = MinHasher(args.permutations, args.n)
     with Pool(args.processes) as pool:
         f = partial(collect_frequent, minhasher=minhasher,
@@ -348,7 +358,8 @@ def main_collect(args):
                     min_freq=args.min_freq)
         with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
             index = []
-            for domain, freq_ps in pool.imap(f, read_grouped_index(args.index)):
+            sum_stats = CollectStats()
+            for domain, freq_ps, stats in pool.imap(f, read_grouped_index(args.index)):
                 if freq_ps:
                     offset = dataf.tell()
                     for pdata in sorted(freq_ps.values(),
@@ -356,6 +367,7 @@ def main_collect(args):
                         pdata.write_to(dataf)
                     length = dataf.tell() - offset
                     index.append((domain, offset, length, len(freq_ps)))
+                sum_stats += stats
 
         index.sort()
         with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
@@ -365,6 +377,9 @@ def main_collect(args):
 
         pool.close()
         pool.join()
+
+        logging.info('Collected frequent paragraphs from index {}:'
+                     'with statistics {}.'.format(args.index, sum_stats))
 
 
 # -------------------------------- Filtering ----------------------------------

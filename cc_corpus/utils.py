@@ -202,7 +202,8 @@ class Stats:
         if len(values) > len(self.__slots__):
             raise ValueError('Too many arguments to {}(): at most {} '
                              'supported, received {}'.format(
-                self.__class__.__name__, len(values), len(self.__slots__)))
+                                 self.__class__.__name__, len(values),
+                                 len(self.__slots__)))
 
         for slot, value in zip_longest(self.__slots__, values, fillvalue=0):
             setattr(self, slot, value)
@@ -224,6 +225,11 @@ class Stats:
         return '{}({})'.format(
             self.__class__.__name__, ', '.join('{}: {}'.format(
                 slot, getattr(self, slot)) for slot in self.__slots__))
+
+    def __str__(self):
+        """Comma-separated string representation."""
+        return ', '.join('{}: {}'.format(slot, getattr(self, slot))
+                         for slot in self.__slots__)
 
     @classmethod
     def create(cls, *fields):
