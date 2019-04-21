@@ -207,7 +207,7 @@ class Stats:
 
         for slot, value in zip_longest(self.__slots__, values, fillvalue=0):
             setattr(self, slot, value)
-        for slot, value in kwvalues:
+        for slot, value in kwvalues.items():
             if slot in self.__slots__:
                 setattr(self, slot, value)
             else:

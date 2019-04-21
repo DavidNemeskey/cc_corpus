@@ -287,7 +287,7 @@ def collect_frequent(group: Group, minhasher: MinHasher, threshold: float,
                      decay: float, min_freq: int) -> Tuple[str, PDict]:
     """Collects the frequent paragraphs in a domain."""
     domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
-    stats = CollectStats()
+    stats = CollectStats(domains=1)
     logging.debug('Collecting frequent paragraphs from {}...'.format(domain))
 
     lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
