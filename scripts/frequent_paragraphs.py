@@ -233,8 +233,10 @@ def main_index_documents(args):
 def read_grouped_index(index_file: str) -> Iterator[DomainGroup]:
     """Reads the index file domain group (of lines) by group."""
     with openall(index_file) as inf:
-        for domain, group in groupby(map(str.strip, inf),
-                                key=lambda l: urlsplit(l[0:l.find('\t')]).netloc):
+        for domain, group in groupby(
+            map(str.strip, inf),
+            key=lambda l: urlsplit(l[0:l.find('\t')]).netloc
+        ):
             yield domain, list(group)
 
 
@@ -284,10 +286,10 @@ def read_group_documents(group: Group) -> Iterator[Document]:
             f.close()
 
 
-def collect_frequent(group: DomainGroup, minhasher: MinHasher, threshold: float,
-                     decay: float, min_freq: int) -> Tuple[str, PDict]:
+def collect_frequent(domain_group: DomainGroup, minhasher: MinHasher,
+                     threshold: float, decay: float, min_freq: int) -> Tuple[str, PDict]:
     """Collects the frequent paragraphs in a domain."""
-    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
+    domain, group = domain_group
     stats = CollectStats(domains=1)
     logging.debug('Collecting frequent paragraphs from {}...'.format(domain))
 
