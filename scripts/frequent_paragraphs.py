@@ -291,7 +291,7 @@ def read_group_documents(group: Group) -> Iterator[Document]:
             f.close()
 
 
-def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, Any]]:
+def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, int, Any]]:
     """
     Minhashes all paragraphs in a group of documents.
 
@@ -307,18 +307,12 @@ def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, Any]]:
     :param minhasher: TODO delete
     :returns: a list of tuples of
         - the URL of the document (so that the caller knows what it gets back)
+        - the paragraph id
         - a list of paragraph fingerprints.
     """
-    return [(doc.attrs['url'] + '_' + str(p), minhasher.minhash(text))
+    return [((doc.attrs['url'], str(p)), minhasher.minhash(text))
             for doc in read_group_documents(group)
             for p, text in enumerate(doc.paragraphs, start=1)]
-
-
-def 
-def xxx(it):
-    for domain, group in it:
-        for item in group:
-            yield domain, group
 
 
 def main_collect2(args):
