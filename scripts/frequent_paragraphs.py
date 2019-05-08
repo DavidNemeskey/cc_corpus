@@ -21,7 +21,7 @@ from multiprocessing_logging import install_mp_handler
 from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData
-from cc_corpus.utils import host_to_path, host_weight, openall, Stats
+from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
 
 
 def parse_arguments():
@@ -230,14 +230,19 @@ def main_index_documents(args):
 
 # ------------------------------- Distribution ---------------------------------
 
+def read_index(index_file: str) -> Iterator[str]:
+    """Reads the index file. Not really necessary, but oh well."""
+    with openall(index_file) as inf:
+        yield from map(str.strip, inf)
+
+
 def read_grouped_index(index_file: str) -> Iterator[DomainGroup]:
     """Reads the index file domain group (of lines) by group."""
-    with openall(index_file) as inf:
-        for domain, group in groupby(
-            map(str.strip, inf),
-            key=lambda l: urlsplit(l[0:l.find('\t')]).netloc
-        ):
-            yield domain, list(group)
+    for domain, group in groupby(
+        read_index(index_file),
+        key=lambda l: urlsplit(l[0:l.find('\t')]).netloc
+    ):
+        yield domain, list(group)
 
 
 def main_distribute(args):
@@ -284,6 +289,81 @@ def read_group_documents(group: Group) -> Iterator[Document]:
     finally:
         if f:
             f.close()
+
+
+def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, Any]]:
+    """
+    Minhashes all paragraphs in a group of documents.
+
+    In the whole fingerprinting / deduplication process, minhashing takes up
+    most of the time. Hence, it has been extracted into a separate function so
+    that it can be run parallelly. We pass a group of documents (instead of
+    a single one and using `chunksize` in :func:`multiprocessing.imap`), because
+    in this way, :func:`read_group_documents` might be able to run faster,
+    using the fact that consecutive documents might belong to the same file.
+
+    :param group: the lines that describe the documents; as read by
+                  :func:`read_grouped_index`.
+    :param minhasher: TODO delete
+    :returns: a list of tuples of
+        - the URL of the document (so that the caller knows what it gets back)
+        - a list of paragraph fingerprints.
+    """
+    return [(doc.attrs['url'] + '_' + str(p), minhasher.minhash(text))
+            for doc in read_group_documents(group)
+            for p, text in enumerate(doc.paragraphs, start=1)]
+
+
+def 
+def xxx(it):
+    for domain, group in it:
+        for item in group:
+            yield domain, group
+
+
+def main_collect2(args):
+    """
+    The main function for collecting frequent paragraphs (and saving the
+    results to file).
+    """
+    install_mp_handler()
+
+    logging.info('Collecting frequent paragraphs from index {}...'.format(
+        args.index))
+
+    minhasher = MinHasher(args.permutations, args.n)
+    with Pool(args.processes) as pool:
+        f = partial(minhash_group, minhasher=minhasher)
+        # TODO: grouper parameter to argument
+        pool.imap(f, grouper(read_index(args.index), 100)):
+
+
+
+
+        with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
+            index = []
+            sum_stats = CollectStats()
+            for domain, freq_ps, stats in pool.imap(f, read_grouped_index(args.index)):
+                if freq_ps:
+                    offset = dataf.tell()
+                    for pdata in sorted(freq_ps.values(),
+                                        key=lambda pd: -pd.count):
+                        pdata.write_to(dataf)
+                    length = dataf.tell() - offset
+                    index.append((domain, offset, length, len(freq_ps)))
+                sum_stats += stats
+
+        index.sort()
+        with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
+            for domain, offset, length, num in index:
+                print('{}\t{}\t{}\t{}\t{}'.format(
+                    domain, offset, length, num, sum_stats.docs), file=indexf)
+
+        pool.close()
+        pool.join()
+
+        logging.info('Collected frequent paragraphs from index {} '
+                     'with statistics {}.'.format(args.index, sum_stats))
 
 
 def collect_frequent(domain_group: DomainGroup, minhasher: MinHasher,
