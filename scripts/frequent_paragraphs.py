@@ -156,7 +156,8 @@ DocLen = int
 DocTuple = Tuple[DocURL, DocPos, DocLen]
 DocFileTuple = Tuple[DocURL, DocFile, DocPos, DocLen]
 
-Group = List[str]  # TODO: maybe change to DocFileTuple later?
+Group = List[str]
+DomainGroup = Tuple[str, Group]
 PDict = Dict[str, PData]
 
 
@@ -229,12 +230,12 @@ def main_index_documents(args):
 
 # ------------------------------- Distribution ---------------------------------
 
-def read_grouped_index(index_file: str) -> Iterator[Group]:
+def read_grouped_index(index_file: str) -> Iterator[DomainGroup]:
     """Reads the index file domain group (of lines) by group."""
     with openall(index_file) as inf:
-        for _, group in groupby(map(str.strip, inf),
+        for domain, group in groupby(map(str.strip, inf),
                                 key=lambda l: urlsplit(l[0:l.find('\t')]).netloc):
-            yield list(group)
+            yield domain, list(group)
 
 
 def main_distribute(args):
@@ -243,7 +244,7 @@ def main_distribute(args):
     hosts = [openall(host_to_path(args.index, host), 'wt') for host, _ in args.hosts]
     lens = [0 for _ in weights]
     try:
-        for group in read_grouped_index(args.index):
+        for _, group in read_grouped_index(args.index):
             i = lens.index(min(lens))  # argmin
             logging.debug('Adding {} items to host {} ({}).'.format(
                 len(group), i, hosts[i].name))
@@ -283,7 +284,7 @@ def read_group_documents(group: Group) -> Iterator[Document]:
             f.close()
 
 
-def collect_frequent(group: Group, minhasher: MinHasher, threshold: float,
+def collect_frequent(group: DomainGroup, minhasher: MinHasher, threshold: float,
                      decay: float, min_freq: int) -> Tuple[str, PDict]:
     """Collects the frequent paragraphs in a domain."""
     domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
