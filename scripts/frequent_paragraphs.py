@@ -372,8 +372,8 @@ def main_collect(args):
         index.sort()
         with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
             for domain, offset, length, num in index:
-                print('{}\t{}\t{}\t{}'.format(
-                    domain, offset, length, num), file=indexf)
+                print('{}\t{}\t{}\t{}\t{}'.format(
+                    domain, offset, length, num, sum_stats.docs), file=indexf)
 
         pool.close()
         pool.join()
