@@ -309,9 +309,10 @@ def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, List[An
         - the URL of the document (so that the caller knows what it gets back)
         - a list of paragraph fingerprints.
     """
+    logging.debug('minhash_group({}) -> {}'.format(len(group), group[0]))
     return [(doc.attrs['url'], [minhasher.minhash(text)
                                 for p, text in enumerate(doc.paragraphs, start=1)])
-            for doc in read_group_documents(group)]
+            for doc in read_group_documents(filter(bool, group))]
 
 
 class FrequentCollector:
@@ -376,9 +377,9 @@ class FrequentCollector:
         updates the statistics.
         """
         # Get rid of paragraphs that only occured once
-        freq_ps = {key: p_data for key, p_data in self.freq_ps.items()
-                   if p_data.count > self.min_freq}
-        self.stats.frequents = len(freq_ps)
+        self.freq_ps = {key: p_data for key, p_data in self.freq_ps.items()
+                        if p_data.count > self.min_freq}
+        self.stats.frequents = len(self.freq_ps)
 
 
 def collect_frequent2(
@@ -394,8 +395,10 @@ def collect_frequent2(
     Yields (domain, `PDict`) tuples per domain.
     """
     curr_domain = None
-    fc = FrequentCollector(threshold, permutations, decay)
-    for url, mhs in chain.from_iterable(it):
+    fc = FrequentCollector(threshold, permutations, decay, min_freq)
+    # I don't want to write all the domain != curr_domain stuff twice, so
+    # let's add a sentinel record to the end.
+    for url, mhs in chain(chain.from_iterable(it), [('', [])]):
         domain = urlsplit(url).netloc
 
         # A new domain: yield results and re-initialize everything
@@ -406,7 +409,7 @@ def collect_frequent2(
 
                 logging.debug(
                     'Finished collecting frequent paragraphs from {}...'.format(
-                        domain))
+                        curr_domain))
                 if fc.freq_ps:
                     logging.debug('Found {} frequent paragraphs (duplicates: '
                                   '{}) in domain {} ({} documents).'.format(
@@ -416,9 +419,14 @@ def collect_frequent2(
                 # The domain is returned as well, so that we know what the input was
                 yield curr_domain, fc.freq_ps, fc.stats
 
+            # Check for the sentinel
+            if not domain:
+                break
+
             # Re-initialization
             logging.debug(
                 'Collecting frequent paragraphs from {}...'.format(domain))
+            curr_domain = domain
             fc.reset()
 
         fc.collect_from_doc(url, mhs)
@@ -452,14 +460,14 @@ def main_collect2(args):
                                         key=lambda pd: -pd.count):
                         pdata.write_to(dataf)
                     length = dataf.tell() - offset
-                    index.append((domain, offset, length, len(freq_ps)))
+                    index.append((domain, offset, length, len(freq_ps), stats.docs))
                 sum_stats += stats
 
         index.sort()
         with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
-            for domain, offset, length, num in index:
+            for domain, offset, length, num, docs in index:
                 print('{}\t{}\t{}\t{}\t{}'.format(
-                    domain, offset, length, num, sum_stats.docs), file=indexf)
+                    domain, offset, length, num, docs), file=indexf)
 
         pool.close()
         pool.join()
