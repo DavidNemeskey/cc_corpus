@@ -6,13 +6,13 @@
 from argparse import ArgumentParser
 from contextlib import closing
 from functools import partial, reduce
-from itertools import accumulate, groupby
+from itertools import accumulate, chain, groupby
 import logging
 from multiprocessing import Manager, Pool
 import os
 import os.path as op
 import time
-from cc_corpus.typing import Any, Dict, Iterator, List, Set, Tuple
+from cc_corpus.typing import Any, Dict, Generator, Iterator, List, Set, Tuple
 from urllib.parse import urlsplit
 
 from datasketch import MinHashLSH
@@ -291,7 +291,7 @@ def read_group_documents(group: Group) -> Iterator[Document]:
             f.close()
 
 
-def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, int, Any]]:
+def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, List[Any]]]:
     """
     Minhashes all paragraphs in a group of documents.
 
@@ -307,12 +307,121 @@ def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, int, An
     :param minhasher: TODO delete
     :returns: a list of tuples of
         - the URL of the document (so that the caller knows what it gets back)
-        - the paragraph id
         - a list of paragraph fingerprints.
     """
-    return [((doc.attrs['url'], str(p)), minhasher.minhash(text))
-            for doc in read_group_documents(group)
-            for p, text in enumerate(doc.paragraphs, start=1)]
+    return [(doc.attrs['url'], [minhasher.minhash(text)
+                                for p, text in enumerate(doc.paragraphs, start=1)])
+            for doc in read_group_documents(group)]
+
+
+class FrequentCollector:
+    def __init__(self, threshold, permutations, decay, min_freq):
+        self.threshold = threshold
+        self.permutations = permutations
+        self.decay = decay
+        self.min_freq = min_freq
+
+    def reset(self):
+        """Resets the bookkeeping and statistics objects."""
+        self.stats = CollectStats(domains=1)
+        self.lsh = MinHashLSH(threshold=self.threshold,
+                              num_perm=self.permutations)
+        self.freq_ps = {}  # type: Dict[str, PData]
+        self.num_dup = 0
+
+    def collect_from_doc(self, url, paragraphs):
+        """
+        Runs the algorithm in MMDS (TOOD) on a document, does the bookkeeping
+        and updates the statistcs in the object.
+
+        :param url: the URL of the document (used as key in LSH).
+        :param paragraphs: the minhashes of the paragraphs of the document.
+        """
+        # Step 1: decrease score of all paragraphs
+        for p_data in self.freq_ps.values():
+            p_data *= self.decay
+
+        # Step 2: add new paragraphs to the roster
+        already_increased = set()  # type: Set[str]
+        for p, mh in enumerate(paragraphs, start=1):
+            found_dup = False
+            for duplicate in self.lsh.query(mh):
+                # Ensure that the paragraph counter is increased by
+                # at most one per document
+                if duplicate not in already_increased:
+                    self.freq_ps[duplicate] += 1
+                    already_increased.add(duplicate)
+                    if not found_dup:
+                        found_dup = True
+                        self.num_dup += 1
+            if not found_dup:
+                # OK, this is a new paragraph
+                key = url + '_' + str(p)
+                self.lsh.insert(key, mh)
+                self.freq_ps[key] = PData(mh)
+                already_increased.add(key)
+        self.stats.docs += 1
+        self.stats.ps += p
+
+        # Step 3: drop paragraphs with low score
+        to_drop = [key for key, p_data in self.freq_ps.items()
+                   if p_data.score < 0.5]
+        for key in to_drop:
+            self.freq_ps.pop(key)
+            self.lsh.remove(key)
+
+    def wrap_up_domain(self):
+        """
+        Drops all frequent candidates that are below the minimum frequency and
+        updates the statistics.
+        """
+        # Get rid of paragraphs that only occured once
+        freq_ps = {key: p_data for key, p_data in self.freq_ps.items()
+                   if p_data.count > self.min_freq}
+        self.stats.frequents = len(freq_ps)
+
+
+def collect_frequent2(
+    it: Iterator[List[Tuple[str, List[Any]]]], threshold: float,
+    permutations: int, decay: float, min_freq: int
+ ) -> Generator[Tuple[str, PDict], None, None]:  # noqa
+    """
+    Reads all the documents (as returned by :func:`minhash_group`) and
+    collects the frequent paragraphs from them on a per-domain basis.
+
+    TODO: reference to MMDS
+
+    Yields (domain, `PDict`) tuples per domain.
+    """
+    curr_domain = None
+    fc = FrequentCollector(threshold, permutations, decay)
+    for url, mhs in chain.from_iterable(it):
+        domain = urlsplit(url).netloc
+
+        # A new domain: yield results and re-initialize everything
+        if domain != curr_domain:
+            # Filtering and yielding results
+            if curr_domain is not None:
+                fc.wrap_up_domain()
+
+                logging.debug(
+                    'Finished collecting frequent paragraphs from {}...'.format(
+                        domain))
+                if fc.freq_ps:
+                    logging.debug('Found {} frequent paragraphs (duplicates: '
+                                  '{}) in domain {} ({} documents).'.format(
+                                      len(fc.freq_ps), fc.num_dup,
+                                      curr_domain, fc.stats.docs))
+
+                # The domain is returned as well, so that we know what the input was
+                yield curr_domain, fc.freq_ps, fc.stats
+
+            # Re-initialization
+            logging.debug(
+                'Collecting frequent paragraphs from {}...'.format(domain))
+            fc.reset()
+
+        fc.collect_from_doc(url, mhs)
 
 
 def main_collect2(args):
@@ -325,19 +434,18 @@ def main_collect2(args):
     logging.info('Collecting frequent paragraphs from index {}...'.format(
         args.index))
 
-    minhasher = MinHasher(args.permutations, args.n)
-    with Pool(args.processes) as pool:
-        f = partial(minhash_group, minhasher=minhasher)
-        # TODO: grouper parameter to argument
-        pool.imap(f, grouper(read_index(args.index), 100)):
+    with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
+        index = []
+        sum_stats = CollectStats()
 
-
-
-
-        with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
-            index = []
-            sum_stats = CollectStats()
-            for domain, freq_ps, stats in pool.imap(f, read_grouped_index(args.index)):
+        minhasher = MinHasher(args.permutations, args.n)
+        with Pool(args.processes) as pool:
+            # TODO: grouper parameter to argument
+            it = pool.imap(partial(minhash_group, minhasher=minhasher),
+                           grouper(read_index(args.index), 100))
+            for domain, freq_ps, stats in collect_frequent2(
+                it, args.threshold, args.permutations, 1 - args.c, args.min_freq
+            ):
                 if freq_ps:
                     offset = dataf.tell()
                     for pdata in sorted(freq_ps.values(),
@@ -618,7 +726,7 @@ def main():
     elif args.command == 'distribute':
         main_distribute(args)
     elif args.command == 'collect':
-        main_collect(args)
+        main_collect2(args)
     elif args.command == 'filter':
         main_filter(args)
 
