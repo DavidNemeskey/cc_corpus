@@ -20,4 +20,4 @@ except ImportError:
         def __getitem__(self, key):
             pass
 
-    Any, BinaryIO, Dict, Iterator, List, Set, Tuple = [GetItemType()] * len(__all__)
+    Any, BinaryIO, Dict, Generator, Iterator, List, Set, Tuple = [GetItemType()] * len(__all__)
