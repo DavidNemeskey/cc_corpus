@@ -24,7 +24,6 @@ try:
     for typ in __all__:
         globals()[typ] = getattr(m, typ)
 except ImportError:
-    raise
     class GetItemType:
         def __getitem__(self, key):
             pass
