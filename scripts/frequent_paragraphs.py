@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from argparse import ArgumentParser
 from contextlib import closing
 from functools import partial, reduce
+import gc
 from itertools import accumulate, chain, groupby
 import logging
 from multiprocessing import Manager, Pool
@@ -533,6 +534,7 @@ def main_collect2(args):
                     length = dataf.tell() - offset
                     index.add((domain, offset, length, len(freq_ps), stats.docs))
                 sum_stats += stats
+                gc.collect()
 
         with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
             for domain, offset, length, num, docs in index.sorted_list():
