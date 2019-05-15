@@ -93,6 +93,8 @@ setup(name='commoncrawl-downloader',
           'cld2-cffi', 'langid',
           # WARC 3 library
           'warc',
+          # Type hints for Python < 3.5
+          'typing'
       ],
       dependency_links=[
           # WARC 3 library

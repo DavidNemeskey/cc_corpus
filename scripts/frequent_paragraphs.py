@@ -21,7 +21,7 @@ from multiprocessing_logging import install_mp_handler
 from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData
-from cc_corpus.typing import Any, Dict, Generator, Iterator, List, Set, Tuple
+from typing import Any, Dict, Generator, Iterator, List, Set, Tuple
 from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
 from cc_corpus.utils import IllegalStateError
 

@@ -9,7 +9,7 @@ Stuff common to all scripts that handle frequent paragraphs
 import math
 import pickle
 import struct
-from cc_corpus.typing import BinaryIO
+from typing import BinaryIO
 
 from datasketch import LeanMinHash
 
