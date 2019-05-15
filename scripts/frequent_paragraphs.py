@@ -3,7 +3,6 @@
 
 """Writes the positions of all documents in each file."""
 
-from abc import ABC, abstractmethod
 from argparse import ArgumentParser
 from contextlib import closing
 from functools import partial, reduce
@@ -23,7 +22,6 @@ from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData
 from typing import Any, Dict, Generator, Iterator, List, Set, Tuple
 from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
-from cc_corpus.utils import IllegalStateError
 
 
 def parse_arguments():
@@ -96,10 +94,6 @@ def parse_arguments():
     parser_collect.add_argument('--docs-per-batch', type=int, default=100,
                                 help='the number of documents to send to '
                                      'workers at a time (100).')
-    parser_collect.add_argument('--tmp-index', action='store_true',
-                                help='save the index to a temporary file while '
-                                     'minhashing instead of keeping it in '
-                                     'memory.')
     decay_group = parser_collect.add_mutually_exclusive_group()
     decay_group.add_argument('--c', '-c', type=float, default=0.01,
                              help='the decay (multiplication) constant used '
@@ -445,65 +439,6 @@ def collect_frequent2(
         fc.collect_from_doc(url, mhs)
 
 
-class IndexCollector(ABC):
-    """Used to implement the --tmp-index option."""
-    @abstractmethod
-    def add(self, index_tuple):
-        """Adds an index tuple (domain, offset, ...) to the collection."""
-
-    @abstractmethod
-    def sorted_list(self):
-        """Returns a sorted list of all tuples."""
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        pass
-
-
-class ListIndexCollector(IndexCollector):
-    """Collects index tuples in a list."""
-    def __init__(self):
-        self.l = []
-
-    def add(self, index_tuple):
-        self.l.append(index_tuple)
-
-    def sorted_list(self):
-        self.l.sort()
-        return self.l
-
-
-class FileIndexCollector(IndexCollector):
-    """Collects index tuples in a (semantically temporary) file."""
-    def __init__(self, file_name):
-        self.file_name = file_name
-        self.f = None
-
-    def add(self, index_tuple):
-        print('\t'.join(map(str, index_tuple)), file=self.f)
-
-    def sorted_list(self):
-        """It is illegal to call this method while the file is open."""
-        if self.f:
-            raise IllegalStateError('File is still open.')
-        with openall(self.file_name) as inf:
-            l = [(domain, int(offset), int(length), int(num), int(docs))
-                 for domain, offset, length, num, docs
-                 in (line.strip().split('\t') for line in inf)]
-        l.sort()
-        return l
-
-    def __enter__(self):
-        self.f = openall(self.file_name, 'wt')
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.f.close()
-        self.f = None
-
-
 def main_collect2(args):
     """
     The main function for collecting frequent paragraphs (and saving the
@@ -515,10 +450,7 @@ def main_collect2(args):
         args.index))
 
     with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
-        if args.tmp_index:
-            index = FileIndexCollector('{}_tmp.pdi'.format(args.output_prefix))
-        else:
-            index = ListIndexCollector()
+        index = []
         sum_stats = CollectStats()
 
         minhasher = MinHasher(args.permutations, args.n)
@@ -535,12 +467,13 @@ def main_collect2(args):
                                         key=lambda pd: -pd.count):
                         pdata.write_to(dataf)
                     length = dataf.tell() - offset
-                    index.add((domain, offset, length, len(freq_ps), stats.docs))
+                    index.append((domain, offset, length, len(freq_ps), stats.docs))
                 sum_stats += stats
                 logging.debug('Pool cache is {}'.format(len(pool._cache)))
 
+        index.sort()
         with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
-            for domain, offset, length, num, docs in index.sorted_list():
+            for domain, offset, length, num, docs in index:
                 print('{}\t{}\t{}\t{}\t{}'.format(
                     domain, offset, length, num, docs), file=indexf)
 
