@@ -469,7 +469,6 @@ def main_collect2(args):
                     length = dataf.tell() - offset
                     index.append((domain, offset, length, len(freq_ps), stats.docs))
                 sum_stats += stats
-                logging.debug('Pool cache is {}'.format(len(pool._cache)))
 
         index.sort()
         with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
