@@ -35,7 +35,11 @@ def parse_arguments():
                              'num of cores, default: 1). Note that in order '
                              'to deduplicate documents, much memory might be '
                              'needed, so it is a good idea to be conservative '
-                             'with the number of processes.')
+                             'with the number of processes. Also, for the '
+                             'collect task, if too high a number of '
+                             'processes is created, the main processes will '
+                             'be unable to keep up with the data they '
+                             'produce, and the system might run out of memory.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
