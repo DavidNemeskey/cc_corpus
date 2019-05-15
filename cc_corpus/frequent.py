@@ -9,7 +9,7 @@ Stuff common to all scripts that handle frequent paragraphs
 import math
 import pickle
 import struct
-from typing import BinaryIO
+from typing import BinaryIO, Union
 
 from datasketch import LeanMinHash
 
@@ -73,3 +73,40 @@ class PData:
         pd.score = struct.unpack('!f', ins.read(4))[0]
         pd.count = struct.unpack('!I', ins.read(4))[0]
         return pd
+
+
+class PDataReader:
+    def __init__(self, prefix: str):
+        self.prefix = prefix
+        self.pdi = open(self.prefix + '.pdi', 'rt')
+        self.pdata = open(self.prefix + '.pdata', 'rb')
+
+    def __iter__(self):
+        pass
+
+    def close(self):
+        if self.pdi:
+            self.pdi.close()
+            self.pdata.close()
+            self.pdi = self.pdata = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
+def open(prefix: str, mode: str = 'r') -> Union[PDataReader, PDataWriter]:
+    """
+    Opens a .pdi--.pdata pair for reading or writing, depending on `mode`.
+
+    :param prefix: the file prefix of the `.pdi--.pdata` pair, without any of
+                   the extensions.
+    :param mode: Reading (*r*) or writing (*w*). Note that append is not
+                 supported.
+    """
+    if mode == 'r':
+        return PDataReader(prefix)
+    else:
+        return PDataWriter(prefix)

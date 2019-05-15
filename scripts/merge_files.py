@@ -18,9 +18,30 @@ def parse_arguments():
                         help='type of the input and output files. See above.')
     parser.add_argument('--output', '-o', required=True,
                         help='the output file (prefix).')
+    parser.add_argument('--merge-type', '-m', choices=['simple', 'iterator'],
+                        default='simple',
+                        help='the merge algorithm. Simple merge (the default) '
+                             'simply concatenates the two files (and updates '
+                             'index offsets, etc.). Iterator mode copies data '
+                             'from the old files to the new on a per-record '
+                             'basis. As such, it is much slower than simple '
+                             'mode; however, it is useful when the index '
+                             'does not describe the whole data, as it will '
+                             'avoid copying excess records. When filtering '
+                             '(--filter), the mode is automatically set to '
+                             'iterator.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
+
+
+def merge_pdata_it(output_prefix, *file_prefixes):
+    """
+    Merges "paragraph data" files output by frequent_paragraphs.py's collect
+    mode. This includes two file types: the index file .pdi and the file with
+    the actual paragraph data (.pdata).
+    """
+    with closing(open('{}.pdata'.format(output_prefix), 'wb')) as dataf:
 
 
 def merge_pdata(output_prefix, *file_prefixes):
@@ -60,9 +81,9 @@ def merge_pdata(output_prefix, *file_prefixes):
 
     index.sort()
     with closing(open('{}.pdi'.format(output_prefix), 'wt')) as indexf:
-        for domain, offset, length, num in index:
-            print('{}\t{}\t{}\t{}'.format(
-                domain, offset, length, num), file=indexf)
+        for domain, offset, length, num, docs in index:
+            print('{}\t{}\t{}\t{}\t{}'.format(
+                domain, offset, length, num, docs), file=indexf)
 
 
 def main():
