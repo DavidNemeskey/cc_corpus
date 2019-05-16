@@ -10,7 +10,7 @@ import io
 import math
 import pickle
 import struct
-from typing import BinaryIO, List, Union
+from typing import BinaryIO, Union
 
 from datasketch import LeanMinHash
 
@@ -161,14 +161,8 @@ class PDataWriter(PDataIO):
             self.docs = docs
             self.num = 0
 
-    def write(self, domain: str, docs: int, pdata: PData):
-        """Writes a single PData."""
-        self._check_new_domain(domain, docs)
-        pdata.write_to(self.pdata)
-        self.num += 1
-
-    def write_domain(self, domain: str, docs: int, pdatas: List[PData]):
-        """Writes a whole domain in one go."""
+    def write(self, domain: str, docs: int, *pdatas: PData):
+        """Writes any number of single :class:`PData`s."""
         self._check_new_domain(domain, docs)
         for pdata in pdatas:
             pdata.write_to(self.pdata)
