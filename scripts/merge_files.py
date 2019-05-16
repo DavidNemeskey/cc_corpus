@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 from contextlib import closing
 import logging
 import os
+import sys
 
 from cc_corpus.frequent import open as pdata_open
 
@@ -40,6 +41,9 @@ def parse_arguments():
                              'following variables: domain, docs (in domain), '
                              'pdata (the paragraph object). Can be specified '
                              'more than once.')
+    parser.add_argument('--head', type=int, default=0, metavar='N',
+                        help='stop after the first N domains. For debugging, '
+                             'mostly.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
@@ -88,29 +92,35 @@ class Filter:
         return eval(self.code, Filter._globals, kwargs)
 
 
-def merge_pdata_it(output_prefix, file_prefixes, filters):
+def merge_pdata_it(output_prefix, file_prefixes, **kwargs):
     """
     Merges "paragraph data" files output by frequent_paragraphs.py's collect
     mode. This includes two file types: the index file .pdi and the file with
     the actual paragraph data (.pdata).
     """
-    cond = Filter(filters)
+    cond = Filter(kwargs['filters'])
+    head = kwargs['head'] or sys.maxsize
+    num_written = 0
     with pdata_open(output_prefix, 'w') as outf:
         for input_prefix in file_prefixes:
             with pdata_open(input_prefix, 'r') as inf:
                 for domain, docs, pdatas in inf:
                     pdatas = [cond.filter(domain=domain, docs=docs, pdata=pdata)
                               for pdata in pdatas]
-                    outf.write(domain, docs, *pdatas)
+                    if pdatas:
+                        outf.write(domain, docs, *pdatas)
+                        num_written += 1
+                        if num_written == head:
+                            return
 
 
-def merge_pdata(output_prefix, file_prefixes, filters):
+def merge_pdata(output_prefix, file_prefixes, **kwargs):
     """
     Merges "paragraph data" files output by frequent_paragraphs.py's collect
     mode. This includes two file types: the index file .pdi and the file with
     the actual paragraph data (.pdata).
 
-    :param filters: not used.
+    :param kwargs: not used.
     """
     # Merge the data files
     with closing(open('{}.pdata'.format(output_prefix), 'wb')) as dataf:
@@ -161,7 +171,7 @@ def main():
     if args.type == 'pdata':
         fun = merge_pdata_it if args.merge_type == 'iterator' else merge_pdata
 
-    fun(args.output, args.inputs, args.filters)
+    fun(args.output, args.inputs, {'filters': args.filters, 'head': args.head})
 
 
 if __name__ == '__main__':
