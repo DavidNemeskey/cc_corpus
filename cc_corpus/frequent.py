@@ -6,6 +6,7 @@ Stuff common to all scripts that handle frequent paragraphs
 (frequent_paragraphs.py, merge_files.py).
 """
 
+import io
 import math
 import pickle
 import struct
@@ -92,8 +93,8 @@ class PDataIO:
                      ``a``.
         """
         self.prefix = prefix
-        self.pdi = open(self.prefix + '.pdi', mode + 't')
-        self.pdata = open(self.prefix + '.pdata', mode + 'b')
+        self.pdi = io.open(self.prefix + '.pdi', mode + 't')
+        self.pdata = io.open(self.prefix + '.pdata', mode + 'b')
 
     def close(self):
         """Closes both files."""
