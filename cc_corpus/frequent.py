@@ -9,7 +9,7 @@ Stuff common to all scripts that handle frequent paragraphs
 import math
 import pickle
 import struct
-from typing import BinaryIO, Union
+from typing import BinaryIO, List, Union
 
 from datasketch import LeanMinHash
 
@@ -75,16 +75,28 @@ class PData:
         return pd
 
 
-class PDataReader:
-    def __init__(self, prefix: str):
-        self.prefix = prefix
-        self.pdi = open(self.prefix + '.pdi', 'rt')
-        self.pdata = open(self.prefix + '.pdata', 'rb')
+class PDataIO:
+    """
+    Base class for PData I/O classes. Defines :meth:`~PDataIO.__init__`,
+    :meth:`~PDataIO.close`, :meth:`~PDataIO.__enter__` and
+    :meth:`~PDataIO.__exit__` (so subclasses can be used in a :keyword:`with`
+    statement).
+    """
+    def __init__(self, prefix: str, mode: str):
+        """
+        Opens the file handles.
 
-    def __iter__(self):
-        pass
+        :param prefix: the file name prefix. The two files opened are thus
+                       ``prefix.pdi`` and ``prefix.pdata``.
+        :param mode: the mode the files will be opened in: ``r``, ``w`` or
+                     ``a``.
+        """
+        self.prefix = prefix
+        self.pdi = open(self.prefix + '.pdi', mode + 't')
+        self.pdata = open(self.prefix + '.pdata', mode + 'b')
 
     def close(self):
+        """Closes both files."""
         if self.pdi:
             self.pdi.close()
             self.pdata.close()
@@ -94,7 +106,66 @@ class PDataReader:
         return self
 
     def __exit__(self, *args):
+        """Calls :meth:`~PDataIO.close`."""
         self.close()
+
+
+class PDataReader(PDataIO):
+    def __init__(self, prefix: str):
+        super().__init__(prefix, 'r')
+
+    def __iter__(self):
+        """Returns the paragraph records one-by-one."""
+        for line in self.pdi:
+            domain, *tail = line.strip().split('\t')
+            offset, length, num, docs = map(int, tail)
+            self.pdata.seek(offset)
+            for _ in range(num):
+                pdata = PData.read_from(self.pdata)
+                yield (domain, docs, pdata)
+
+
+class PDataWriter(PDataIO):
+    """Writes paragraph data to file(s), by paragraph or by domain."""
+    def __init__(self, prefix: str, append: bool):
+        """Opens the files in ``w`` or ``a`` mode, depending on ``append``."""
+        super().__init__(prefix, 'a' if append else 'w')
+        self.domain = None
+        self.num = 0
+        self.offset = self.pdata.seek()
+
+    def _finalize_domain(self):
+        """"Finalizes" data from a domain: writes the index record."""
+        if self.domain is not None:
+            new_offset = self.pdata.tell()
+            print('{}\t{}\t{}\t{}\t{}'.format(self.domain, self.offset,
+                                              new_offset - self.offset,
+                                              self.num, self.docs),
+                  file=self.pdi)
+            self.offset = new_offset
+
+    def write(self, domain: str, docs: int, pdata: PData):
+        """Writes a single PData."""
+        if domain != self.domain:
+            self._finalize_domain()
+            self.domain = domain
+            self.docs = docs
+            self.num = 0
+        pdata.write_to(self.pdata)
+        self.num += 1
+
+    def write_domain(self, domain: str, docs: int, pdatas: List[PData]):
+        """Writes a whole domain in one go."""
+        offset = self.pdata.tell()
+        for pdata in pdatas:
+            pdata.write_to(self.pdata)
+        length = self.pdata.tell()
+        print('{}\t{}\t{}\t{}\t{}'.format(
+            domain, offset, length, len(pdatas), docs), file=self.pdi)
+
+    def close(self):
+        self._finalize_domain()
+        super().close()
 
 
 def open(prefix: str, mode: str = 'r') -> Union[PDataReader, PDataWriter]:
