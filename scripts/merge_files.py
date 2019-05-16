@@ -43,6 +43,11 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
+    args = parser.parse_args()
+
+    if args.filters:
+        args.merge_type = 'iterator'
+    return args
 
 class Filter:
     """Compiles the filters and applies them."""
@@ -83,7 +88,7 @@ class Filter:
         return eval(self.code, Filter._globals, kwargs)
 
 
-def merge_pdata_it(output_prefix, *file_prefixes, filters):
+def merge_pdata_it(output_prefix, file_prefixes, filters):
     """
     Merges "paragraph data" files output by frequent_paragraphs.py's collect
     mode. This includes two file types: the index file .pdi and the file with
@@ -99,11 +104,13 @@ def merge_pdata_it(output_prefix, *file_prefixes, filters):
                     outf.write(domain, docs, *pdatas)
 
 
-def merge_pdata(output_prefix, *file_prefixes):
+def merge_pdata(output_prefix, file_prefixes, filters):
     """
     Merges "paragraph data" files output by frequent_paragraphs.py's collect
     mode. This includes two file types: the index file .pdi and the file with
     the actual paragraph data (.pdata).
+
+    :param filters: not used.
     """
     # Merge the data files
     with closing(open('{}.pdata'.format(output_prefix), 'wb')) as dataf:
@@ -152,9 +159,9 @@ def main():
     os.nice(20)
 
     if args.type == 'pdata':
-        fun = merge_pdata_it
+        fun = merge_pdata_it if args.merge_type == 'iterator' else merge_pdata
 
-    fun(args.output, *args.inputs, args.filters)
+    fun(args.output, args.inputs, args.filters)
 
 
 if __name__ == '__main__':
