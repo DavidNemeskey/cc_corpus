@@ -133,7 +133,7 @@ class PDataWriter(PDataIO):
         super().__init__(prefix, 'a' if append else 'w')
         self.domain = None
         self.num = 0
-        self.offset = self.pdata.seek()
+        self.offset = self.pdata.tell()
 
     def _finalize_domain(self):
         """"Finalizes" data from a domain: writes the index record."""
