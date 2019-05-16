@@ -172,7 +172,7 @@ class PDataWriter(PDataIO):
         self._check_new_domain(domain, docs)
         for pdata in pdatas:
             pdata.write_to(self.pdata)
-            self.num += len(pdatas)
+        self.num += len(pdatas)
 
     def close(self):
         self._finalize_domain()
