@@ -127,7 +127,7 @@ class PDataReader(PDataIO):
 
 class PDataWriter(PDataIO):
     """Writes paragraph data to file(s), by paragraph or by domain."""
-    def __init__(self, prefix: str, append: bool):
+    def __init__(self, prefix: str, append: bool = False):
         """Opens the files in ``w`` or ``a`` mode, depending on ``append``."""
         super().__init__(prefix, 'a' if append else 'w')
         self.domain = None
@@ -174,10 +174,9 @@ def open(prefix: str, mode: str = 'r') -> Union[PDataReader, PDataWriter]:
 
     :param prefix: the file prefix of the `.pdi--.pdata` pair, without any of
                    the extensions.
-    :param mode: Reading (*r*) or writing (*w*). Note that append is not
-                 supported.
+    :param mode: Reading (*r*), writing (*w*) or appending(*a*).
     """
     if mode == 'r':
         return PDataReader(prefix)
     else:
-        return PDataWriter(prefix)
+        return PDataWriter(prefix, mode == 'a')
