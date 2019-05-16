@@ -10,6 +10,8 @@ from contextlib import closing
 import logging
 import os
 
+from cc_corpus.frequent import open as pdata_open
+
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
@@ -30,18 +32,71 @@ def parse_arguments():
                              'avoid copying excess records. When filtering '
                              '(--filter), the mode is automatically set to '
                              'iterator.')
+    parser.add_argument('--filter', '-f', action='append', default=[],
+                        dest='filters',
+                        help='add a filter condition to the paragraphs read '
+                             'from the input files. The filter is a Python '
+                             'expression; however, it can only refer to the '
+                             'following variables: domain, docs (in domain), '
+                             'pdata (the paragraph object). Can be specified '
+                             'more than once.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
 
+class Filter:
+    """Compiles the filters and applies them."""
 
-def merge_pdata_it(output_prefix, *file_prefixes):
+    _allowed_builtins = {
+        'abs': abs,
+        'all': all,
+        'any': any,
+        'chr': chr,
+        'divmod': divmod,
+        'len': len,
+        'max': max,
+        'min': min,
+        'pow': pow,
+        'round': round,
+        'sorted': sorted,
+        'sum': sum,
+        'bool': bool,
+        'float': float,
+        'int': int,
+        'list': list,
+        'map': map,
+        'range': range,
+        'str': str,
+        'tuple': tuple,
+        'type': type,
+        'zip': zip,
+    }
+    _globals = {'__builtins__': _allowed_builtins}
+
+    def __init__(self, *filters):
+        if not filters:
+            filters = ['True']
+        self.code = compile('(' + ') and ('.join(filters) + ')',
+                            '<string>', 'eval', optimize=2)
+
+    def filter(self, **kwargs):
+        return eval(self.code, Filter._globals, kwargs)
+
+
+def merge_pdata_it(output_prefix, *file_prefixes, filters):
     """
     Merges "paragraph data" files output by frequent_paragraphs.py's collect
     mode. This includes two file types: the index file .pdi and the file with
     the actual paragraph data (.pdata).
     """
-    with closing(open('{}.pdata'.format(output_prefix), 'wb')) as dataf:
+    cond = Filter(filters)
+    with pdata_open(output_prefix, 'w') as outf:
+        for input_prefix in file_prefixes:
+            with pdata_open(input_prefix, 'r') as inf:
+                for domain, docs, pdatas in inf:
+                    pdatas = [cond.filter(domain=domain, docs=docs, pdata=pdata)
+                              for pdata in pdatas]
+                    outf.write(domain, docs, *pdatas)
 
 
 def merge_pdata(output_prefix, *file_prefixes):
@@ -97,9 +152,9 @@ def main():
     os.nice(20)
 
     if args.type == 'pdata':
-        fun = merge_pdata
+        fun = merge_pdata_it
 
-    fun(args.output, *args.inputs)
+    fun(args.output, *args.inputs, args.filters)
 
 
 if __name__ == '__main__':
