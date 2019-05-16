@@ -127,7 +127,15 @@ class PDataReader(PDataIO):
 
 
 class PDataWriter(PDataIO):
-    """Writes paragraph data to file(s), by paragraph or by domain."""
+    """
+    Writes paragraph data to file(s), by paragraph or by domain.
+
+    .. note::
+
+       It is the caller's responsibility to present the records of a domain
+       in after one another. Failing to do so will result in multiple index
+       lines for the same domain and faulty behavior.
+    """
     def __init__(self, prefix: str, append: bool = False):
         """Opens the files in ``w`` or ``a`` mode, depending on ``append``."""
         super().__init__(prefix, 'a' if append else 'w')
@@ -145,24 +153,26 @@ class PDataWriter(PDataIO):
                   file=self.pdi)
             self.offset = new_offset
 
-    def write(self, domain: str, docs: int, pdata: PData):
-        """Writes a single PData."""
+    def _check_new_domain(self, domain, docs):
+        """Handles the case when we receive a new domain."""
         if domain != self.domain:
             self._finalize_domain()
             self.domain = domain
             self.docs = docs
             self.num = 0
+
+    def write(self, domain: str, docs: int, pdata: PData):
+        """Writes a single PData."""
+        self._check_new_domain(domain, docs)
         pdata.write_to(self.pdata)
         self.num += 1
 
     def write_domain(self, domain: str, docs: int, pdatas: List[PData]):
         """Writes a whole domain in one go."""
-        offset = self.pdata.tell()
+        self._check_new_domain(domain, docs)
         for pdata in pdatas:
             pdata.write_to(self.pdata)
-        length = self.pdata.tell()
-        print('{}\t{}\t{}\t{}\t{}'.format(
-            domain, offset, length, len(pdatas), docs), file=self.pdi)
+            self.num += len(pdatas)
 
     def close(self):
         self._finalize_domain()
