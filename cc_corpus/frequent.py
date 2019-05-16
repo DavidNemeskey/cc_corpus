@@ -7,6 +7,7 @@ Stuff common to all scripts that handle frequent paragraphs
 """
 
 import io
+from itertools import islice
 import math
 import pickle
 import struct
@@ -115,15 +116,30 @@ class PDataReader(PDataIO):
     def __init__(self, prefix: str):
         super().__init__(prefix, 'r')
 
-    def __iter__(self):
-        """Returns the paragraph records one-by-one."""
+    def _inner_iter(self):
         for line in self.pdi:
             domain, *tail = line.strip().split('\t')
             offset, length, num, docs = map(int, tail)
+            yield domain, docs, num
             self.pdata.seek(offset)
             for _ in range(num):
                 pdata = PData.read_from(self.pdata)
-                yield (domain, docs, pdata)
+                yield pdata
+
+    def iterate_p(self):
+        """Returns the paragraph records one-by-one."""
+        it = self._inner_iter()
+        for domain, docs, num in it:
+            for _ in range(num):
+                yield (domain, docs, next(it))
+
+    def iterate_domains(self):
+        """Returns the paragraph records domain-by-domain."""
+        it = self._inner_iter()
+        for domain, docs, num in it:
+            yield (domain, docs, list(islice(it, num)))
+
+    __iter__ = iterate_domains  # Not sure about this
 
 
 class PDataWriter(PDataIO):
