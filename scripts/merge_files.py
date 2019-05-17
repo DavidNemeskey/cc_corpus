@@ -171,7 +171,7 @@ def main():
     if args.type == 'pdata':
         fun = merge_pdata_it if args.merge_type == 'iterator' else merge_pdata
 
-    fun(args.output, args.inputs, {'filters': args.filters, 'head': args.head})
+    fun(args.output, args.inputs, filters=args.filters, head=args.head})
 
 
 if __name__ == '__main__':
