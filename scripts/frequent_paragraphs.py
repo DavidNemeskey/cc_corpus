@@ -134,9 +134,12 @@ def parse_arguments():
     parser_filter.add_argument('--min-freq', '-m', type=int, default=2,
                                help='the minimum number of occurrence from '
                                     'which a paragraph is deemed frequent (2).')
-    parser_collect.add_argument('--docs-per-batch', type=int, default=100,
-                                help='the number of documents to send to '
-                                     'workers at a time (100).')
+    parser_filter.add_argument('--docs-per-batch', type=int, default=100,
+                               help='the number of documents to send to '
+                                    'workers at a time (100).')
+    parser_filter.add_argument('--batch-per-process', type=int, default=5,
+                               help='the number of unfinished batches kept in '
+                                    'memory per process (5).')
 
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
@@ -571,12 +574,68 @@ def full_filter(group, args, queue):
     return stats
 
 
+def main_filter2(args):
+    """The main function for filtering the documents."""
+    install_mp_handler()
+
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
+    logging.info('Filtering frequent paragraphs from index {}...'.format(
+        args.index))
+
+    with Pool(args.processes) as pool:
+        f = partial(full_filter, args=args, queue=queue)
+        res = pool.map_async(f, read_grouped_index(args.index))
+
+        sum_stats = CollectStats()
+
+        minhasher = MinHasher(args.permutations, args.n)
+        groups, res = [], []
+        minhash_fn = partial(minhash_group, minhasher=minhasher)
+        with Pool(args.processes) as pool:
+            for group in islice(grouper(read_index(args.index),
+                                        args.docs_per_batch),
+                                args.processes * args.batch_per_process):
+                groups.append(group)
+                res.append(p.apply_async(minhash_fn, (group,)))
+
+
+        with closing(BatchWriter(args.documents,
+                                 args.output_dir, args.zeroes)) as bw:
+            while True:
+                if queue.empty():
+                    if res.ready():
+                        break
+                    time.sleep(1)  # I don't like Empty exceptions
+                else:
+                    doc = queue.get()
+                    bw.write(doc)
+                    queue.task_done()
+
+        pool.close()
+        pool.join()
+
+        try:
+            stats = reduce(lambda ss, s: ss + s, res.get())
+            logging.info(
+                'Done filtering; in total, found {} frequent paragraphs, '
+                'resulting in documents {} -> {}, paragraphs {} -> {}.'.format(
+                    stats.frequent, stats.old_docs, stats.new_docs,
+                    stats.old_ps, stats.new_ps))
+        except:
+            logging.exception('Error while filtering')
+
+
 def main_filter(args):
     """The main function for filtering the documents."""
     install_mp_handler()
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
+
+    logging.info('Filtering frequent paragraphs from index {}...'.format(
+        args.index))
 
     with Pool(args.processes) as pool:
         m = Manager()
