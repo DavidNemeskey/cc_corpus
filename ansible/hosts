@@ -1,8 +1,5 @@
 [slaves]
-nessie
-ginny
 ron
-percy
 charlie
 
 [controller]
@@ -10,3 +7,6 @@ nessie
 
 [test_slaves]
 george
+nessie
+ginny
+percy

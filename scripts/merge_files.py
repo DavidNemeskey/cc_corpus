@@ -141,14 +141,14 @@ def merge_pdata(output_prefix, file_prefixes, **kwargs):
         max_offset = 0
         with closing(open('{}.pdi'.format(input_prefix), 'rt')) as inf:
             for line in inf:
-                domain, offset, length, num = line.strip().split('\t')
+                domain, offset, length, num, docs = line.strip().split('\t')
                 int_offset = int(offset)
                 int_length = int(length)
                 curr_offset = int_offset + int_length
                 if curr_offset > max_offset:
                     max_offset = curr_offset
                 index.append(
-                    (domain, initial_offset + int_offset, int_length, num))
+                    (domain, initial_offset + int_offset, int_length, num, docs))
         initial_offset += max_offset
 
     index.sort()
