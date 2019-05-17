@@ -317,7 +317,7 @@ def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, List[An
     """
     logging.debug('minhash_group({}) -> {}'.format(len(group), group[0]))
     return [(doc.attrs['url'], [minhasher.minhash(text)
-                                for p, text in enumerate(doc.paragraphs, start=1)])
+                                for text in doc.paragraphs])
             for doc in read_group_documents(filter(bool, group))]
 
 
