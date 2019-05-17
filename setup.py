@@ -68,6 +68,7 @@ setup(name='commoncrawl-downloader',
           'scripts/extract_attributes.py',
           'scripts/renumber_corpus_files.py',
           'scripts/frequent_paragraphs.py',
+          'scripts/merge_files.py',
           'scripts/rewrite_files.py',
       ],
       install_requires=[
