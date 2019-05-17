@@ -49,7 +49,7 @@ def parse_arguments():
                         help='the logging level.')
     args = parser.parse_args()
 
-    if args.filters:
+    if args.filters or args.head:
         args.merge_type = 'iterator'
     return args
 
@@ -82,7 +82,7 @@ class Filter:
     }
     _globals = {'__builtins__': _allowed_builtins}
 
-    def __init__(self, *filters):
+    def __init__(self, filters):
         if not filters:
             filters = ['True']
         self.code = compile('(' + ') and ('.join(filters) + ')',
@@ -105,8 +105,8 @@ def merge_pdata_it(output_prefix, file_prefixes, **kwargs):
         for input_prefix in file_prefixes:
             with pdata_open(input_prefix, 'r') as inf:
                 for domain, docs, pdatas in inf:
-                    pdatas = [cond.filter(domain=domain, docs=docs, pdata=pdata)
-                              for pdata in pdatas]
+                    pdatas = [pdata for pdata in pdatas if
+                              cond.filter(domain=domain, docs=docs, pdata=pdata)]
                     if pdatas:
                         outf.write(domain, docs, *pdatas)
                         num_written += 1
