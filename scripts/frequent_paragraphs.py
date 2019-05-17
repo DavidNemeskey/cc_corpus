@@ -593,12 +593,32 @@ def main_filter2(args):
         minhasher = MinHasher(args.permutations, args.n)
         groups, res = [], []
         minhash_fn = partial(minhash_group, minhasher=minhasher)
+        # TODO read index
+        # TODO PDataReader to read per domain
+        # TODO do not minhash domains without frequent paragraphs
         with Pool(args.processes) as pool:
-            for group in islice(grouper(read_index(args.index),
-                                        args.docs_per_batch),
+            group_it = grouper(read_index(args.index), args.docs_per_batch)
+            # Add the first batch of groups at the same time
+            for group in islice(group_it,
                                 args.processes * args.batch_per_process):
                 groups.append(group)
                 res.append(p.apply_async(minhash_fn, (group,)))
+            # After that, add new a group whenever one has been processed. We
+            # wait for the first result to keep the order of the index and the
+            # output corpus the same.
+            for group in group_it:
+                res[0].wait()
+                # TODO: process
+                res.pop_first()
+                groups.pop_first()
+                groups.append(group)
+                res.append(p.apply_async(minhash_fn, (group,)))
+            # Just consume the rest
+            while res:
+                res[0].wait()
+                # TODO: process
+                res.pop_first()
+                groups.pop_first()
 
 
         with closing(BatchWriter(args.documents,
