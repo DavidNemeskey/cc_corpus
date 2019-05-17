@@ -311,7 +311,6 @@ def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, List[An
 
     :param group: the lines that describe the documents; as read by
                   :func:`read_grouped_index`.
-    :param minhasher: TODO delete
     :returns: a list of tuples of
         - the URL of the document (so that the caller knows what it gets back)
         - a list of paragraph fingerprints.
@@ -455,7 +454,6 @@ def main_collect(args):
 
         minhasher = MinHasher(args.permutations, args.n)
         with Pool(args.processes) as pool, index:
-            # TODO: grouper parameter to argument
             it = pool.imap(partial(minhash_group, minhasher=minhasher),
                            grouper(read_index(args.index), args.docs_per_batch))
             for domain, freq_ps, stats in collect_frequent(
