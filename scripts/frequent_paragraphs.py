@@ -27,7 +27,8 @@ from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
 def parse_arguments():
     parser = ArgumentParser(__doc__)
     parser.add_argument('--index', required=True,
-                        help='the output index file.')
+                        help='the index file (output of the index task and '
+                             'input to the rest.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
@@ -132,15 +133,9 @@ def parse_arguments():
     parser_filter.add_argument('--min-freq', '-m', type=int, default=2,
                                help='the minimum number of occurrence from '
                                     'which a paragraph is deemed frequent (2).')
-    decay_group = parser_filter.add_mutually_exclusive_group()
-    decay_group.add_argument('--c', '-c', type=float, default=0.01,
-                             help='the decay (multiplication) constant used '
-                                  'for scoring paraphraphs (0.99).')
-    decay_group.add_argument('--keep-for', '-k', type=int,
-                             help='keep frequent paragraph candidates for this '
-                                  'many iterations. This argument is '
-                                  'another way to specify -c and is mutually '
-                                  'exclusive with it.')
+    parser_collect.add_argument('--docs-per-batch', type=int, default=100,
+                                help='the number of documents to send to '
+                                     'workers at a time (100).')
 
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
