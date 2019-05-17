@@ -113,13 +113,19 @@ class PDataIO:
 
 
 class PDataReader(PDataIO):
+    """Reads paragraph data from file(s), by paragraph or by domain."""
     def __init__(self, prefix: str):
         super().__init__(prefix, 'r')
 
-    def _inner_iter(self):
+    def read_index(self):
+        """Iterates through the index file."""
         for line in self.pdi:
             domain, *tail = line.strip().split('\t')
             offset, length, num, docs = map(int, tail)
+            yield domain, offset, length, num, docs
+
+    def _inner_iter(self):
+        for domain, offset, length, num, docs in self.read_index():
             yield domain, docs, num
             self.pdata.seek(offset)
             for _ in range(num):
