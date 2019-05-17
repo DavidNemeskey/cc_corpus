@@ -20,6 +20,7 @@ from multiprocessing_logging import install_mp_handler
 from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData
+from cc_corpus.frequent import open as pdata_open
 from typing import Any, Dict, Generator, Iterator, List, Set, Tuple
 from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
 
@@ -443,31 +444,21 @@ def main_collect(args):
     logging.info('Collecting frequent paragraphs from index {}...'.format(
         args.index))
 
-    with closing(open('{}.pdata'.format(args.output_prefix), 'wb')) as dataf:
-        index = []
+    with pdata_open(args.output_prefix, 'w') as dataf:
         sum_stats = CollectStats()
 
         minhasher = MinHasher(args.permutations, args.n)
-        with Pool(args.processes) as pool, index:
+        with Pool(args.processes) as pool:
             it = pool.imap(partial(minhash_group, minhasher=minhasher),
                            grouper(read_index(args.index), args.docs_per_batch))
             for domain, freq_ps, stats in collect_frequent(
                 it, args.threshold, args.permutations, 1 - args.c, args.min_freq
             ):
                 if freq_ps:
-                    offset = dataf.tell()
-                    for pdata in sorted(freq_ps.values(),
-                                        key=lambda pd: -pd.count):
-                        pdata.write_to(dataf)
-                    length = dataf.tell() - offset
-                    index.append((domain, offset, length, len(freq_ps), stats.docs))
+                    dataf.write(domain, stats.docs,
+                                *sorted(freq_ps.values(),
+                                        key=lambda pd: -pd.count))
                 sum_stats += stats
-
-        index.sort()
-        with closing(open('{}.pdi'.format(args.output_prefix), 'wt')) as indexf:
-            for domain, offset, length, num, docs in index:
-                print('{}\t{}\t{}\t{}\t{}'.format(
-                    domain, offset, length, num, docs), file=indexf)
 
         pool.close()
         pool.join()

@@ -158,21 +158,33 @@ class PDataWriter(PDataIO):
        in after one another. Failing to do so will result in multiple index
        lines for the same domain and faulty behavior.
     """
-    def __init__(self, prefix: str, append: bool = False):
-        """Opens the files in ``w`` or ``a`` mode, depending on ``append``."""
+    def __init__(self, prefix: str, append: bool = False, sorting: bool = False):
+        """
+        Opens the files in ``w`` or ``a`` mode, depending on ``append``.
+
+        :param sorting: if ``True``, instead of writing the index to file right
+                        away, it is collected in a list. Once
+                        :meth:`~PDataWriter.close` is called, the list is sorted
+                        and its contents written to the *.pdi* file.
+        """
         super().__init__(prefix, 'a' if append else 'w')
         self.domain = None
         self.num = 0
+        self.sorting = sorting
         self.offset = self.pdata.tell()
+        if self.sorting:
+            self._index = []
 
     def _finalize_domain(self):
         """"Finalizes" data from a domain: writes the index record."""
         if self.domain is not None:
             new_offset = self.pdata.tell()
-            print('{}\t{}\t{}\t{}\t{}'.format(self.domain, self.offset,
-                                              new_offset - self.offset,
-                                              self.num, self.docs),
-                  file=self.pdi)
+            index_tuple = (self.domain, self.offset, new_offset - self.offset,
+                           self.num, self.docs)
+            if self.sorting:
+                self._index.append(index_tuple)
+            else:
+                print('{}\t{}\t{}\t{}\t{}'.format(index_tuple), file=self.pdi)
             self.offset = new_offset
 
     def _check_new_domain(self, domain, docs):
@@ -192,6 +204,11 @@ class PDataWriter(PDataIO):
 
     def close(self):
         self._finalize_domain()
+        if self.sorting:
+            self._index.sort()
+            for index_tuple in self._index:
+                print('{}\t{}\t{}\t{}\t{}'.format(index_tuple), file=self.pdi)
+            del self._index
         super().close()
 
 
