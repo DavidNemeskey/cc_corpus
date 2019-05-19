@@ -4,14 +4,18 @@
 """Writes the positions of all documents in each file."""
 
 from argparse import ArgumentParser
+from collections import deque
 from contextlib import closing
 from functools import partial, reduce
-from itertools import accumulate, chain, groupby
+from itertools import accumulate, chain, groupby, islice
 import logging
 from multiprocessing import Manager, Pool
 import os
 import os.path as op
 import time
+from typing import (
+    Any, Callable, Dict, Generator, Iterable, Iterator, List, Set, Tuple
+)
 from urllib.parse import urlsplit
 
 from datasketch import MinHashLSH
@@ -21,7 +25,6 @@ from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData
 from cc_corpus.frequent import open as pdata_open
-from typing import Any, Dict, Generator, Iterator, List, Set, Tuple
 from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
 
 
@@ -574,6 +577,47 @@ def full_filter(group, args, queue):
     return stats
 
 
+class TeePool(Pool):
+    """
+    A version of :class:`multiprocessing.Pool` that adds two functions to it:
+
+    1. :meth:`~TeePool.imap` returns an iterator not only the output, but an
+       iterator of (input, output) pairs.
+    2. at the beginning, ``processes * item_per_process`` inputs are sent
+       to the pool. Further inputs are only sent if the previous ones have
+       already been processed. This prevents outputs from being overgenerated
+       and filling up the memory when the main processes cannot keep up.
+
+    Note: ATM only :meth:`imap` is implemented.
+    """
+    def __init__(self, processes=None, item_per_process=5,
+                 initializer=None, initargs=(),
+                 maxtasksperchild=None, context=None):
+        super().__init__(processes, initializer, initargs,
+                         maxtasksperchild, context)
+        self.item_per_process = item_per_process
+        self.max_items = item_per_process * processes
+
+    def imap(self, func: Callable, iterable: Iterable) -> Generator[Tuple[Any, Any], None, None]:
+        inputs, outputs = deque(self.max_items), deque(self.max_items)
+        # Add the first batch of inputs at the same time
+        for inp in islice(iterable, self.max_items):
+            inputs.append(inp)
+            outputs.append(self.apply_async(func, (inp,)))
+        # After that, add new input whenever one has been processed. We
+        # wait for the first result to keep the order of the input and the
+        # output corpus the same.
+        for inp in iterable:
+            outputs[0].wait()
+            yield inputs.popleft(), outputs.popleft().get()
+            inputs.append(inp)
+            outputs.append(self.apply_async(func, (inp,)))
+        # Just consume the rest
+        while outputs:
+            outputs[0].wait()
+            yield inputs.popleft(), outputs.popleft().get()
+
+
 def main_filter2(args):
     """The main function for filtering the documents."""
     install_mp_handler()
@@ -596,29 +640,10 @@ def main_filter2(args):
         # TODO read index
         # TODO PDataReader to read per domain
         # TODO do not minhash domains without frequent paragraphs
-        with Pool(args.processes) as pool:
+        with TeePool(args.processes, args.docs_per_batch) as pool:
             group_it = grouper(read_index(args.index), args.docs_per_batch)
-            # Add the first batch of groups at the same time
-            for group in islice(group_it,
-                                args.processes * args.batch_per_process):
-                groups.append(group)
-                res.append(p.apply_async(minhash_fn, (group,)))
-            # After that, add new a group whenever one has been processed. We
-            # wait for the first result to keep the order of the index and the
-            # output corpus the same.
-            for group in group_it:
-                res[0].wait()
-                # TODO: process
-                res.pop_first()
-                groups.pop_first()
-                groups.append(group)
-                res.append(p.apply_async(minhash_fn, (group,)))
-            # Just consume the rest
-            while res:
-                res[0].wait()
-                # TODO: process
-                res.pop_first()
-                groups.pop_first()
+            for docs, mhs in pool.imap(minhash_fn, group_it):
+                pass
 
 
         with closing(BatchWriter(args.documents,
