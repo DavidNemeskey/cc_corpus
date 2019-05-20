@@ -146,7 +146,7 @@ def parse_arguments():
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
     # Compute c from keep_for
-    if args.command == 'filter' and args.keep_for:
+    if args.command == 'collect' and args.keep_for:
         args.c = 1 - pow(0.5, 1 / (args.keep_for - 0.5))
     return args
 
@@ -493,6 +493,8 @@ class FrequentManager:
 
 
 def filter_file(self, file_id, index_lines, args, manager):
+    # TODO to initializer
+    frequents = RandomPDataReader(file_name)
     sum_stats = FilterStats()
     minhasher = MinHasher(args.permutations, args.n)
     with closing(BatchWriter(sys.maxsize, args.output_dir, args.zeroes)) as bw:
@@ -500,7 +502,7 @@ def filter_file(self, file_id, index_lines, args, manager):
             stats = FilterStats()
             # Build the LSH
             lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
-            for i, pdata in manager.get_frequents(domain):
+            for i, pdata in enumerate(frequents.get(domain), start=1):
                 lsh.insert(str(i), pdata.minhash)
 
             doc_it = read_group_documents(group)
