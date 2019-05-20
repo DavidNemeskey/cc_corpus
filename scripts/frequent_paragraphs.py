@@ -10,11 +10,12 @@ from functools import partial
 from itertools import accumulate, chain, groupby, islice
 import logging
 from multiprocessing import Manager, Pool
+import multiprocessing as mp
 import os
 import os.path as op
 import sys
 from typing import (
-    Any, Callable, DefaultDict, Dict, Generator, Iterable, Iterator,
+    Any, Callable, Dict, Generator, Iterable, Iterator,
     List, Set, Tuple
 )
 from urllib.parse import urlsplit
@@ -480,7 +481,7 @@ FilterStats = Stats.create(
     'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
 
 
-class TeePool(Pool):
+class TeePool(mp.pool.Pool):
     """
     A version of :class:`multiprocessing.Pool` that adds two functions to it:
 
@@ -492,6 +493,7 @@ class TeePool(Pool):
        and filling up the memory when the main processes cannot keep up.
 
     Note: ATM only :meth:`imap` is implemented.
+    Note also that :class:`multiprocessing.Pool` cannot (easily?) be subclassed.
     """
     def __init__(self, processes=None, item_per_process=5,
                  initializer=None, initargs=(),
