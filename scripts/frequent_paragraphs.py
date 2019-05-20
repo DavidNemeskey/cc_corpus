@@ -4,20 +4,16 @@
 """Writes the positions of all documents in each file."""
 
 from argparse import ArgumentParser
-from collections import Counter, defaultdict, deque
+from collections import Counter, defaultdict
 from contextlib import closing
 from functools import partial
-from itertools import accumulate, chain, groupby, islice
+from itertools import accumulate, chain, groupby
 import logging
 from multiprocessing import Manager, Pool
-import multiprocessing as mp
 import os
 import os.path as op
 import sys
-from typing import (
-    Any, Callable, Dict, Generator, Iterable, Iterator,
-    List, Set, Tuple
-)
+from typing import Any, Dict, Generator, Iterable, Iterator, List, Set, Tuple
 from urllib.parse import urlsplit
 
 from datasketch import MinHashLSH
@@ -479,48 +475,6 @@ def main_collect(args):
 
 FilterStats = Stats.create(
     'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
-
-
-class TeePool(mp.pool.Pool):
-    """
-    A version of :class:`multiprocessing.Pool` that adds two functions to it:
-
-    1. :meth:`~TeePool.imap` returns an iterator not only the output, but an
-       iterator of (input, output) pairs.
-    2. at the beginning, ``processes * item_per_process`` inputs are sent
-       to the pool. Further inputs are only sent if the previous ones have
-       already been processed. This prevents outputs from being overgenerated
-       and filling up the memory when the main processes cannot keep up.
-
-    Note: ATM only :meth:`imap` is implemented.
-    Note also that :class:`multiprocessing.Pool` cannot (easily?) be subclassed.
-    """
-    def __init__(self, processes=None, item_per_process=5,
-                 initializer=None, initargs=(),
-                 maxtasksperchild=None, context=None):
-        super().__init__(processes, initializer, initargs,
-                         maxtasksperchild, context)
-        self.item_per_process = item_per_process
-        self.max_items = item_per_process * processes
-
-    def imap(self, func: Callable, iterable: Iterable) -> Generator[Tuple[Any, Any], None, None]:
-        inputs, outputs = deque(self.max_items), deque(self.max_items)
-        # Add the first batch of inputs at the same time
-        for inp in islice(iterable, self.max_items):
-            inputs.append(inp)
-            outputs.append(self.apply_async(func, (inp,)))
-        # After that, add new input whenever one has been processed. We
-        # wait for the first result to keep the order of the input and the
-        # output corpus the same.
-        for inp in iterable:
-            outputs[0].wait()
-            yield inputs.popleft(), outputs.popleft().get()
-            inputs.append(inp)
-            outputs.append(self.apply_async(func, (inp,)))
-        # Just consume the rest
-        while outputs:
-            outputs[0].wait()
-            yield inputs.popleft(), outputs.popleft().get()
 
 
 class FrequentManager:
