@@ -477,14 +477,14 @@ FilterStats = Stats.create(
     'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
 
 
-def filter_file(self, file_id: int, index_lines: List[IndexLine], args: Any,
-                seen_enough: Dict[str, Any], lock: RLock):
+def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
+                frequents_seen: Dict[str, Any], lock: RLock):
     def seen_enough_of(domain: str, ps: List[int]) -> Set[int]:
         # https://stackoverflow.com/questions/9436757/how-does-multiprocessing-manager-work-in-python
         with lock:
-            freq_counter = seen_enough.setdefault(domain, Counter)
+            freq_counter = frequents_seen.setdefault(domain, Counter())
             freq_counter.update(ps)
-            seen_enough[domain] = freq_counter
+            frequents_seen[domain] = freq_counter
             return set(p for p in ps if freq_counter[p] > args.min_freq)
 
     # TODO to initializer
@@ -556,10 +556,11 @@ def main_filter(args):
 
     with Pool(args.processes) as pool:
         m = Manager()
-        seen_enough = m.dict()
+        frequents_seen = m.dict()
         lock = m.RLock()
         group_it = enumerate(grouper(read_index(args.index), args.documents))
-        f = partial(filter_file, args=args, seen_enough=seen_enough, lock=lock)
+        f = partial(filter_file, args=args,
+                    frequents_seen=frequents_seen, lock=lock)
 
         sum_stats = FilterStats()
         for stats in pool.starmap(f, group_it):
