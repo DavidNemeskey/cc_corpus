@@ -447,7 +447,7 @@ def main_collect(args):
     logging.info('Collecting frequent paragraphs from index {}...'.format(
         args.index))
 
-    with pdata_open(args.output_prefix, 'w') as dataf:
+    with pdata_open(args.output_prefix, 'w', sorting=True) as dataf:
         sum_stats = CollectStats()
 
         minhasher = MinHasher(args.permutations, args.n)

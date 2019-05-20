@@ -253,7 +253,8 @@ class PDataWriter(PDataIO):
         super().close()
 
 
-def open(prefix: str, mode: str = 'r') -> Union[PDataReader, PDataWriter]:
+def open(prefix: str, mode: str = 'r',
+         *args, **kwargs) -> Union[PDataReader, PDataWriter]:
     """
     Opens a .pdi--.pdata pair for reading or writing, depending on `mode`.
 
@@ -262,6 +263,6 @@ def open(prefix: str, mode: str = 'r') -> Union[PDataReader, PDataWriter]:
     :param mode: Reading (*r*), writing (*w*) or appending(*a*).
     """
     if mode == 'r':
-        return PDataReader(prefix)
+        return PDataReader(prefix, *args, **kwargs)
     else:
-        return PDataWriter(prefix, mode == 'a')
+        return PDataWriter(prefix, mode == 'a', *args, **kwargs)
