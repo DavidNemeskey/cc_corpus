@@ -225,7 +225,7 @@ class PDataWriter(PDataIO):
             if self.sorting:
                 self._index.append(index_tuple)
             else:
-                print('{}\t{}\t{}\t{}\t{}'.format(index_tuple), file=self.pdi)
+                print('{}\t{}\t{}\t{}\t{}'.format(*index_tuple), file=self.pdi)
             self.offset = new_offset
 
     def _check_new_domain(self, domain, docs):
@@ -248,7 +248,7 @@ class PDataWriter(PDataIO):
         if self.sorting:
             self._index.sort()
             for index_tuple in self._index:
-                print('{}\t{}\t{}\t{}\t{}'.format(index_tuple), file=self.pdi)
+                print('{}\t{}\t{}\t{}\t{}'.format(*index_tuple), file=self.pdi)
             del self._index
         super().close()
 
