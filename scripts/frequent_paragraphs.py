@@ -4,12 +4,12 @@
 """Writes the positions of all documents in each file."""
 
 from argparse import ArgumentParser
-from collections import Counter, defaultdict
+from collections import Counter
 from contextlib import closing
 from functools import partial
 from itertools import accumulate, chain, groupby
 import logging
-from multiprocessing import Manager, Pool
+from multiprocessing import Manager, Pool, RLock
 import os
 import os.path as op
 import sys
@@ -477,24 +477,18 @@ FilterStats = Stats.create(
     'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
 
 
-class FrequentManager:
-    def __init__(self, file_name: str, min_freq: int):
-        self.frequents = RandomPDataReader(file_name)
-        self.min_freq = min_freq
-        self.domains = defaultdict(Counter)
+def filter_file(self, file_id: int, index_lines: List[IndexLine], args: Any,
+                seen_enough: Dict[str, Any], lock: RLock):
+    def seen_enough_of(domain: str, ps: List[int]) -> Set[int]:
+        # https://stackoverflow.com/questions/9436757/how-does-multiprocessing-manager-work-in-python
+        with lock:
+            freq_counter = seen_enough.setdefault(domain, Counter)
+            freq_counter.update(ps)
+            seen_enough[domain] = freq_counter
+            return set(p for p in ps if freq_counter[p] > args.min_freq)
 
-    def get_frequents(self, domain: str) -> List[PData]:
-        return self.frequents.get(domain)
-
-    def seen_enough_of(self, domain: str, ps: List[int]) -> Set[int]:
-        freq_counter = self.domains[domain]
-        freq_counter.update(ps)
-        return set(p for p in ps if freq_counter[p] > self.min_freq)
-
-
-def filter_file(self, file_id, index_lines, args, manager):
     # TODO to initializer
-    frequents = RandomPDataReader(file_name)
+    frequents = RandomPDataReader(args.frequents)
     sum_stats = FilterStats()
     minhasher = MinHasher(args.permutations, args.n)
     with closing(BatchWriter(sys.maxsize, args.output_dir, args.zeroes)) as bw:
@@ -528,7 +522,7 @@ def filter_file(self, file_id, index_lines, args, manager):
                             frequents_found[p_id] = int(freq_id)
                             break
                     if frequents_found:
-                        seen_enough = manager.seen_enough_of(
+                        seen_enough = seen_enough_of(
                             domain, set(frequents_found.values()))
                         frequents_found = set(
                             p_id for p_id, freq_id in frequents_found.items()
@@ -562,9 +556,10 @@ def main_filter(args):
 
     with Pool(args.processes) as pool:
         m = Manager()
-        # TODO: register
+        seen_enough = m.dict()
+        lock = m.RLock()
         group_it = enumerate(grouper(read_index(args.index), args.documents))
-        f = partial(filter_file, args=args, manager=m)
+        f = partial(filter_file, args=args, seen_enough=seen_enough, lock=lock)
 
         sum_stats = FilterStats()
         for stats in pool.starmap(f, group_it):
