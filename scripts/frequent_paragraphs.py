@@ -14,7 +14,8 @@ import os
 import os.path as op
 import sys
 from typing import (
-    Any, Callable, Dict, Generator, Iterable, Iterator, List, Set, Tuple
+    Any, Callable, Counter as Cter, DefaultDict, Dict, Generator, Iterable,
+    Iterator, List, Set, Tuple
 )
 from urllib.parse import urlsplit
 
@@ -163,8 +164,8 @@ DocLen = int
 DocTuple = Tuple[DocURL, DocPos, DocLen]
 DocFileTuple = Tuple[DocURL, DocFile, DocPos, DocLen]
 
-Group = List[str]
-DomainGroup = Tuple[str, Group]
+IndexLine = str
+DomainGroup = Tuple[str, List[IndexLine]]
 PDict = Dict[str, PData]
 
 
@@ -279,7 +280,7 @@ def main_distribute(args):
 CollectStats = Stats.create('docs', 'ps', 'frequents', 'domains')  # type: Any
 
 
-def read_group_documents(group: Group) -> Iterator[Document]:
+def read_group_documents(group: Iterator[str]) -> Iterator[Document]:
     """Returns an iterator of the documents in a group."""
     last_file = None
     f = None
@@ -298,7 +299,8 @@ def read_group_documents(group: Group) -> Iterator[Document]:
             f.close()
 
 
-def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, List[Any]]]:
+def minhash_group(group: List[IndexLine],
+                  minhasher: MinHasher) -> List[Tuple[str, List[Any]]]:
     """
     Minhashes all paragraphs in a group of documents.
 
@@ -523,7 +525,7 @@ class FrequentManager:
     def __init__(self, file_name: str, min_freq: int):
         self.frequents = RandomPDataReader(file_name)
         self.min_freq = min_freq
-        self.domains = defaultdict(Counter)
+        self.domains = defaultdict(Counter)  # type: DefaultDict[str, Cter[int]]
 
     def get_frequents(self, domain: str) -> List[PData]:
         return self.frequents.get(domain)
