@@ -14,8 +14,8 @@ import os
 import os.path as op
 import sys
 from typing import (
-    Any, Callable, Counter as Cter, DefaultDict, Dict, Generator, Iterable,
-    Iterator, List, Set, Tuple
+    Any, Callable, DefaultDict, Dict, Generator, Iterable, Iterator,
+    List, Set, Tuple
 )
 from urllib.parse import urlsplit
 
@@ -525,7 +525,7 @@ class FrequentManager:
     def __init__(self, file_name: str, min_freq: int):
         self.frequents = RandomPDataReader(file_name)
         self.min_freq = min_freq
-        self.domains = defaultdict(Counter)  # type: DefaultDict[str, Cter[int]]
+        self.domains = defaultdict(Counter)
 
     def get_frequents(self, domain: str) -> List[PData]:
         return self.frequents.get(domain)
