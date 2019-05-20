@@ -11,7 +11,7 @@ from itertools import islice
 import math
 import pickle
 import struct
-from typing import BinaryIO, Union
+from typing import Any, BinaryIO, Dict, List, Tuple, Union
 
 from datasketch import LeanMinHash
 
@@ -146,6 +146,41 @@ class PDataReader(PDataIO):
             yield (domain, docs, list(islice(it, num)))
 
     __iter__ = iterate_domains  # Not sure about this
+
+
+class RandomPDataReader(PDataIO):
+    """
+    Allows random indexed access to the :class:`PData` (and associated) values
+    in the data.
+
+    This class is not instantiable by :func:`open`.
+    """
+    def __init__(self, prefix: str):
+        super().__init__(prefix, 'r')
+        self.index = self._read_index()
+
+    def _read_index(self) -> Dict[str, Tuple[int, int, int, int]]:
+        """Reads the index into a dictionary."""
+        ret = {}
+        for line in self.pdi:
+            domain, *tail = line.strip().split('\t')
+            offset, length, num, docs = map(int, tail)
+            ret[domain] = (offset, length, num, docs)
+        return ret
+
+    def __getitem__(self, key: str) -> List[PData]:
+        offset, length, num, docs = self.index[key]
+        self.pdata.seek(offset)
+        return [PData.read_from(self.pdata) for _ in range(num)]
+
+    def __setitem__(self, key: str, value: Any):
+        raise NotImplementedError('Index values are not settable.')
+
+    def __delitem__(self, key: str):
+        del self.index[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.index
 
 
 class PDataWriter(PDataIO):

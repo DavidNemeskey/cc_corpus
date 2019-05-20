@@ -23,7 +23,7 @@ from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
-from cc_corpus.frequent import PData
+from cc_corpus.frequent import PData, RandomPDataReader
 from cc_corpus.frequent import open as pdata_open
 from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
 
@@ -114,6 +114,9 @@ def parse_arguments():
         help='Filters frequent paragraphs within a domain.'
     )
     parser_filter.set_defaults(command='filter')
+    parser.add_argument('--frequents', required=True,
+                        help='the prefix to the frequent paragraph files '
+                             '(written by the `collect` task).')
     parser_filter.add_argument(
         '--output-dir', '-o', required=True,
         help='the output directory. The *last directory* of the input path '
@@ -121,11 +124,12 @@ def parse_arguments():
              'because we expect that all corpus directories are next to each '
              'other; also, if the year is the path element before that, it '
              'will be kept intact.')
-    parser.add_argument('--documents', '-d', type=int, default=1000,
-                        help='the number of documents an output file should '
-                        'contain (1000).')
-    parser.add_argument('--zeroes', '-z', type=int, default=4,
-                        help='the number of zeroes in the output files\' name.')
+    parser_filter.add_argument('--documents', '-d', type=int, default=1000,
+                               help='the number of documents an output file '
+                                    'should contain (1000).')
+    parser_filter.add_argument('--zeroes', '-z', type=int, default=4,
+                               help='the number of zeroes in the output '
+                                    'files\' names.')
     parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
         help='the number of permutations per paragraph (256).'
@@ -246,7 +250,7 @@ def read_index(index_file: str) -> Iterator[str]:
 
 
 def read_grouped_index(index_file: str) -> Iterator[DomainGroup]:
-    """Reads the index file domain group (of lines) by group."""
+    """Reads the index file domain-group (of lines) by group."""
     for domain, group in groupby(
         read_index(index_file),
         key=lambda l: urlsplit(l[0:l.find('\t')]).netloc
@@ -628,6 +632,8 @@ def main_filter2(args):
     logging.info('Filtering frequent paragraphs from index {}...'.format(
         args.index))
 
+    frequents = RandomPDataReader(args.frequents)
+
     with Pool(args.processes) as pool:
         f = partial(full_filter, args=args, queue=queue)
         res = pool.map_async(f, read_grouped_index(args.index))
@@ -637,8 +643,6 @@ def main_filter2(args):
         minhasher = MinHasher(args.permutations, args.n)
         groups, res = [], []
         minhash_fn = partial(minhash_group, minhasher=minhasher)
-        # TODO read index
-        # TODO PDataReader to read per domain
         # TODO do not minhash domains without frequent paragraphs
         with TeePool(args.processes, args.docs_per_batch) as pool:
             group_it = grouper(read_index(args.index), args.docs_per_batch)
