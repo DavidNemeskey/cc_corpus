@@ -4,15 +4,15 @@
 """Writes the positions of all documents in each file."""
 
 from argparse import ArgumentParser
-from collections import deque
+from collections import Counter, defaultdict, deque
 from contextlib import closing
-from functools import partial, reduce
+from functools import partial
 from itertools import accumulate, chain, groupby, islice
 import logging
 from multiprocessing import Manager, Pool
 import os
 import os.path as op
-import time
+import sys
 from typing import (
     Any, Callable, Dict, Generator, Iterable, Iterator, List, Set, Tuple
 )
@@ -141,12 +141,6 @@ def parse_arguments():
     parser_filter.add_argument('--min-freq', '-m', type=int, default=2,
                                help='the minimum number of occurrence from '
                                     'which a paragraph is deemed frequent (2).')
-    parser_filter.add_argument('--docs-per-batch', type=int, default=100,
-                               help='the number of documents to send to '
-                                    'workers at a time (100).')
-    parser_filter.add_argument('--batch-per-process', type=int, default=5,
-                               help='the number of unfinished batches kept in '
-                                    'memory per process (5).')
 
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
@@ -249,10 +243,10 @@ def read_index(index_file: str) -> Iterator[str]:
         yield from map(str.strip, inf)
 
 
-def read_grouped_index(index_file: str) -> Iterator[DomainGroup]:
+def group_index(index_it: Iterable[str]) -> Iterator[DomainGroup]:
     """Reads the index file domain-group (of lines) by group."""
     for domain, group in groupby(
-        read_index(index_file),
+        index_it,
         key=lambda l: urlsplit(l[0:l.find('\t')]).netloc
     ):
         yield domain, list(group)
@@ -264,7 +258,7 @@ def main_distribute(args):
     hosts = [openall(host_to_path(args.index, host), 'wt') for host, _ in args.hosts]
     lens = [0 for _ in weights]
     try:
-        for _, group in read_grouped_index(args.index):
+        for _, group in group_index(read_index(args.index)):
             i = lens.index(min(lens))  # argmin
             logging.debug('Adding {} items to host {} ({}).'.format(
                 len(group), i, hosts[i].name))
@@ -316,7 +310,7 @@ def minhash_group(group: Group, minhasher: MinHasher) -> List[Tuple[str, List[An
     using the fact that consecutive documents might belong to the same file.
 
     :param group: the lines that describe the documents; as read by
-                  :func:`read_grouped_index`.
+                  :func:`read_index`.
     :returns: a list of tuples of
         - the URL of the document (so that the caller knows what it gets back)
         - a list of paragraph fingerprints.
@@ -481,104 +475,7 @@ def main_collect(args):
 
 
 FilterStats = Stats.create(
-    'frequent', 'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
-
-
-def write_through(group: Group, domain: str,
-                  stats: FilterStats) -> Iterator[Document]:
-    """
-    Just enumerates all documents in the group / domain. Called by
-    filter_paragraphs() when there are no frequent paragraphs in the domain
-    and so no filtering is required.
-    """
-    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
-    logging.debug(
-        'Domain {} does not require filtering, copying documents...'.format(
-            domain))
-
-    for doc_no, doc in enumerate(read_group_documents(group), start=1):
-        stats.old_ps += len(doc.paragraphs)
-        stats.new_ps += len(doc.paragraphs)
-        yield doc
-    stats.old_docs += doc_no
-    stats.new_docs += doc_no
-
-    logging.debug('Copied {} documents from {}.'.format(doc_no, domain))
-
-
-def filter_paragraphs(group: Group, domain: str, freq_ps: PDict,
-                      minhasher: MinHasher, threshold: float,
-                      stats: FilterStats) -> Iterator[Document]:
-    """Filters the frequent paragraphs from documents."""
-    # Handle the case where no filtering is needed first
-    if len(freq_ps) == 0:
-        yield from write_through(group, domain, stats)
-        return
-
-    logging.debug('Filtering frequent paragraphs from {}...'.format(domain))
-
-    lsh = MinHashLSH(threshold=threshold, num_perm=minhasher.permutations)
-    for key, p_data in freq_ps.items():
-        lsh.insert(key, p_data.minhash)
-    # The LSH is, by itself, not enough for frequent p filtering, as we have to
-    # keep frequent ps the first time we see them. Hence, seen_frequents, which
-    # consists of frequent paragraphs we have already seen and thus can
-    # (should) be omitted.
-    seen_frequents = set()  # type: Set[str]
-
-    for doc_no, doc in enumerate(read_group_documents(group), start=1):
-        stats.old_ps += len(doc.paragraphs)
-        new_paragraphs = []
-        new_seen_frequents = set()
-        for p, text in enumerate(doc.paragraphs):
-            mh = minhasher.minhash(text)
-            # sorted(), because I don't know if the order is fixed and
-            # it would be a bummer to "lose" two similar frequent paragraphs
-            # in the loop below when a document contains the same p multiple
-            # times
-            duplicates = sorted(lsh.query(mh))
-            if duplicates:
-                # There are (frequent) duplicates: this p is frequent
-                for dup in duplicates:
-                    # But this is the first time seeing it: keep it.
-                    if dup not in seen_frequents:
-                        new_seen_frequents.add(dup)
-                        new_paragraphs.append(text)
-                        break
-            else:
-                # No duplicates: this p is not frequent
-                new_paragraphs.append(text)
-        # Update seen_frequents. We are doing it here because a document
-        # can contain the same p multiple times, and (as in collect_frequent)
-        # we aim to keep all of them.
-        seen_frequents |= new_seen_frequents
-
-        # Keep only documents with at least 1 non-frequent paragraph
-        if new_paragraphs:
-            stats.new_ps += len(new_paragraphs)
-            stats.new_docs += 1
-            doc.paragraphs = new_paragraphs
-            yield doc
-
-    stats.old_docs += doc_no
-    logging.debug('Filtered frequent paragraphs from {}.'.format(domain))
-
-
-def full_filter(group, args, queue):
-    """Groups collect_frequent() and filter_paragraphs()."""
-    minhasher = MinHasher(args.permutations, args.n)
-    domain = urlsplit(group[0][0:group[0].find('\t')]).netloc
-    freq_ps = collect_frequent(group, domain, minhasher, args.threshold,
-                               1 - args.c, args.min_freq)
-    stats = FilterStats(len(freq_ps))
-    for doc in filter_paragraphs(group, domain, freq_ps,
-                                 minhasher, args.threshold, stats):
-        queue.put(doc)
-    logging.debug('Found {} frequent paragraphs in domain {}, resulting in '
-                  'documents {} -> {}, paragraphs {} -> {}.'.format(
-                      stats.frequent, domain, stats.old_docs, stats.new_docs,
-                      stats.old_ps, stats.new_ps))
-    return stats
+    'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
 
 
 class TeePool(Pool):
@@ -622,58 +519,75 @@ class TeePool(Pool):
             yield inputs.popleft(), outputs.popleft().get()
 
 
-def main_filter2(args):
-    """The main function for filtering the documents."""
-    install_mp_handler()
+class FrequentManager:
+    def __init__(self, file_name: str, min_freq: int):
+        self.frequents = RandomPDataReader(file_name)
+        self.min_freq = min_freq
+        self.domains = defaultdict(Counter)
 
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
+    def get_frequents(self, domain: str) -> List[PData]:
+        return self.frequents.get(domain)
 
-    logging.info('Filtering frequent paragraphs from index {}...'.format(
-        args.index))
-
-    frequents = RandomPDataReader(args.frequents)
-
-    with Pool(args.processes) as pool:
-        f = partial(full_filter, args=args, queue=queue)
-        res = pool.map_async(f, read_grouped_index(args.index))
-
-        sum_stats = CollectStats()
-
-        minhasher = MinHasher(args.permutations, args.n)
-        groups, res = [], []
-        minhash_fn = partial(minhash_group, minhasher=minhasher)
-        # TODO do not minhash domains without frequent paragraphs
-        with TeePool(args.processes, args.docs_per_batch) as pool:
-            group_it = grouper(read_index(args.index), args.docs_per_batch)
-            for docs, mhs in pool.imap(minhash_fn, group_it):
-                pass
+    def seen_enough_of(self, domain: str, ps: List[int]) -> Set[int]:
+        freq_counter = self.domains[domain]
+        freq_counter.update(ps)
+        return set(p for p in ps if freq_counter[p] > self.min_freq)
 
 
-        with closing(BatchWriter(args.documents,
-                                 args.output_dir, args.zeroes)) as bw:
-            while True:
-                if queue.empty():
-                    if res.ready():
-                        break
-                    time.sleep(1)  # I don't like Empty exceptions
-                else:
-                    doc = queue.get()
+def filter_file(self, file_id, index_lines, args, manager):
+    sum_stats = FilterStats()
+    minhasher = MinHasher(args.permutations, args.n)
+    with closing(BatchWriter(sys.maxsize, args.output_dir, args.zeroes)) as bw:
+        for domain, group in group_index(index_lines):
+            stats = FilterStats()
+            # Build the LSH
+            lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
+            for i, pdata in manager.get_frequents(domain):
+                lsh.insert(str(i), pdata.minhash)
+
+            doc_it = read_group_documents(group)
+            if not lsh.keys:
+                # There are no frequent paragraphs in the domain: just write
+                # documents to file
+                for doc_no, doc in enumerate(doc_it, start=1):
+                    stats.old_ps += len(doc.paragraphs)
+                    stats.new_ps += len(doc.paragraphs)
                     bw.write(doc)
-                    queue.task_done()
+                stats.old_docs += doc_no
+                stats.new_docs += doc_no
+                logging.debug('Domain {} did not require filtering; copied '
+                              '{} documents.'.format(domain, doc_no))
+            else:
+                for doc_no, doc in enumerate(doc_it, start=1):
+                    stats.old_docs += 1
+                    stats.old_ps += len(doc.paragraphs)
 
-        pool.close()
-        pool.join()
-
-        try:
-            stats = reduce(lambda ss, s: ss + s, res.get())
-            logging.info(
-                'Done filtering; in total, found {} frequent paragraphs, '
-                'resulting in documents {} -> {}, paragraphs {} -> {}.'.format(
-                    stats.frequent, stats.old_docs, stats.new_docs,
-                    stats.old_ps, stats.new_ps))
-        except:
-            logging.exception('Error while filtering')
+                    frequents_found = {}
+                    for p_id, p in enumerate(doc.paragraphs, start=1):
+                        for freq_id in lsh.query(minhasher.minhash(p)):
+                            frequents_found[p_id] = int(freq_id)
+                            break
+                    if frequents_found:
+                        seen_enough = manager.seen_enough_of(
+                            domain, set(frequents_found.values()))
+                        frequents_found = set(
+                            p_id for p_id, freq_id in frequents_found.items()
+                            if freq_id in seen_enough
+                        )
+                        doc.paragraphs = [
+                            p for p_id, p in enumerate(doc.paragraphs)
+                            if i not in frequents_found
+                        ]
+                if doc.paragraphs:
+                    stats.new_docs += 1
+                    stats.new_ps += len(doc.paragraphs)
+                    bw.write(doc)
+            logging.debug('Filtered domain {}, resulting in documents '
+                          '{} -> {}, paragraphs {} -> {}.'.format(
+                              domain, stats.old_docs, stats.new_docs,
+                              stats.old_ps, stats.new_ps))
+            sum_stats += stats
+    return sum_stats
 
 
 def main_filter(args):
@@ -688,34 +602,21 @@ def main_filter(args):
 
     with Pool(args.processes) as pool:
         m = Manager()
-        queue = m.Queue()
-        f = partial(full_filter, args=args, queue=queue)
-        res = pool.map_async(f, read_grouped_index(args.index))
+        # TODO: register
+        group_it = enumerate(grouper(read_index(args.index), args.documents))
+        f = partial(filter_file, args=args, manager=m)
 
-        with closing(BatchWriter(args.documents,
-                                 args.output_dir, args.zeroes)) as bw:
-            while True:
-                if queue.empty():
-                    if res.ready():
-                        break
-                    time.sleep(1)  # I don't like Empty exceptions
-                else:
-                    doc = queue.get()
-                    bw.write(doc)
-                    queue.task_done()
+        sum_stats = FilterStats()
+        for stats in pool.starmap(f, group_it):
+            sum_stats += stats
 
         pool.close()
         pool.join()
 
-        try:
-            stats = reduce(lambda ss, s: ss + s, res.get())
-            logging.info(
-                'Done filtering; in total, found {} frequent paragraphs, '
-                'resulting in documents {} -> {}, paragraphs {} -> {}.'.format(
-                    stats.frequent, stats.old_docs, stats.new_docs,
-                    stats.old_ps, stats.new_ps))
-        except:
-            logging.exception('Error while filtering')
+        logging.info(
+            'Done filtering: documents {} -> {}, paragraphs {} -> {}.'.format(
+                stats.old_docs, stats.new_docs, stats.old_ps, stats.new_ps)
+        )
 
 
 def main():

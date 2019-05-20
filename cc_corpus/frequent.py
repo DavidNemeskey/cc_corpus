@@ -168,6 +168,12 @@ class RandomPDataReader(PDataIO):
             ret[domain] = (offset, length, num, docs)
         return ret
 
+    def get(self, key: str, default: List[PData] = []):
+        try:
+            return self[key]
+        except KeyError:
+            return []
+
     def __getitem__(self, key: str) -> List[PData]:
         offset, length, num, docs = self.index[key]
         self.pdata.seek(offset)
