@@ -112,9 +112,9 @@ def parse_arguments():
         help='Filters frequent paragraphs within a domain.'
     )
     parser_filter.set_defaults(command='filter')
-    parser.add_argument('--frequents', required=True,
-                        help='the prefix to the frequent paragraph files '
-                             '(written by the `collect` task).')
+    parser_filter.add_argument('--frequents', required=True,
+                               help='the prefix to the frequent paragraph files '
+                                    '(written by the `collect` task).')
     parser_filter.add_argument(
         '--output-dir', '-o', required=True,
         help='the output directory. The *last directory* of the input path '
