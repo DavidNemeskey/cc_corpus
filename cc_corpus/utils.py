@@ -256,5 +256,17 @@ def grouper(iterable, n, fillvalue=None):
     return zip_longest(*args, fillvalue=fillvalue)
 
 
+def grouper2(iterable, n, fillvalue=None):
+    """
+    Same as :funct:`grouper`, but it also filters all instances of ``fillvalue``
+    from the returned groups. If it does not occur anywhere else in
+    ``iterable``, this effectively means that the last chunk might
+    contain fewer elements than the rest.
+    """
+    # grouper2('ABCDEFG', 3) --> ABC DEF G"
+    for group in grouper(iterable, n, fillvalue):
+        yield tuple(elem for elem in group if elem != fillvalue)
+
+
 class IllegalStateError(RuntimeError):
     """Thrown when a method is invoked on an object in inappropriate state."""

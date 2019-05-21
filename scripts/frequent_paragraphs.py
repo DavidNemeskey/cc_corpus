@@ -23,7 +23,7 @@ from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData, RandomPDataReader
 from cc_corpus.frequent import open as pdata_open
-from cc_corpus.utils import grouper, host_to_path, host_weight, openall, Stats
+from cc_corpus.utils import grouper2, host_to_path, host_weight, openall, Stats
 
 
 def parse_arguments():
@@ -317,7 +317,7 @@ def minhash_group(group: List[IndexLine],
     logging.debug('minhash_group({}) -> {}'.format(len(group), group[0]))
     return [(doc.attrs['url'], [minhasher.minhash(text)
                                 for text in doc.paragraphs])
-            for doc in read_group_documents(filter(bool, group))]
+            for doc in read_group_documents(group)]
 
 
 class FrequentCollector:
@@ -453,7 +453,7 @@ def main_collect(args):
         minhasher = MinHasher(args.permutations, args.n)
         with Pool(args.processes) as pool:
             it = pool.imap(partial(minhash_group, minhasher=minhasher),
-                           grouper(read_index(args.index), args.docs_per_batch))
+                           grouper2(read_index(args.index), args.docs_per_batch))
             for domain, freq_ps, stats in collect_frequent(
                 it, args.threshold, args.permutations, 1 - args.c, args.min_freq
             ):
@@ -558,7 +558,7 @@ def main_filter(args):
         m = Manager()
         frequents_seen = m.dict()
         lock = m.RLock()
-        group_it = enumerate(grouper(read_index(args.index), args.documents))
+        group_it = enumerate(grouper2(read_index(args.index), args.documents))
         f = partial(filter_file, args=args,
                     frequents_seen=frequents_seen, lock=lock)
 
