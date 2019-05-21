@@ -573,7 +573,8 @@ def main_filter(args):
 
         logging.info(
             'Done filtering: documents {} -> {}, paragraphs {} -> {}.'.format(
-                stats.old_docs, stats.new_docs, stats.old_ps, stats.new_ps)
+                sum_stats.old_docs, sum_stats.new_docs,
+                sum_stats.old_ps, sum_stats.new_ps)
         )
 
 
