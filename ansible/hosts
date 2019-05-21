@@ -1,4 +1,7 @@
 [slaves]
+nessie
+ginny
+percy
 ron
 charlie
 
@@ -7,6 +10,3 @@ nessie
 
 [test_slaves]
 george
-nessie
-ginny
-percy
