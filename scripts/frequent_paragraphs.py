@@ -493,11 +493,12 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
     minhasher = MinHasher(args.permutations, args.n)
     with closing(BatchWriter(sys.maxsize, args.output_dir, args.zeroes)) as bw:
         for domain, group in group_index(index_lines):
+            logging.debug('Filtering domain {}...'.format(domain))
             stats = FilterStats()
             # Build the LSH
             lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
-            for i, pdata in enumerate(frequents.get(domain), start=1):
-                lsh.insert(str(i), pdata.minhash)
+            for pdata_id, pdata in enumerate(frequents.get(domain), start=1):
+                lsh.insert(str(pdata_id), pdata.minhash)
 
             doc_it = read_group_documents(group)
             if not lsh.keys:
@@ -510,7 +511,8 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
                 stats.old_docs += doc_no
                 stats.new_docs += doc_no
                 logging.debug('Domain {} did not require filtering; copied '
-                              '{} documents.'.format(domain, doc_no))
+                              '{} documents and {} paragraphs.'.format(
+                                  domain, doc_no, stats.old_ps))
             else:
                 for doc_no, doc in enumerate(doc_it, start=1):
                     stats.old_docs += 1
@@ -529,17 +531,17 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
                             if freq_id in seen_enough
                         )
                         doc.paragraphs = [
-                            p for p_id, p in enumerate(doc.paragraphs)
-                            if i not in frequents_found
+                            p for p_id, p in enumerate(doc.paragraphs, start=1)
+                            if p_id not in frequents_found
                         ]
-                if doc.paragraphs:
-                    stats.new_docs += 1
-                    stats.new_ps += len(doc.paragraphs)
-                    bw.write(doc)
-            logging.debug('Filtered domain {}, resulting in documents '
-                          '{} -> {}, paragraphs {} -> {}.'.format(
-                              domain, stats.old_docs, stats.new_docs,
-                              stats.old_ps, stats.new_ps))
+                    if doc.paragraphs:
+                        stats.new_docs += 1
+                        stats.new_ps += len(doc.paragraphs)
+                        bw.write(doc)
+                logging.debug('Filtered domain {}, resulting in documents '
+                              '{} -> {}, paragraphs {} -> {}.'.format(
+                                  domain, stats.old_docs, stats.new_docs,
+                                  stats.old_ps, stats.new_ps))
             sum_stats += stats
     return sum_stats
 
