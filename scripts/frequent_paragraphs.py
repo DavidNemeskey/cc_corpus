@@ -491,7 +491,8 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
     frequents = RandomPDataReader(args.frequents)
     sum_stats = FilterStats()
     minhasher = MinHasher(args.permutations, args.n)
-    with closing(BatchWriter(sys.maxsize, args.output_dir, args.zeroes)) as bw:
+    with closing(BatchWriter(sys.maxsize, args.output_dir,
+                 args.zeroes, first_batch=file_id)) as bw:
         for domain, group in group_index(index_lines):
             logging.debug('Filtering domain {}...'.format(domain))
             stats = FilterStats()
