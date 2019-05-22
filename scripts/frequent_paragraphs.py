@@ -561,7 +561,8 @@ def main_filter(args):
         m = Manager()
         frequents_seen = m.dict()
         lock = m.RLock()
-        group_it = enumerate(grouper2(read_index(args.index), args.documents))
+        group_it = enumerate(grouper2(read_index(args.index), args.documents),
+                             start=1)
         f = partial(filter_file, args=args,
                     frequents_seen=frequents_seen, lock=lock)
 
