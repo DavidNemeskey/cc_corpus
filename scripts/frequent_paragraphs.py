@@ -383,7 +383,7 @@ class FrequentCollector:
         """
         # Get rid of paragraphs that only occured once
         self.freq_ps = {key: p_data for key, p_data in self.freq_ps.items()
-                        if p_data.count > self.min_freq}
+                        if p_data.count >= self.min_freq}
         self.stats.frequents = len(self.freq_ps)
 
 
@@ -485,7 +485,7 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
             freq_counter = frequents_seen.setdefault(domain, Counter())
             freq_counter.update(ps)
             frequents_seen[domain] = freq_counter
-            return set(p for p in ps if freq_counter[p] > args.min_freq)
+            return set(p for p in ps if freq_counter[p] >= args.min_freq)
 
     # TODO to initializer
     frequents = RandomPDataReader(args.frequents)
