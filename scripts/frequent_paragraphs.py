@@ -390,7 +390,7 @@ class FrequentCollector:
 def collect_frequent(
     it: Iterator[List[Tuple[str, List[Any]]]], threshold: float,
     permutations: int, decay: float, min_freq: int
- ) -> Generator[Tuple[str, PDict], None, None]:  # noqa
+) -> Generator[Tuple[str, PDict], None, None]:  # noqa
     """
     Reads all the documents (as returned by :func:`minhash_group`) and
     collects the frequent paragraphs from them on a per-domain basis.
