@@ -4,16 +4,18 @@
 """Writes the positions of all documents in each file."""
 
 from argparse import ArgumentParser
-from collections import Counter
+from collections import Counter, deque
 from contextlib import closing
 from functools import partial
-from itertools import accumulate, chain, groupby
+from itertools import accumulate, chain, groupby, islice
 import logging
 from multiprocessing import Manager, Pool, RLock
 import os
 import os.path as op
 import sys
-from typing import Any, Dict, Generator, Iterable, Iterator, List, Set, Tuple
+from typing import (
+    Any, Callable, Dict, Generator, Iterable, Iterator, List, Set, Tuple
+)
 from urllib.parse import urlsplit
 
 from datasketch import MinHashLSH
@@ -320,6 +322,58 @@ def minhash_group(group: List[IndexLine],
             for doc in read_group_documents(group)]
 
 
+class TeePool:
+    """
+    A version of :class:`multiprocessing.Pool` that adds two features to it:
+
+    1. :meth:`~TeePool.imap` returns an iterator not only the output, but an
+       iterator of (input, output) pairs.
+    2. at the beginning, ``processes * item_per_process`` inputs are sent
+       to the pool. Further inputs are only sent if the previous ones have
+       already been processed. This prevents outputs from being overgenerated
+       and filling up the memory when the main processes cannot keep up.
+
+    Note: ATM only :meth:`imap` is implemented.
+
+    Note also that :class:`multiprocessing.Pool` cannot (easily?) be subclassed.
+    So :class:`TeePool` is not a subclass of :class:`multiprocessing.Pool`, just
+    uses the latter. After Python 3.5, :class:`multiprocessing.pool.Pool` is
+    exposed (or simply exists?), so it's a bit easier.
+    """
+    def __init__(self, processes=None, item_per_process=5,
+                 initializer=None, initargs=(), maxtasksperchild=None):
+        self.item_per_process = item_per_process
+        self.max_items = item_per_process * processes
+        self.pool = Pool(processes, initializer, initargs, maxtasksperchild)
+
+    def __enter__(self):
+        self.pool.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        return self.pool.__exit__(*args)
+
+    def imap(self, func: Callable, iterable: Iterable) -> Generator[Tuple[Any, Any], None, None]:
+        inputs, outputs = deque(maxlen=self.max_items), deque(maxlen=self.max_items)
+        it = iter(iterable)
+        # Add the first batch of inputs at the same time
+        for inp in islice(it, self.max_items):
+            inputs.append(inp)
+            outputs.append(self.pool.apply_async(func, (inp,)))
+        # After that, add new input whenever one has been processed. We
+        # wait for the first result to keep the order of the input and the
+        # output corpus the same.
+        for inp in it:
+            outputs[0].wait()
+            yield inputs.popleft(), outputs.popleft().get()
+            inputs.append(inp)
+            outputs.append(self.pool.apply_async(func, (inp,)))
+        # Just consume the rest
+        while outputs:
+            outputs[0].wait()
+            yield inputs.popleft(), outputs.popleft().get()
+
+
 class FrequentCollector:
     def __init__(self, threshold, permutations, decay, min_freq):
         self.threshold = threshold
@@ -451,7 +505,7 @@ def main_collect(args):
         sum_stats = CollectStats()
 
         minhasher = MinHasher(args.permutations, args.n)
-        with Pool(args.processes) as pool:
+        with TeePool(args.processes) as pool:
             it = pool.imap(partial(minhash_group, minhasher=minhasher),
                            grouper2(read_index(args.index), args.docs_per_batch))
             for domain, freq_ps, stats in collect_frequent(
