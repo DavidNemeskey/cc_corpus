@@ -322,21 +322,19 @@ def minhash_group(group: List[IndexLine],
             for doc in read_group_documents(group)]
 
 
-class TeePool:
+class LazyPool:
     """
-    A version of :class:`multiprocessing.Pool` that adds two features to it:
-
-    1. :meth:`~TeePool.imap` returns an iterator not only the output, but an
-       iterator of (input, output) pairs.
-    2. at the beginning, ``processes * item_per_process`` inputs are sent
-       to the pool. Further inputs are only sent if the previous ones have
-       already been processed. This prevents outputs from being overgenerated
-       and filling up the memory when the main processes cannot keep up.
+    A version of :class:`multiprocessing.Pool` that limits the number of inputs
+    being queued at the same time.
+    At the beginning, ``processes * item_per_process`` inputs are sent
+    to the pool. Further inputs are only sent if the previous ones have
+    already been processed. This prevents outputs from being overgenerated
+    and filling up the memory when the main processes cannot keep up.
 
     Note: ATM only :meth:`imap` is implemented.
 
     Note also that :class:`multiprocessing.Pool` cannot (easily?) be subclassed.
-    So :class:`TeePool` is not a subclass of :class:`multiprocessing.Pool`, just
+    So :class:`LazyPool` is not a subclass of :class:`multiprocessing.Pool`, just
     uses the latter. After Python 3.5, :class:`multiprocessing.pool.Pool` is
     exposed (or simply exists?), so it's a bit easier.
     """
@@ -354,24 +352,22 @@ class TeePool:
         return self.pool.__exit__(*args)
 
     def imap(self, func: Callable, iterable: Iterable) -> Generator[Tuple[Any, Any], None, None]:
-        inputs, outputs = deque(maxlen=self.max_items), deque(maxlen=self.max_items)
+        outputs = deque(maxlen=self.max_items)
         it = iter(iterable)
         # Add the first batch of inputs at the same time
         for inp in islice(it, self.max_items):
-            inputs.append(inp)
             outputs.append(self.pool.apply_async(func, (inp,)))
         # After that, add new input whenever one has been processed. We
         # wait for the first result to keep the order of the input and the
         # output corpus the same.
         for inp in it:
             outputs[0].wait()
-            yield inputs.popleft(), outputs.popleft().get()
-            inputs.append(inp)
+            yield outputs.popleft().get()
             outputs.append(self.pool.apply_async(func, (inp,)))
         # Just consume the rest
         while outputs:
             outputs[0].wait()
-            yield inputs.popleft(), outputs.popleft().get()
+            yield outputs.popleft().get()
 
 
 class FrequentCollector:
@@ -505,7 +501,7 @@ def main_collect(args):
         sum_stats = CollectStats()
 
         minhasher = MinHasher(args.permutations, args.n)
-        with TeePool(args.processes) as pool:
+        with LazyPool(args.processes) as pool:
             it = pool.imap(partial(minhash_group, minhasher=minhasher),
                            grouper2(read_index(args.index), args.docs_per_batch))
             for domain, freq_ps, stats in collect_frequent(
