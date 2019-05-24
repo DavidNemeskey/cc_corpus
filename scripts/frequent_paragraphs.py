@@ -460,7 +460,8 @@ class FrequentCollector:
 
 def collect_frequent(
     it: Iterator[List[Tuple[str, List[Any]]]], threshold: float,
-    permutations: int, decay: float, min_freq: int
+    permutations: int, decay: float, min_freq: int,
+    decay_filter: str, wrap_filter: str
 ) -> Generator[Tuple[str, PDict], None, None]:  # noqa
     """
     Reads all the documents (as returned by :func:`minhash_group`) and
@@ -471,7 +472,8 @@ def collect_frequent(
     Yields (domain, `PDict`) tuples per domain.
     """
     curr_domain = None
-    fc = FrequentCollector(threshold, permutations, decay, min_freq)
+    fc = FrequentCollector(threshold, permutations, decay, min_freq,
+                           decay_filter, wrap_filter)
     # I don't want to write all the domain != curr_domain stuff twice, so
     # let's add a sentinel record to the end.
     for url, mhs in chain(chain.from_iterable(it), [('', [])]):
@@ -526,7 +528,8 @@ def main_collect(args):
             it = pool.imap(partial(minhash_group, minhasher=minhasher),
                            grouper2(read_index(args.index), args.docs_per_batch))
             for domain, freq_ps, stats in collect_frequent(
-                it, args.threshold, args.permutations, 1 - args.c, args.min_freq
+                it, args.threshold, args.permutations, 1 - args.c, args.min_freq,
+                args.decay_filter, args.wrap_filter
             ):
                 if freq_ps:
                     dataf.write(domain, stats.docs,
