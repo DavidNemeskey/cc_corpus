@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
+from cc_corpus.code import Filter
 from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData, RandomPDataReader
@@ -108,6 +109,17 @@ def parse_arguments():
                                   'many iterations. This argument is '
                                   'another way to specify -c and is mutually '
                                   'exclusive with it.')
+    parser_collect.add_argument('--decay-filter', default='score < 0.5',
+                                help='decay expression that is used to filter '
+                                     'paragraphs after each step. The default '
+                                     'purges those whose score < 0.5. The '
+                                     'available variables are score and count.')
+    parser_collect.add_argument('--wrap-filter', default='count >= min_freq',
+                                help='expression that is used to filter '
+                                     'paragraphs after all documents have been '
+                                     'processed. Default is count >= min_freq; '
+                                     'available variables are score, count, '
+                                     'min_freq and docs.')
 
     parser_filter = subparsers.add_parser(
         'filter_paragraphs', aliases=['filter'],
@@ -371,11 +383,14 @@ class LazyPool:
 
 
 class FrequentCollector:
-    def __init__(self, threshold, permutations, decay, min_freq):
+    def __init__(self, threshold, permutations, decay, min_freq,
+                 decay_filter='score < 0.5', wrap_filter='count >= min_freq'):
         self.threshold = threshold
         self.permutations = permutations
         self.decay = decay
         self.min_freq = min_freq
+        self.decay_filter = Filter(decay_filter)
+        self.wrap_filter = Filter(wrap_filter)
 
     def reset(self):
         """Resets the bookkeeping and statistics objects."""
@@ -385,17 +400,17 @@ class FrequentCollector:
         self.freq_ps = {}  # type: Dict[str, PData]
         self.num_dup = 0
 
-    def collect_from_doc(self, url, paragraphs):
+    def collect_from_doc(self, url: str, paragraphs: List[Any]):
         """
         Runs the algorithm in MMDS (TOOD) on a document, does the bookkeeping
-        and updates the statistcs in the object.
+        and updates the statistics in the object.
 
         :param url: the URL of the document (used as key in LSH).
         :param paragraphs: the minhashes of the paragraphs of the document.
         """
         # Step 1: decrease score of all paragraphs
-        for p_data in self.freq_ps.values():
-            p_data *= self.decay
+        for pdata in self.freq_ps.values():
+            pdata *= self.decay
 
         # Step 2: add new paragraphs to the roster
         already_increased = set()  # type: Set[str]
@@ -420,8 +435,8 @@ class FrequentCollector:
         self.stats.ps += p
 
         # Step 3: drop paragraphs with low score
-        to_drop = [key for key, p_data in self.freq_ps.items()
-                   if p_data.score < 0.5]
+        to_drop = [key for key, pdata in self.freq_ps.items()
+                   if self.decay_filter(score=pdata.score, count=pdata.count)]
         for key in to_drop:
             self.freq_ps.pop(key)
             self.lsh.remove(key)
@@ -432,8 +447,11 @@ class FrequentCollector:
         updates the statistics.
         """
         # Get rid of paragraphs that only occured once
-        self.freq_ps = {key: p_data for key, p_data in self.freq_ps.items()
-                        if p_data.count >= self.min_freq}
+        self.freq_ps = {key: pdata for key, pdata in self.freq_ps.items()
+                        if self.wrap_filter(score=pdata.score,
+                                            count=pdata.count,
+                                            min_freq=self.min_freq,
+                                            docs=self.stats.docs)}
         self.stats.frequents = len(self.freq_ps)
 
 

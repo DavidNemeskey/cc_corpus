@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 
+from cc_corpus.code import Filter
 from cc_corpus.frequent import open as pdata_open
 
 
@@ -53,44 +54,6 @@ def parse_arguments():
         args.merge_type = 'iterator'
     return args
 
-class Filter:
-    """Compiles the filters and applies them."""
-
-    _allowed_builtins = {
-        'abs': abs,
-        'all': all,
-        'any': any,
-        'chr': chr,
-        'divmod': divmod,
-        'len': len,
-        'max': max,
-        'min': min,
-        'pow': pow,
-        'round': round,
-        'sorted': sorted,
-        'sum': sum,
-        'bool': bool,
-        'float': float,
-        'int': int,
-        'list': list,
-        'map': map,
-        'range': range,
-        'str': str,
-        'tuple': tuple,
-        'type': type,
-        'zip': zip,
-    }
-    _globals = {'__builtins__': _allowed_builtins}
-
-    def __init__(self, filters):
-        if not filters:
-            filters = ['True']
-        self.code = compile('(' + ') and ('.join(filters) + ')',
-                            '<string>', 'eval', optimize=2)
-
-    def filter(self, **kwargs):
-        return eval(self.code, Filter._globals, kwargs)
-
 
 def merge_pdata_it(output_prefix, file_prefixes, **kwargs):
     """
@@ -98,7 +61,7 @@ def merge_pdata_it(output_prefix, file_prefixes, **kwargs):
     mode. This includes two file types: the index file .pdi and the file with
     the actual paragraph data (.pdata).
     """
-    cond = Filter(kwargs['filters'])
+    cond = Filter(*kwargs['filters'])
     head = kwargs['head'] or sys.maxsize
     num_written = 0
     with pdata_open(output_prefix, 'w') as outf:
@@ -106,7 +69,7 @@ def merge_pdata_it(output_prefix, file_prefixes, **kwargs):
             with pdata_open(input_prefix, 'r') as inf:
                 for domain, docs, pdatas in inf:
                     pdatas = [pdata for pdata in pdatas if
-                              cond.filter(domain=domain, docs=docs, pdata=pdata)]
+                              cond(domain=domain, docs=docs, pdata=pdata)]
                     if pdatas:
                         outf.write(domain, docs, *pdatas)
                         num_written += 1
