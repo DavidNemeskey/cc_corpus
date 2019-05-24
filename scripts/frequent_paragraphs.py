@@ -394,6 +394,8 @@ class FrequentCollector:
         self.min_freq = min_freq
         self.decay_filter = Filter(decay_filter)
         self.wrap_filter = Filter(wrap_filter)
+        logging.debug('Decay filter: {}'.format(decay_filter))
+        logging.debug('Wrap filter: {}'.format(wrap_filter))
 
     def reset(self):
         """Resets the bookkeeping and statistics objects."""
