@@ -381,6 +381,9 @@ class LazyPool:
             outputs[0].wait()
             yield outputs.popleft().get()
 
+    def __getattr__(self, name):
+        return getattr(self.pool, name)
+
 
 class FrequentCollector:
     def __init__(self, threshold, permutations, decay, min_freq,
