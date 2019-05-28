@@ -5,7 +5,7 @@
 
 from argparse import ArgumentParser
 from collections import Counter, deque
-from contextlib import closing, nullcontext
+from contextlib import closing
 from functools import partial
 from itertools import accumulate, chain, groupby, islice
 import logging
@@ -511,11 +511,12 @@ def collect_frequent(
     curr_domain = None
 
     if bootstrap_prefix:
-        btm = closing(RandomPDataReader(bootstrap_prefix))
+        bootstrap = RandomPDataReader(bootstrap_prefix)
         logging.debug('Bootstrap file prefix: {}'.format(bootstrap_prefix))
     else:
-        btm = nullcontext({})
-    with btm as bootstrap:
+        bootstrap = {}
+
+    try:
         fc = FrequentCollector(threshold, permutations, decay, min_freq,
                                bootstrap, decay_filter, wrap_filter)
         # I don't want to write all the domain != curr_domain stuff twice, so
@@ -552,6 +553,9 @@ def collect_frequent(
                 fc.reset(curr_domain)
 
             fc.collect_from_doc(url, mhs)
+    finally:
+        if bootstrap:
+            bootstrap.close()
 
 
 def main_collect(args):
