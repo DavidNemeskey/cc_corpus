@@ -5,7 +5,7 @@
 
 from argparse import ArgumentParser
 from collections import Counter, deque
-from contextlib import closing
+from contextlib import closing, nullcontext
 from functools import partial
 from itertools import accumulate, chain, groupby, islice
 import logging
@@ -14,7 +14,7 @@ import os
 import os.path as op
 import sys
 from typing import (
-    Any, Callable, Dict, Generator, Iterable, Iterator, List, Set, Tuple
+    Any, Callable, Dict, Generator, Iterable, Iterator, List, Set, Tuple, Union
 )
 from urllib.parse import urlsplit
 
@@ -93,7 +93,8 @@ def parse_arguments():
     parser_collect.add_argument('--n', '-n', type=int, default=5,
                                 help='the size of the n-grams (5).')
     parser_collect.add_argument('--threshold', '-t', type=float, default=0.9,
-                                help='the Jaccard similarity threshold (0.9).')
+                                help='the Jaccard similarity threshold for '
+                                     'paragraph identity (0.9).')
     parser_collect.add_argument('--min-freq', '-m', type=int, default=2,
                                 help='the minimum number of occurrence from '
                                      'which a paragraph is deemed frequent (2).')
@@ -120,6 +121,13 @@ def parse_arguments():
                                      'processed. Default is count >= min_freq; '
                                      'available variables are score, count, '
                                      'min_freq and docs.')
+    parser_collect.add_argument('--continue', default=None,
+                                help='instead of starting from scratch, use an '
+                                     'existing .pdata/.pdi pair to bootstrap '
+                                     'the paragraph statistics. The original '
+                                     'files are not modified, and the output '
+                                     'will contain only the domains met in the '
+                                     'data.')
 
     parser_filter = subparsers.add_parser(
         'filter_paragraphs', aliases=['filter'],
@@ -386,8 +394,16 @@ class LazyPool:
 
 
 class FrequentCollector:
-    def __init__(self, threshold, permutations, decay, min_freq,
-                 decay_filter='score < 0.5', wrap_filter='count >= min_freq'):
+    """
+    Parts of the frequent paragraph collection algorithm in
+    :func:`collect_frequent` have been moved here to make the code more
+    readable.
+    """
+    def __init__(self, threshold: float, permutations: int, decay: float,
+                 min_freq: int,
+                 bootstrap_prefix: Union[RandomPDataReader, Dict],
+                 decay_filter: str = 'score < 0.5',
+                 wrap_filter: int = 'count >= min_freq'):
         self.threshold = threshold
         self.permutations = permutations
         self.decay = decay
@@ -397,13 +413,17 @@ class FrequentCollector:
         logging.debug('Decay filter: {}'.format(decay_filter))
         logging.debug('Wrap filter: {}'.format(wrap_filter))
 
-    def reset(self):
+    def reset(self, domain):
         """Resets the bookkeeping and statistics objects."""
         self.stats = CollectStats(domains=1)
         self.lsh = MinHashLSH(threshold=self.threshold,
                               num_perm=self.permutations)
         self.freq_ps = {}  # type: Dict[str, PData]
         self.num_dup = 0
+        # Bootstrap the domain frequency counts if previous data is available
+        for pdata_id, pdata in enumerate(self.bootstrap.get(domain), start=1):
+            self.lsh.insert(str(pdata_id), pdata.minhash)
+            self.freq_ps[str(pdata_id)] = pdata
 
     def collect_from_doc(self, url: str, paragraphs: List[Any]):
         """
@@ -463,7 +483,7 @@ class FrequentCollector:
 def collect_frequent(
     it: Iterator[List[Tuple[str, List[Any]]]], threshold: float,
     permutations: int, decay: float, min_freq: int,
-    decay_filter: str, wrap_filter: str
+    decay_filter: str, wrap_filter: str, bootstrap_prefix: str = None
 ) -> Generator[Tuple[str, PDict], None, None]:  # noqa
     """
     Reads all the documents (as returned by :func:`minhash_group`) and
@@ -472,44 +492,66 @@ def collect_frequent(
     TODO: reference to MMDS
 
     Yields (domain, `PDict`) tuples per domain.
+
+    :param it: an iterator that yields documents as in :func:`minhash_group`;
+               i.e. URL -- paragraph minhash list tuples.
+    :param threshold: the Jaccard similarity threshold for paragraph identity.
+    :param permutations: the number of permutations per paragraph.
+    :param decay: the decay (multiplication) constant used for scoring
+                  paraphraphs.
+    :param min_freq: the minimum number of occurrence from which a paragraph
+                     is deemed frequent.
+    :param decay_filter: decay expression that is used to filter paragraphs
+                         after each step.
+    :param wrap_filter: expression that is used to filter paragraphs after all
+                        documents have been processed.
+    :param bootstrap_prefix: prefix of an existing .pdata/.pdi file pair to
+                             bootstrap the domain frequency counts with.
     """
     curr_domain = None
-    fc = FrequentCollector(threshold, permutations, decay, min_freq,
-                           decay_filter, wrap_filter)
-    # I don't want to write all the domain != curr_domain stuff twice, so
-    # let's add a sentinel record to the end.
-    for url, mhs in chain(chain.from_iterable(it), [('', [])]):
-        domain = urlsplit(url).netloc
 
-        # A new domain: yield results and re-initialize everything
-        if domain != curr_domain:
-            # Filtering and yielding results
-            if curr_domain is not None:
-                fc.wrap_up_domain()
+    if bootstrap_prefix:
+        btm = closing(RandomPDataReader(bootstrap_prefix))
+        logging.debug('Bootstrap file prefix: {}'.format(bootstrap_prefix))
+    else:
+        btm = nullcontext({})
+    with btm as bootstrap:
+        fc = FrequentCollector(threshold, permutations, decay, min_freq,
+                               bootstrap, decay_filter, wrap_filter)
+        # I don't want to write all the domain != curr_domain stuff twice, so
+        # let's add a sentinel record to the end.
+        for url, mhs in chain(chain.from_iterable(it), [('', [])]):
+            domain = urlsplit(url).netloc
 
+            # A new domain: yield results and re-initialize everything
+            if domain != curr_domain:
+                # Filtering and yielding results
+                if curr_domain is not None:
+                    fc.wrap_up_domain()
+
+                    logging.debug('Finished collecting frequent paragraphs '
+                                  'from {}...'.format(curr_domain))
+                    if fc.freq_ps:
+                        logging.debug('Found {} frequent paragraphs (duplicates: '
+                                      '{}) in domain {} ({} documents).'.format(
+                                          len(fc.freq_ps), fc.num_dup,
+                                          curr_domain, fc.stats.docs))
+
+                    # The domain is returned as well, so that we know what the
+                    # input was
+                    yield curr_domain, fc.freq_ps, fc.stats
+
+                # Check for the sentinel
+                if not domain:
+                    break
+
+                # Re-initialization
                 logging.debug(
-                    'Finished collecting frequent paragraphs from {}...'.format(
-                        curr_domain))
-                if fc.freq_ps:
-                    logging.debug('Found {} frequent paragraphs (duplicates: '
-                                  '{}) in domain {} ({} documents).'.format(
-                                      len(fc.freq_ps), fc.num_dup,
-                                      curr_domain, fc.stats.docs))
+                    'Collecting frequent paragraphs from {}...'.format(domain))
+                curr_domain = domain
+                fc.reset(curr_domain)
 
-                # The domain is returned as well, so that we know what the input was
-                yield curr_domain, fc.freq_ps, fc.stats
-
-            # Check for the sentinel
-            if not domain:
-                break
-
-            # Re-initialization
-            logging.debug(
-                'Collecting frequent paragraphs from {}...'.format(domain))
-            curr_domain = domain
-            fc.reset()
-
-        fc.collect_from_doc(url, mhs)
+            fc.collect_from_doc(url, mhs)
 
 
 def main_collect(args):
