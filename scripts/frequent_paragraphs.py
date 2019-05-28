@@ -401,13 +401,14 @@ class FrequentCollector:
     """
     def __init__(self, threshold: float, permutations: int, decay: float,
                  min_freq: int,
-                 bootstrap_prefix: Union[RandomPDataReader, Dict],
+                 bootstrap: Union[RandomPDataReader, None],
                  decay_filter: str = 'score < 0.5',
                  wrap_filter: int = 'count >= min_freq'):
         self.threshold = threshold
         self.permutations = permutations
         self.decay = decay
         self.min_freq = min_freq
+        self.bootstrap = bootstrap or {}
         self.decay_filter = Filter(decay_filter)
         self.wrap_filter = Filter(wrap_filter)
         logging.debug('Decay filter: {}'.format(decay_filter))
@@ -514,7 +515,7 @@ def collect_frequent(
         bootstrap = RandomPDataReader(bootstrap_prefix)
         logging.debug('Bootstrap file prefix: {}'.format(bootstrap_prefix))
     else:
-        bootstrap = {}
+        bootstrap = None
 
     try:
         fc = FrequentCollector(threshold, permutations, decay, min_freq,
