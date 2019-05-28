@@ -121,7 +121,7 @@ def parse_arguments():
                                      'processed. Default is count >= min_freq; '
                                      'available variables are score, count, '
                                      'min_freq and docs.')
-    parser_collect.add_argument('--continue', default=None,
+    parser_collect.add_argument('--bootstrap', '-b', default=None,
                                 help='instead of starting from scratch, use an '
                                      'existing .pdata/.pdi pair to bootstrap '
                                      'the paragraph statistics. The original '
@@ -401,7 +401,7 @@ class FrequentCollector:
     """
     def __init__(self, threshold: float, permutations: int, decay: float,
                  min_freq: int,
-                 bootstrap: Union[RandomPDataReader, None],
+                 bootstrap: Union[RandomPDataReader, None] = None,
                  decay_filter: str = 'score < 0.5',
                  wrap_filter: int = 'count >= min_freq'):
         self.threshold = threshold
@@ -422,7 +422,7 @@ class FrequentCollector:
         self.freq_ps = {}  # type: Dict[str, PData]
         self.num_dup = 0
         # Bootstrap the domain frequency counts if previous data is available
-        for pdata_id, pdata in enumerate(self.bootstrap.get(domain), start=1):
+        for pdata_id, pdata in enumerate(self.bootstrap.get(domain, []), start=1):
             self.lsh.insert(str(pdata_id), pdata.minhash)
             self.freq_ps[str(pdata_id)] = pdata
 
@@ -578,7 +578,7 @@ def main_collect(args):
                            grouper2(read_index(args.index), args.docs_per_batch))
             for domain, freq_ps, stats in collect_frequent(
                 it, args.threshold, args.permutations, 1 - args.c, args.min_freq,
-                args.decay_filter, args.wrap_filter
+                args.decay_filter, args.wrap_filter, args.bootstrap
             ):
                 if freq_ps:
                     dataf.write(domain, stats.docs,
