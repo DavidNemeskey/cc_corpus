@@ -35,6 +35,22 @@ This repository also contains a massively fixed and overhauled version of [cdx-i
 
 ## The new part
 
+### From start to end
+
+This section describes how to download and process the Common Crawl data to
+arrive at a corpus.
+
+#### Download the index
+
+The script `get_indexfiles.py` can be used to download the index for a
+specific collection. The example below downloads the index for January 2019:
+```
+get_indexfiles.py -q *.hu -o 2019/cc_download -l 2019_01.log -m 5 -c CC-MAIN-2019-04
+```
+
+Note that `get_indexfiles.py` is a replacement for the original
+`get_indexfiles.sh`.
+
 ### Type checking
 
 Some of the code I have annotated with
