@@ -3,12 +3,21 @@
 
 """Utility functions."""
 
+from argparse import ArgumentTypeError
 import bz2
+import copy
 import gzip
+import inspect
 import io
+from itertools import zip_longest
 import os
 import os.path as op
 import pickle
+
+try:
+    import idzip
+except ImportError:
+    idzip = None
 
 def openall(
     filename, mode='rt', encoding=None, errors=None, newline=None,
@@ -22,7 +31,16 @@ def openall(
     - the default compresslevel is 5, because e.g. gzip does not benefit a lot
       from higher values, only becomes slower.
     """
-    if filename.endswith('.gz'):
+    if filename.endswith('.dz') and idzip:
+        # Unfortunately idzip's API is not very good
+        f = idzip.open(filename, mode.replace('t', '').replace('b', '') + 'b')
+        if 't' in mode:
+            return io.TextIOWrapper(f, encoding, errors,
+                                    newline, write_through=True)
+        else:
+            return f
+    elif filename.endswith('.gz') or filename.endswith('.dz'):
+        # .dz is .gz, so if we don't have idzip installed, we can still read it
         return gzip.open(filename, mode, compresslevel,
                          encoding, errors, newline)
     elif filename.endswith('.bz2'):
@@ -53,9 +71,11 @@ def file_mode(f):
             return ('w' if f.mode == gzip.WRITE else 'r') + mode
         elif isinstance(f, bz2.BZ2File):
             return ('w' if f._mode == bz2._MODE_WRITE else 'r') + mode
+        elif idzip and isinstance(f, idzip.IdzipFile):
+            return ('w' if 'w' in f.mode else 'r') + mode
         else:
             raise ValueError('Unknown file object type {}'.format(type(f)))
-            
+
 
 def unpickle_stream(inf):
     """
@@ -77,7 +97,7 @@ class NoEmptyWriteWrapper:
     Truth be told, instead of this, a lazy file object (that only creates the
     actual file on the first write()) would be much better, but it is much
     more difficult to implement, due to the complexity of the io classes.
-    
+
     Note that ATM it is only possible to differentiate between 'w' and 'a'
     modes for regular (not gzip or bz2) files.
     """
@@ -140,3 +160,113 @@ def collect_inputs(inputs):
         else:
             raise ValueError('{} is neither a file nor a directory'.format(input))
     return files
+
+
+def host_weight(value):
+    """Implements an argument type for argparse that is a string:float tuple."""
+    host, _, weight = value.partition(':')
+    if weight:
+        try:
+            weight = float(weight)
+        except:
+            raise ArgumentTypeError(
+                'Must be in the form of host:weight, where weight is a number. '
+                'It is optional, though.')
+    else:
+        weight = 1
+    return host, weight
+
+
+def host_to_path(path, host):
+    """
+    Adds the host name to the path. If path has a file extension (such as .gz),
+    the host name is appended before that; otherwise, it is appended at the
+    end of the file / directory name.
+    """
+    root, ext = op.splitext(path.rstrip(os.sep))
+    hosty_path = root + '_{}'.format(host)
+    if ext:
+        hosty_path += ext
+    return hosty_path
+
+
+class Stats:
+    """
+    Class that can be used to count various things. The class cannot be used
+    as-is; users should create subclasses with the create() class method.
+    """
+    __slots__ = ()  # So that we don't create a  __dict__
+
+    def __init__(self, *values, **kwvalues):
+        """Initializes all fields to 0."""
+        if len(values) > len(self.__slots__):
+            raise ValueError('Too many arguments to {}(): at most {} '
+                             'supported, received {}'.format(
+                                 self.__class__.__name__, len(values),
+                                 len(self.__slots__)))
+
+        for slot, value in zip_longest(self.__slots__, values, fillvalue=0):
+            setattr(self, slot, value)
+        for slot, value in kwvalues.items():
+            if slot in self.__slots__:
+                setattr(self, slot, value)
+            else:
+                raise ValueError('{} does not have a slot {}'.format(
+                    self.__class__.__name__, slot))
+
+    def __iadd__(self, other):
+        """+= for all fields."""
+        for slot in self.__slots__:
+            setattr(self, slot, getattr(self, slot) + getattr(other, slot))
+        return self
+
+    def __add__(self, other):
+        """+ for all fields."""
+        ret = copy.copy(self)
+        ret += other
+        return ret
+
+    def __repr__(self):
+        """Generic string representation."""
+        return '{}({})'.format(
+            self.__class__.__name__, ', '.join('{}: {}'.format(
+                slot, getattr(self, slot)) for slot in self.__slots__))
+
+    def __str__(self):
+        """Comma-separated string representation."""
+        return ', '.join('{}: {}'.format(slot, getattr(self, slot))
+                         for slot in self.__slots__)
+
+    @classmethod
+    def create(cls, *fields):
+        """
+        Creates a subclass of Stats with the specified fields. The name of the
+        new class is added to the current module, so that it is pickle-able.
+        """
+        subclass = type('Stats_' + '_'.join(map(str, fields)), (cls,),
+                        {'__slots__': fields})
+        setattr(inspect.getmodule(cls), subclass.__name__, subclass)
+        return subclass
+
+
+def grouper(iterable, n, fillvalue=None):
+    """Collect data into fixed-length chunks or blocks. An itertools recipe."""
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
+
+
+def grouper2(iterable, n, fillvalue=None):
+    """
+    Same as :funct:`grouper`, but it also filters all instances of ``fillvalue``
+    from the returned groups. If it does not occur anywhere else in
+    ``iterable``, this effectively means that the last chunk might
+    contain fewer elements than the rest.
+    """
+    # grouper2('ABCDEFG', 3) --> ABC DEF G"
+    for group in grouper(iterable, n, fillvalue):
+        yield tuple(elem for elem in group if elem != fillvalue)
+
+
+class IllegalStateError(RuntimeError):
+    """Thrown when a method is invoked on an object in inappropriate state."""

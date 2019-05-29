@@ -18,11 +18,10 @@ import logging
 from multiprocessing import Pool
 import os
 
-from datasketch import MinHash, LeanMinHash
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.deduplication import BatchWriter
+from cc_corpus.deduplication import BatchWriter, MinHasher
 from cc_corpus.utils import collect_inputs
 
 
@@ -43,7 +42,7 @@ def parse_arguments():
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--n', '-n', type=int, default=5,
-                        help='the number of permutations per paragraph (5).')
+                        help='the size of the n-grams (5).')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -60,15 +59,10 @@ def parse_arguments():
     return args
 
 
-def shinglize(text, n):
-    """Creates character n-grams from the text."""
-    for i in range(len(text) - n + 1):
-        yield text[i:i+n]
-
-
 def minhash_ps(input_file, permutations, n):
     """Minhashes paragraphs."""
     logging.info('Processing {}...'.format(input_file))
+    minhasher = MinHasher(permutations, n)
     results = {'id': [], 'minhash': []}
     num_docs, num_ps = 0, 0
     try:
@@ -79,10 +73,7 @@ def minhash_ps(input_file, permutations, n):
                 logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
                 for p, text in enumerate(doc.paragraphs, start=1):
                     results['id'].append((doc.attrs['url'], p))
-                    mh = MinHash(num_perm=permutations)
-                    for shingle in shinglize(text, n):
-                        mh.update(shingle.encode('utf-8'))
-                    results['minhash'].append(LeanMinHash(mh))
+                    results['minhash'].append(minhasher.minhash(text))
             except:
                 logging.exception(
                     'Exception while processing file {}, in doc {}'.format(
@@ -97,6 +88,7 @@ def minhash_ps(input_file, permutations, n):
 def minhash_docs(input_file, permutations, n):
     """Minhashes documents."""
     logging.info('Processing {}...'.format(input_file))
+    minhasher = MinHasher(permutations, n)
     results = {'id': [], 'minhash': []}
     num_docs = 0
     try:
@@ -105,10 +97,7 @@ def minhash_docs(input_file, permutations, n):
                 num_docs += 1
                 logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
                 results['id'].append((doc.attrs['url'],))
-                mh = MinHash(num_perm=permutations)
-                for shingle in shinglize(doc.content(), n):
-                    mh.update(shingle.encode('utf-8'))
-                results['minhash'].append(LeanMinHash(mh))
+                results['minhash'].append(minhasher.minhash(doc.content()))
             except:
                 logging.exception(
                     'Exception while processing file {}, in doc {}'.format(

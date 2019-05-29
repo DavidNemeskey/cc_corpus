@@ -1,0 +1,9 @@
+---
+# Default values for some variables. Put here because
+# vars:
+#   - xy: "{{ xy | default('wz') }}"
+# doesn't work.
+
+tmux_session_name: cc_corpus_task
+tmux_window_title: CC Corpus Python Job
+working_dir: .

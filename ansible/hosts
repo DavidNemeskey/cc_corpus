@@ -1,10 +1,9 @@
 [slaves]
 nessie
 ginny
-ron
 percy
+ron
 charlie
-store
 
 [controller]
 nessie

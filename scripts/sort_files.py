@@ -18,7 +18,7 @@ import os.path as op
 
 
 def parse_arguments():
-    parser = ArgumentParser('Sorts segments & offsets to download.')
+    parser = ArgumentParser(__doc__)
     parser.add_argument('input_dir', help='the index directory')
     parser.add_argument('--processes', '-p', type=int, default=1,
                         help='number of worker processes to use (max is the '

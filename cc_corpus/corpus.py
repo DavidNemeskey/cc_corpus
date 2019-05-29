@@ -57,6 +57,14 @@ class Document:
         else:
             return 0 if p or w or c else (0, 0, 0)
 
+    def stream_size(self):
+        """
+        The size of the document in a stream. This is the number of bytes it
+        takes up in a file.
+        """
+        # +: str() doesn't add a newline after the document, so we have to
+        return len(str(self).encode('utf-8')) + len(os.linesep)
+
     def __len__(self):
         """
         The length (in characters) of the document. Same as len(self.content()).
@@ -283,19 +291,23 @@ def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
 
 class BatchWriter:
     """Writes Documents into a batch of files with consecutive numbering."""
-    def __init__(self, batch_size, out_dir, zeroes=4):
+    def __init__(self, batch_size, out_dir, zeroes=4,
+                 name_prefix='', first_batch=1):
         """
         Parameters:
-        - batch_size: the number of documents after which a new batch file is
-                      opened (with consecutive numbering)
-        - out_dir: the output directory
-        - zeroes: the number of zeroes in the batch files' name (e.g. if 2,
-                  the first batches will be called 01, 02, etc.)
+        :param batch_size: the number of documents after which a new batch file
+                           is opened (with consecutive numbering)
+        :param out_dir: the output directory
+        :param zeroes: the number of zeroes in the batch files' name (e.g. if 2,
+                       the first batches will be called 01, 02, etc.)
+        :param name_prefix: prepend this string to all file names.
+        :param first_batch: start batch numbering here instead of the default 1.
         """
         self.batch_size = batch_size
         self.out_dir = out_dir
         self.zeroes = zeroes
-        self.batch = 0
+        self.name_prefix = name_prefix
+        self.batch = first_batch - 1
         self.outf = None
         self.doc_written = self.batch_size + 1  # so that we invoke new_file
         self.total_written = 0
@@ -317,7 +329,8 @@ class BatchWriter:
 
         self.batch += 1
         new_file = os.path.join(
-            self.out_dir, '{{:0{}}}.txt.gz'.format(self.zeroes).format(self.batch))
+            self.out_dir, '{}{{:0{}}}.txt.gz'.format(
+                self.name_prefix, self.zeroes).format(self.batch))
         logging.debug('Opening file {}...'.format(new_file))
         self.outf = openall(new_file, 'wt')
 

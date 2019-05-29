@@ -1,0 +1,10 @@
+---
+# Runs Python scripts in a distributed way.
+
+- hosts: localhost
+  roles:
+    - assert
+
+- hosts: slaves
+  roles:
+    - python

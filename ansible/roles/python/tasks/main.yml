@@ -1,17 +1,23 @@
 ---
 # Runs a python script in a tmux session
 #
-# The script's parameters must be specified in a variable called script_args.
-# All key: value pairs in it will be turned into arguments to the script in the
-# form --key value_hostname. The only exception is the common_args key, whose
-# value will be appended to the command line as-is.
+# The script's parameters must be specified in a variable called arguments. It
+# should be the actual argument line as-is, with the exception that per-host
+# arguments should be "variables" like "output" below:
+# {"arguments": "-i input -o $output"}
+# The values of all "variables" must be given in a separate dict,
+# "per_host_args":
+# {"per_host_args": {"output": "output_prefix"}}
 
 # Some checks first
 
-# First check if the log_file and script_args variables exist.
+# First check if all required variables exist.
 - fail:
-    msg: The log_file and script_args variables must exist.
-  when: log_file is undefined or script_args is undefined
+    msg: "The {{ pvar }} variable must exist."
+  when: pvar not in vars
+  loop: "{{ 'python_script,log_file,processes'.split(',') }}"
+  loop_control:
+    loop_var: pvar
 # Also check if the name of the log file is valid.
 # Having a log file is very important, as that's the only output we will ever
 # get.
@@ -20,15 +26,16 @@
   when: not (log_file|regex_search('.log$') or log_file == '/dev/null')
 
 # Now we can do the argument setup...
-- name: initializing per-host arguments...
+- name: initializing arguments...
   set_fact:
-    per_host_args: "{{ per_host_args|default('') }} {{ '--' if item.key|length > 1 else '-' }}{{ item.key }} {{ item.value }}_{{ inventory_hostname }}"
-  loop: "{{ script_args|dict2items }}"
-  when: item.key != "common_args"
-- name: setting arguments common to processes on all hosts and the log file
+    full_argument_line: "{{ arguments|default('') }}"
+- name: replace values in the arguments
   set_fact:
-    common_args: "{{ script_args['common_args']|default('') }}"
-    per_host_log_file: "{{ log_file|regex_replace('.log$', '_' + inventory_hostname + '.log') }}"
+    full_argument_line: " {{ full_argument_line | replace('$' + item.key, item.value|distribute(inventory_hostname)) }}"
+  loop: "{{ per_host_args|default({})|dict2items }}"
+- name: setting up the log file
+  set_fact:
+    per_host_log_file: "{{ log_file|distribute(inventory_hostname) }}"
 - name: upload the tmuxp configuration template
   template:
     src: tmuxp.yml.j2

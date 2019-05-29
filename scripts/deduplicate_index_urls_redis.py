@@ -11,13 +11,16 @@ from functools import partial
 import gzip
 from itertools import zip_longest
 import logging
-from multiprocessing_logging import install_mp_handler
 import os
 import os.path as op
 import re
-import redis
 import subprocess
 import time
+
+from multiprocessing_logging import install_mp_handler
+import redis
+
+from cc_corpus.utils import grouper
 
 
 file_name_p = re.compile('(\d{4}-\d{2}-\d+).gz$')
@@ -100,13 +103,6 @@ def mem_only_redis(port):
         r = redis.Redis(port=port)
         r.shutdown(nosave=True)
         proc.terminate()
-
-
-def grouper(iterable, n, fillvalue=None):
-    "Collect data into fixed-length chunks or blocks. The itertools recipe."
-    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
-    args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
 
 
 def parse_arguments():

@@ -5,4 +5,4 @@ github_repo_dir: "~/commoncrawl_downloader"
 github_key_file: "~/.ssh/id_rsa"
 virtualenv_dir: "~/venvs/cc_downloader_env"
 
-processes: 6
+processes: 4

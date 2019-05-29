@@ -6,26 +6,12 @@ Distributes files in a directory to several directories so that we can
 distribute the processing as well to separate hosts.
 """
 
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser
 import os
 import os.path as op
-import re
 import shutil
 
-
-def host_weight(value):
-    host, _, weight = value.partition(':')
-    if weight:
-        try:
-            weight = float(weight)
-        except:
-            raise ArgumentTypeError(
-                'Must be in the form of host:weight, where weight is a number. '
-                'It is optional, though.')
-    else:
-        weight = 1
-    return host, weight
-
+from cc_corpus.utils import host_weight
 
 
 def parse_arguments():

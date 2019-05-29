@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.1.13',
+      version='1.2.0',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -67,12 +67,18 @@ setup(name='commoncrawl-downloader',
           'scripts/dedup_filter.py',
           'scripts/extract_attributes.py',
           'scripts/renumber_corpus_files.py',
+          'scripts/frequent_paragraphs.py',
+          'scripts/merge_files.py',
+          'scripts/rewrite_files.py',
       ],
       install_requires=[
           'boto3',
           'botocore',
           # Minhash + LSH
           'datasketch',
+          # idzip for fast seek in compressed files
+          # Uncommented until my PR is merged
+          # 'idzip',
           # Boilerplate removal
           'justext',
           'lxml',
@@ -88,6 +94,8 @@ setup(name='commoncrawl-downloader',
           'cld2-cffi', 'langid',
           # WARC 3 library
           'warc',
+          # Type hints for Python < 3.5
+          'typing'
       ],
       dependency_links=[
           # WARC 3 library
