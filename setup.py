@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.2.0',
+      version='1.2.1',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -72,6 +72,7 @@ setup(name='commoncrawl-downloader',
           'scripts/rewrite_files.py',
       ],
       install_requires=[
+          'beautifulsoup4',
           'boto3',
           'botocore',
           # Minhash + LSH
