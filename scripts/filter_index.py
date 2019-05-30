@@ -15,7 +15,9 @@ from the downloaded index. In particular,
 """
 
 from argparse import ArgumentParser
+from functools import partial
 import mimetypes
+from multiprocessing import Pool
 import os
 import re
 from typing import Generator, Iterator, Pattern, Set, Tuple
@@ -46,7 +48,15 @@ def parse_arguments():
                         help='a list of regexes that describe entries '
                              'permanently resulting in decompression errors '
                              '(bad index?)')
-    return parser.parse_args()
+    parser.add_argument('--processes', '-P', type=int, default=1,
+                        help='number of worker processes to use (max is the '
+                             'num of cores, default: 1).')
+    args = parser.parse_args()
+    num_procs = len(os.sched_getaffinity(0))
+    if args.processes < 1 or args.processes > num_procs:
+        parser.error('Number of processes must be between 1 and {}'.format(
+            num_procs))
+    return args
 
 
 def read_fields(ins: Iterator[str]) -> FieldGen:
@@ -119,8 +129,10 @@ def read_allowed_mimes(allowed_mimes_file: str) -> Set[str]:
         return set(line.strip() for line in inf)
 
 
-def filter_file(input_file: str, output_file: str,
+def filter_file(file_name: str, input_dir: str, output_dir: str,
                 allowed_mimes: Set[str], bad_indexp: Pattern):
+    input_file = os.path.join(input_dir, file_name)
+    output_file = os.path.join(output_dir, file_name)
     with openall(input_file) as inf, openall(output_file, 'wt') as outf:
         it = read_fields(inf)
         it = basic_filter(it)
@@ -142,10 +154,11 @@ def main():
     allowed_mimes = read_allowed_mimes(args.allowed_mimes)
     bad_indexp = read_bad_index(args.bad_index)
 
-    for input_file in os.listdir(args.input_dir):
-        filter_file(os.path.join(args.input_dir, input_file),
-                    os.path.join(args.output_dir, input_file),
-                    allowed_mimes, bad_indexp)
+    with Pool(args.processes) as pool:
+        f = partial(filter_file, input_dir=args.input_dir,
+                    output_dir=args.output_dir, allowed_mimes=allowed_mimes,
+                    bad_indexp=bad_indexp)
+        pool.map(f, os.listdir(args.input_dir))
 
 
 if __name__ == '__main__':
