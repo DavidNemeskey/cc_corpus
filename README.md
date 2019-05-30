@@ -51,6 +51,17 @@ get_indexfiles.py -q *.hu -o 2019/cc_download -l 2019_01.log -m 5 -c CC-MAIN-201
 Note that `get_indexfiles.py` is a replacement for the original
 `get_indexfiles.sh`.
 
+#### Filter the index
+
+Next, filter the index with the script `filter_index.py`:
+```
+filter_index.py 2019/cc_index/ 2019/cc_index_filtered/ -a commoncrawl-downloader2/allowed_mimes.txt -P 12
+```
+
+This script is a replacement for and an improvement on the original
+`filter_index.sh`. Being Python, it might be a little slower than the original
+though, hence the `-P` option for multiprocessing.
+
 ### Type checking
 
 Some of the code I have annotated with
