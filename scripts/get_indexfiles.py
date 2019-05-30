@@ -36,11 +36,12 @@ def download_index(query: str, output_dir: str, params: str, log_file: str,
                    mode: str = 'w'):
     """Calls the script :program:`cdx-index-client.py` to do the actual work."""
     with open(log_file, '{}t'.format(mode)) as logf:
-        subprocess.run(
+        res = subprocess.run(
             'cdx-index-client.py --fl url,filename,offset,length,status,mime '
             '-z {} -d {} {}'.format(query, output_dir, params),
-            stdout=logf, stderr=subprocess.STDOUT, shell=True
+            stdout=logf, stderr=subprocess.STDOUT, shell=True, check=True
         )
+        return res.returncode
 
 
 def get_uncompleted(log_file: str) -> Dict[str, List[str]]:
@@ -60,9 +61,9 @@ def main():
     args = parse_arguments()
     i = 0
     log_file = args.log_file + '.{}'.format(i)
-    download_index(args.query, args.output_dir,
-                   '-c {}'.format(args.collection), log_file)
-    while i <= args.max_retry:
+    rcode = download_index(args.query, args.output_dir,
+                           '-c {}'.format(args.collection), log_file)
+    while rcode == 0 and i <= args.max_retry:
         uncompleted = get_uncompleted(log_file)
         if not uncompleted:
             break
@@ -78,10 +79,11 @@ def main():
                            log_file, 'a')
 
     if i <= args.max_retry:
-        print('Successfully finished after $i iterations!', file=sys.stderr)
+        print('Successfully finished after {} iterations!'.format(i + 1),
+              file=sys.stderr)
     else:
         print('Finished after {} of {} iterations please check if everything '
-              'is all right!'.format(i, args.max_retry), file=sys.stderr)
+              'is all right!'.format(i + 1, args.max_retry + 1), file=sys.stderr)
 
 
 if __name__ == '__main__':

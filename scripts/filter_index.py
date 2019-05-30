@@ -140,7 +140,7 @@ def main():
 
     mimetypes.init()
     allowed_mimes = read_allowed_mimes(args.allowed_mimes)
-    bad_indexp = read_bad_index(args.bad_indexp)
+    bad_indexp = read_bad_index(args.bad_index)
 
     for input_file in os.listdir(args.input_dir):
         filter_file(os.path.join(args.input_dir, input_file),
