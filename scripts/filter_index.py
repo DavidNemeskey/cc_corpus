@@ -140,7 +140,7 @@ def filter_file(file_name: str, input_dir: str, output_dir: str,
         it = http_filter(it)
         if bad_indexp:
             it = bad_index_filter(it, bad_indexp)
-        for fields in it:
+        for fields in sorted(it, key=lambda f: f[:2]):
             print(' '.join(fields), file=outf)
 
 
