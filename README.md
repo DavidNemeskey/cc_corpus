@@ -62,6 +62,20 @@ This script is a replacement for and an improvement on the original
 `filter_index.sh`. Being Python, it might be a little slower than the original
 though, hence the `-P` option for multiprocessing.
 
+#### Index statistics
+
+At any point while working with indices, you can query the index statistics like
+```
+index_statistics.py -i 2019/cc_index/ -o 2019/stats/index -P 12
+```
+
+This script writes 5 files:
+
+- `urls.tsv` lists the individual urls and their count
+- `domains.tsv`, `statuses.tsv` and `mimes.tsv` list the domains / status codes
+  / mime types in the index, along with their count and percentage
+- `stats.tsv` contains general statistics, such as the total number of documents
+
 ### Type checking
 
 Some of the code I have annotated with
