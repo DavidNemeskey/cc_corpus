@@ -52,6 +52,8 @@ setup(name='commoncrawl-downloader',
       # Install the scripts
       scripts=[
           'scripts/cdx-index-client.py',
+          'scripts/get_indexfiles.py',
+          'scripts/filter_index.py',
           'scripts/deduplicate_index_urls_redis.py',
           'scripts/filter_corpus.py',
           'scripts/filter_known_urls.py',
