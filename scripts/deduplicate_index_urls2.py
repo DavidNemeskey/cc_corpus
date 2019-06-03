@@ -4,20 +4,19 @@
 """Deduplicates the urls in the index."""
 
 from argparse import ArgumentParser
-from collections import defaultdict
 from functools import partial
-import gzip
 import logging
-from multiprocessing import Pool
+from multiprocessing import Manager, Pool
+from multiprocessing.synchronize import RLock
 import os
 import os.path as op
 import re
-from typing import Set
+from typing import Any, Dict, Set, Union
 
 from multiprocessing_logging import install_mp_handler
 from url_normalize import url_normalize
 
-from cc_corpus.utils import openall
+from cc_corpus.utils import openall, Stats
 
 
 def parse_arguments():
@@ -64,6 +63,146 @@ def read_urls(urls_file: str) -> Set[int]:
         return hashes
 
 
+file_name_p = re.compile(r'(\d{4}-\d{2}-\d+).gz$')
+
+
+class IndexRecord():
+    """
+    A data class that contains all information about a URL relevant for
+    deduplication.
+    """
+    # TODO: I have a generic solution for this, don't I?
+    def __init__(self, warc: str, offset: Union[str, int],
+                 length: Union[str, int], index: str = None):
+        """
+        :param warc: the name of the warc file the file is in (which contains
+                     the date)
+        :param offset: the offset of the document in the warc file
+        :param length: the length of the document
+        :param index: the index file
+        """
+        self.warc = warc
+        self.offset = int(offset)
+        self.length = int(length)
+        self.index = index
+
+    def __eq__(self, other):
+        """
+        Equality check. All fields must match with the exception of
+        :attr:`index`, which might be ``None``, which matches everything.
+        """
+        if other:
+            same = self.warc == other.warc
+            same = same and self.offset == other.offset
+            same = same and self.length == other.length  # Necessary?
+            if self.index or other.index:
+                same = same and self.index == other.index
+            return same
+        else:
+            return False
+
+    def __repr__(self):
+        return '({}, {}, {} in {})'.format(
+            self.warc, self.offset, self.length, self.index)
+
+
+def uniq_record(url: str, record: IndexRecord, uniqs: Set[str], keep: str):
+    """
+    Uniq's a record. Returns whether the record is uniq (not in uniqs), or is
+    the representative of its URL (i.e. it is the latest / biggest).
+    """
+    if url in uniqs:
+        other_record = uniqs[url]
+        if keep == 'latest':
+            if record.warc <= other_record.warc:
+                return False
+        else:
+            if record.length <= other_record.length:
+                return False
+
+    uniqs[url] = record
+    return True
+
+
+def file_to_dict(index_file: str, keep: str, skip_hashes: Set[str],
+                 global_uniqs: Dict[str, IndexRecord], lock: RLock):
+    """
+    Collects all URLs from an index file and deduplicats in two phrases:
+
+    1. First, the index lines / URLs are deduplicated inside the file, in case
+       an index file contains the same URL twice (not likely, but who knows?)
+    2. Then, the URLs are deduplicated across all files / processes. To achieve
+       this, we use a shared dictionary kept in-memory.
+
+    :param index_file: the name of the input file
+    :param keep: which record should win: the ``latest`` or ``biggest``
+    :param global_uniqs: the shared dictionary of unique URLs
+    :param lock: regulates access to ``global_uniqs``
+    """
+    logging.info('Collecting URLs from {}...'.format(index_file))
+    try:
+        # In-file deduplication
+        with openall(index_file, 'rt') as inf:
+            uniqs = {}
+            file_id = file_name_p.search(index_file).group(1)
+            for line_no, line in enumerate(map(str.strip, inf), start=1):
+                try:
+                    # After filtering, the line is prepended with the "domain"
+                    # I skip that and extract it myself
+                    url, warc, offset, length = line.split()[:7][-6:-2]
+                    record = IndexRecord(warc, offset, length, file_id)
+                    uniq_record(url_normalize(url), record, uniqs, keep)
+                except:
+                    logging.exception(
+                        'Exception in file {}:{}'.format(index_file, line_no))
+                    break
+            logging.info('Self-deduplicated {} URLs in {} to {}.'.format(
+                line_no, index_file, len(uniqs)))
+
+        # Global deduplication
+        with lock:
+            num_uniqs = sum(uniq_record(url, record, global_uniqs, keep)
+                            for url, record in uniqs.items())
+
+        logging.info('Cross-deduplicated {} URLs in {} to {}.'.format(
+            len(uniqs), index_file, num_uniqs))
+    except:
+        logging.exception(
+            'Exception in file {}'.format(index_file))
+
+
+# -------------------------------- Filtering ----------------------------------
+
+
+FilterStats = Stats.create(
+    'old_files', 'new_files', 'old_urls', 'new_urls')  # type: Any
+
+
+def filter_file(input_file, output_file, uniqs):
+    """
+    Filters an index file; i.e. drops all duplicate URLs.
+    :param input_file: the input index file
+    :param output_file: the output index file
+    :param global_uniqs: the shared dictionary of unique URLs
+    """
+    logging.info('Filtering file {}...'.format(input_file))
+    with openall(input_file, 'rt') as inf, openall(output_file, 'wt') as outf:
+        lines_printed = 0
+        for line_no, line in enumerate(map(str.strip, inf), start=1):
+            try:
+                url, warc, offset, length = line.split()[:7][-6:-2]
+                url = url_normalize(url)
+                record = IndexRecord(warc, offset, length)
+                if record == uniqs.get(url):
+                    print(line, file=outf)
+                    lines_printed += 1
+            except:
+                logging.exception(
+                    'Exception in file {}:{}'.format(input_file, line_no))
+        logging.info('Kept {} URLs out of {} in {}.'.format(
+            lines_printed, line_no, input_file))
+
+
 def main():
     args = parse_arguments()
 
@@ -74,6 +213,49 @@ def main():
     install_mp_handler()
 
     skip_hashes = read_urls(args.skip_urls) if args.skip_urls else set()
+
+    basenames = os.listdir(args.input_dir)
+    input_files = [op.join(args.input_dir, f) for f in basenames]
+
+    logging.info('Collected {} index files from {}.'.format(
+        len(input_files), args.input_dir))
+
+    # Collect the representative records for all URLs
+    m = Manager()
+    global_uniqs = m.dict()
+    lock = m.RLock()
+
+    with Pool(args.processes) as pool:
+        f = partial(file_to_dict, keep=args.keep, skip_hashes=skip_hashes,
+                    global_uniqs=global_uniqs, lock=lock)
+        pool.imap_unordered(f, input_files)
+        logging.info('Total number of unique URLs found: {}'.format(
+            len(global_uniqs)))
+
+        pool.close()
+        pool.join()
+
+    # TODO skip_hashes
+    # TODO defaultdict?
+
+    # And filter from the files all non-representative URLs
+    if not os.path.isdir(args.output_dir):
+        os.mkdir(args.output_dir)
+    tasks = zip(input_files, [op.join(args.output_dir, f) for f in basenames])
+    with Pool(args.processes) as pool:
+        f = partial(filter_file, uniqs=global_uniqs)
+        sum_stats = FilterStats()
+        for stats in pool.starmap(f, tasks):
+            sum_stats += stats
+
+        pool.close()
+        pool.join()
+
+        logging.info(
+            'Done filtering index: index files {} -> {}, URLs {} -> {}.'.format(
+                sum_stats.old_files, sum_stats.new_files,
+                sum_stats.old_urls, sum_stats.new_urls)
+        )
 
 
 if __name__ == '__main__':
