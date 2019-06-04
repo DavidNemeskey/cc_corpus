@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, Set, Union
 from multiprocessing_logging import install_mp_handler
 from url_normalize import url_normalize
 
-from cc_corpus.utils import openall, Stats
+from cc_corpus.utils import notempty, openall, Stats
 
 
 def parse_arguments():
@@ -197,7 +197,7 @@ FilterStats = Stats.create(
     'old_files', 'new_files', 'old_urls', 'new_urls')  # type: Any
 
 
-def filter_file(input_file, output_file, uniqs, url_fn: UrlFn):
+def filter_file(input_file, output_file, uniqs, url_fn: UrlFn) -> FilterStats:
     """
     Filters an index file; i.e. drops all duplicate URLs.
     :param input_file: the input index file
@@ -208,7 +208,8 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn):
                    optional hashing
     """
     logging.info('Filtering file {}...'.format(input_file))
-    with openall(input_file, 'rt') as inf, openall(output_file, 'wt') as outf:
+    stats = FilterStats(old_files=1)
+    with openall(input_file, 'rt') as inf, notempty(openall(output_file, 'wt')) as outf:
         lines_printed = 0
         for line_no, line in enumerate(map(str.strip, inf), start=1):
             try:
@@ -222,6 +223,11 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn):
                     'Exception in file {}:{}'.format(input_file, line_no))
         logging.info('Kept {} URLs out of {} in {}.'.format(
             lines_printed, line_no, input_file))
+        stats.old_urls = line_no
+        if lines_printed:
+            stats.new_files = 1
+            stats.new_urls = lines_printed
+    return stats
 
 
 def hash_normalize(url: str) -> Url:
