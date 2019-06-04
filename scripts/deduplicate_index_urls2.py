@@ -4,6 +4,7 @@
 """Deduplicates the urls in the index."""
 
 from argparse import ArgumentParser
+from collections import Counter
 from functools import partial
 import logging
 from multiprocessing import Manager, Pool
@@ -106,7 +107,7 @@ class IndexRecord():
             same = self.warc == other.warc
             same = same and self.offset == other.offset
             same = same and self.length == other.length  # Necessary?
-            if self.index or other.index:
+            if self.index and other.index:
                 same = same and self.index == other.index
             return same
         else:
@@ -121,22 +122,27 @@ UrlIndexDict = Dict[Url, IndexRecord]
 
 
 def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
-                keep: str):
+                keep: str) -> str:
     """
     Uniq's a record. Returns whether the record is uniq (not in uniqs), or is
-    the representative of its URL (i.e. it is the latest / biggest).
+    the representative of its URL (i.e. it is the latest / biggest). Returns
+    a string that describes what happened to the URL (``reject`` / ``new``
+    / ``overwrite``).
     """
     if url in uniqs:
         other_record = uniqs[url]
         if keep == 'latest':
             if record.warc <= other_record.warc:
-                return False
+                return 'reject'
         else:
             if record.length <= other_record.length:
-                return False
+                return 'reject'
+        ret = 'overwrite'
+    else:
+        ret = 'new'
 
     uniqs[url] = record
-    return True
+    return ret
 
 
 def file_to_dict(index_file: str, keep: str, skip_urls: UrlSet, url_fn: UrlFn,
@@ -180,11 +186,14 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlSet, url_fn: UrlFn,
 
         # Global deduplication
         with lock:
-            num_uniqs = sum(uniq_record(url, record, global_uniqs, keep)
-                            for url, record in uniqs.items())
+            counts = Counter(uniq_record(url, record, global_uniqs, keep)
+                             for url, record in uniqs.items())
+            num_uniqs = counts['new'] + counts['overwrite']
 
-        logging.info('Cross-deduplicated {} URLs in {} to {}.'.format(
-            len(uniqs), index_file, num_uniqs))
+        logging.info('Cross-deduplicated {} URLs in {} to '
+                     '{} (overwrote {}; {} new).'.format(
+                         len(uniqs), index_file, num_uniqs,
+                         counts['overwrite'], counts['new']))
     except:
         logging.exception(
             'Exception in file {}'.format(index_file))
