@@ -11,7 +11,7 @@ from multiprocessing.synchronize import RLock
 import os
 import os.path as op
 import re
-from typing import Any, Dict, Set, Union
+from typing import Any, Callable, Dict, Set, Union
 
 from multiprocessing_logging import install_mp_handler
 from url_normalize import url_normalize
@@ -29,6 +29,11 @@ def parse_arguments():
                         help='a file with the list of URLs to skip (i.e. '
                              'drop). Typically, these are URLs already '
                              'downloaded in a previous batch.')
+    parser.add_argument('--hash', action='store_true',
+                        help='use hashes to store the URLs to skip. Uses less '
+                             'memory, but there is a chance for hash collision '
+                             '(though not high: all the Hungarian URLs of '
+                             '2017-2018 failed to produce one).')
     parser.add_argument('--keep', '-k', choices=['latest', 'biggest'],
                         default='biggest',
                         help='which occurrence to keep. Default: biggest.')
@@ -43,24 +48,30 @@ def parse_arguments():
     return args
 
 
-def read_urls(urls_file: str) -> Set[int]:
+Url = Union[str, int]
+UrlSet = Set[Url]
+UrlFn = Callable[[str], Url]
+
+
+def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
     """
     Reads URLS from the file ``urls_file``, one per line. The URLs are
-    normalized and their hashes are returned in a set.
+    normalized and returned in a set; either as a string or as a hash value,
+    depending on what the transformation function ``url_fn`` does.
 
-    We use hashes instead of the full url to conserve memory. In our
+    Using hashes instead of the full url can conserve memory. In our
     experiments, we have not encountered collisions yet.
 
     Note: normalization keeps the separate http / https versions. Hopefully,
     document deduplication will take care of this.
     """
     with openall(urls_file) as inf:
-        hashes = set()
+        urls = set()
         for no_urls, url in enumerate(map(str.strip, inf), start=1):
-            hashes.add(hash(url_normalize(url)))
-        logging.info('Loaded {} urls from {}; {} unique hashes.'.format(
-            no_urls, urls_file, len(hashes)))
-        return hashes
+            urls.add(url_fn(url))
+        logging.info('Loaded {} urls from {}; {} unique.'.format(
+            no_urls, urls_file, len(urls)))
+        return urls
 
 
 file_name_p = re.compile(r'(\d{4}-\d{2}-\d+).gz$')
@@ -106,7 +117,11 @@ class IndexRecord():
             self.warc, self.offset, self.length, self.index)
 
 
-def uniq_record(url: str, record: IndexRecord, uniqs: Set[str], keep: str):
+UrlIndexDict = Dict[Url, IndexRecord]
+
+
+def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
+                keep: str):
     """
     Uniq's a record. Returns whether the record is uniq (not in uniqs), or is
     the representative of its URL (i.e. it is the latest / biggest).
@@ -124,8 +139,8 @@ def uniq_record(url: str, record: IndexRecord, uniqs: Set[str], keep: str):
     return True
 
 
-def file_to_dict(index_file: str, keep: str, skip_hashes: Set[str],
-                 global_uniqs: Dict[str, IndexRecord], lock: RLock):
+def file_to_dict(index_file: str, keep: str, skip_urls: UrlSet, url_fn: UrlFn,
+                 global_uniqs: UrlIndexDict, lock: RLock):
     """
     Collects all URLs from an index file and deduplicats in two phrases:
 
@@ -136,6 +151,10 @@ def file_to_dict(index_file: str, keep: str, skip_hashes: Set[str],
 
     :param index_file: the name of the input file
     :param keep: which record should win: the ``latest`` or ``biggest``
+    :param skip_urls: the set of URLs to skip (e.g. because we already have them)
+    :param url_fn: the URL transformation function to apply to each URL. In the
+                   scope of this program, this includes normalization and
+                   optional hashing
     :param global_uniqs: the shared dictionary of unique URLs
     :param lock: regulates access to ``global_uniqs``
     """
@@ -143,7 +162,7 @@ def file_to_dict(index_file: str, keep: str, skip_hashes: Set[str],
     try:
         # In-file deduplication
         with openall(index_file, 'rt') as inf:
-            uniqs = {}
+            uniqs = {}  # type: UrlIndexDict
             file_id = file_name_p.search(index_file).group(1)
             for line_no, line in enumerate(map(str.strip, inf), start=1):
                 try:
@@ -151,7 +170,7 @@ def file_to_dict(index_file: str, keep: str, skip_hashes: Set[str],
                     # I skip that and extract it myself
                     url, warc, offset, length = line.split()[:7][-6:-2]
                     record = IndexRecord(warc, offset, length, file_id)
-                    uniq_record(url_normalize(url), record, uniqs, keep)
+                    uniq_record(url_fn(url), record, uniqs, keep)
                 except:
                     logging.exception(
                         'Exception in file {}:{}'.format(index_file, line_no))
@@ -178,12 +197,15 @@ FilterStats = Stats.create(
     'old_files', 'new_files', 'old_urls', 'new_urls')  # type: Any
 
 
-def filter_file(input_file, output_file, uniqs):
+def filter_file(input_file, output_file, uniqs, url_fn: UrlFn):
     """
     Filters an index file; i.e. drops all duplicate URLs.
     :param input_file: the input index file
     :param output_file: the output index file
-    :param global_uniqs: the shared dictionary of unique URLs
+    :param uniqs: the shared dictionary of unique URLs
+    :param url_fn: the URL transformation function to apply to each URL. In the
+                   scope of this program, this includes normalization and
+                   optional hashing
     """
     logging.info('Filtering file {}...'.format(input_file))
     with openall(input_file, 'rt') as inf, openall(output_file, 'wt') as outf:
@@ -191,9 +213,8 @@ def filter_file(input_file, output_file, uniqs):
         for line_no, line in enumerate(map(str.strip, inf), start=1):
             try:
                 url, warc, offset, length = line.split()[:7][-6:-2]
-                url = url_normalize(url)
                 record = IndexRecord(warc, offset, length)
-                if record == uniqs.get(url):
+                if record == uniqs.get(url_fn(url)):
                     print(line, file=outf)
                     lines_printed += 1
             except:
@@ -212,7 +233,8 @@ def main():
     )
     install_mp_handler()
 
-    skip_hashes = read_urls(args.skip_urls) if args.skip_urls else set()
+    url_fn = lambda u: hash(url_normalize(u)) if args.hash else url_normalize  # noqa
+    skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
 
     basenames = os.listdir(args.input_dir)
     input_files = [op.join(args.input_dir, f) for f in basenames]
@@ -226,8 +248,8 @@ def main():
     lock = m.RLock()
 
     with Pool(args.processes) as pool:
-        f = partial(file_to_dict, keep=args.keep, skip_hashes=skip_hashes,
-                    global_uniqs=global_uniqs, lock=lock)
+        f = partial(file_to_dict, keep=args.keep, skip_urls=skip_urls,
+                    url_fn=url_fn, global_uniqs=global_uniqs, lock=lock)
         pool.imap_unordered(f, input_files)
         logging.info('Total number of unique URLs found: {}'.format(
             len(global_uniqs)))
@@ -235,7 +257,6 @@ def main():
         pool.close()
         pool.join()
 
-    # TODO skip_hashes
     # TODO defaultdict?
 
     # And filter from the files all non-representative URLs
@@ -243,7 +264,7 @@ def main():
         os.mkdir(args.output_dir)
     tasks = zip(input_files, [op.join(args.output_dir, f) for f in basenames])
     with Pool(args.processes) as pool:
-        f = partial(filter_file, uniqs=global_uniqs)
+        f = partial(filter_file, uniqs=global_uniqs, url_fn=url_fn)
         sum_stats = FilterStats()
         for stats in pool.starmap(f, tasks):
             sum_stats += stats
