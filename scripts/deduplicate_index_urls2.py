@@ -265,7 +265,7 @@ def main():
     with Pool(args.processes) as pool:
         f = partial(file_to_dict, keep=args.keep, skip_urls=skip_urls,
                     url_fn=url_fn, global_uniqs=global_uniqs, lock=lock)
-        pool.imap_unordered(f, input_files)
+        pool.map(f, input_files)
         logging.info('Total number of unique URLs found: {}'.format(
             len(global_uniqs)))
 
