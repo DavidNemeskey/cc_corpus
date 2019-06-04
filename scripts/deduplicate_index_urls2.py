@@ -224,6 +224,15 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn):
             lines_printed, line_no, input_file))
 
 
+def hash_normalize(url: str) -> Url:
+    """
+    This is the URL transform function that converts a URL to a hash.
+
+    It cannot be a lambda, because those cannot be pickled.
+    """
+    return hash(url_normalize(url))
+
+
 def main():
     args = parse_arguments()
 
@@ -233,7 +242,7 @@ def main():
     )
     install_mp_handler()
 
-    url_fn = lambda u: hash(url_normalize(u)) if args.hash else url_normalize  # noqa
+    url_fn = hash_normalize if args.hash else url_normalize
     skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
 
     basenames = os.listdir(args.input_dir)
@@ -256,8 +265,6 @@ def main():
 
         pool.close()
         pool.join()
-
-    # TODO defaultdict?
 
     # And filter from the files all non-representative URLs
     if not os.path.isdir(args.output_dir):
