@@ -56,7 +56,7 @@ UrlSet = Set[Url]
 UrlFn = Callable[[str], Url]
 
 
-def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
+def read_urls(urls_file: str, url_fn: UrlFn, url_set: UrlSet = None) -> UrlSet:
     """
     Reads URLS from the file ``urls_file``, one per line. The URLs are
     returned in a set; either as a string or as a hash value,
@@ -69,9 +69,17 @@ def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
     slooooooooow. This also means that versions of the same URL might stay in
     the index, including http / https versions. Hopefully,
     document deduplication will take care of this.
+
+    :param urls_file: the name of the file to load
+    :param url_fn: the URL transformation function to apply to each URL. In the
+                   scope of this program, this is either hashing or nothing.
+    :param url_set: a set that will contain the result. If ``None``
+                    (the default), a new set will be created. This parameter is
+                    useful if we want to fill a specific set; e.g. one created
+                    by a :class:`SyncManager`
     """
+    urls = url_set if url_set is not None else set()
     with openall(urls_file) as inf:
-        urls = set()
         for no_urls, url in enumerate(map(str.strip, inf), start=1):
             urls.add(url_fn(url))
             if no_urls % 1000000 == 0:
@@ -267,9 +275,6 @@ def main():
     )
     install_mp_handler()
 
-    url_fn = hash_normalize if args.hash else noop_normalize
-    skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
-
     basenames = os.listdir(args.input_dir)
     input_files = [op.join(args.input_dir, f) for f in basenames]
 
@@ -279,7 +284,11 @@ def main():
     # Collect the representative records for all URLs
     m = Manager()
     global_uniqs = m.dict()
+    skip_urls = m.set()
     lock = m.RLock()
+
+    url_fn = hash_normalize if args.hash else noop_normalize
+    read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
 
     with Pool(args.processes) as pool:
         f = partial(file_to_dict, keep=args.keep, skip_urls=skip_urls,
