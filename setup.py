@@ -101,8 +101,6 @@ setup(name='commoncrawl-downloader',
           'warc',
           # Type hints for Python < 3.5
           'typing',
-          # URL normalization library
-          'url_normalize'
       ],
       dependency_links=[
           # WARC 3 library

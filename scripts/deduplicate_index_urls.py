@@ -15,7 +15,6 @@ import re
 from typing import Any, Callable, Dict, Set, Union
 
 from multiprocessing_logging import install_mp_handler
-from url_normalize import url_normalize
 
 from cc_corpus.utils import notempty, openall, Stats
 
@@ -60,13 +59,15 @@ UrlFn = Callable[[str], Url]
 def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
     """
     Reads URLS from the file ``urls_file``, one per line. The URLs are
-    normalized and returned in a set; either as a string or as a hash value,
+    returned in a set; either as a string or as a hash value,
     depending on what the transformation function ``url_fn`` does.
 
     Using hashes instead of the full url can conserve memory. In our
     experiments, we have not encountered collisions yet.
 
-    Note: normalization keeps the separate http / https versions. Hopefully,
+    Note: no normalization of URLs for now, as the library that I tried was
+    slooooooooow. This also means that versions of the same URL might stay in
+    the index, including http / https versions. Hopefully,
     document deduplication will take care of this.
     """
     with openall(urls_file) as inf:
@@ -165,8 +166,7 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlSet, url_fn: UrlFn,
     :param keep: which record should win: the ``latest`` or ``biggest``
     :param skip_urls: the set of URLs to skip (e.g. because we already have them)
     :param url_fn: the URL transformation function to apply to each URL. In the
-                   scope of this program, this includes normalization and
-                   optional hashing
+                   scope of this program, this is either hashing or nothing.
     :param global_uniqs: the shared dictionary of unique URLs
     :param lock: regulates access to ``global_uniqs``
     """
@@ -219,8 +219,7 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn) -> FilterStats:
     :param output_file: the output index file
     :param uniqs: the shared dictionary of unique URLs
     :param url_fn: the URL transformation function to apply to each URL. In the
-                   scope of this program, this includes normalization and
-                   optional hashing
+                   scope of this program, this is either hashing or nothing.
     """
     logging.info('Filtering file {}...'.format(input_file))
     stats = FilterStats(old_files=1)
@@ -251,7 +250,12 @@ def hash_normalize(url: str) -> Url:
 
     It cannot be a lambda, because those cannot be pickled.
     """
-    return hash(url_normalize(url))
+    return hash(url)
+
+
+def noop_normalize(url: str) -> Url:
+    """This URL transform function just returns the URL as-is."""
+    return url
 
 
 def main():
@@ -263,7 +267,7 @@ def main():
     )
     install_mp_handler()
 
-    url_fn = hash_normalize if args.hash else url_normalize
+    url_fn = hash_normalize if args.hash else noop_normalize
     skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
 
     basenames = os.listdir(args.input_dir)

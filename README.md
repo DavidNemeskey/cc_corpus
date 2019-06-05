@@ -102,6 +102,8 @@ Once the list of URLs to skip is complete, the index can be deduplicated like
 deduplicate_index_urls.py -i 2019/cc_index_filtered/ -o 2019/cc_index_dedup/ -s 2018_index_urls.gz -k biggest -P 12
 ```
 
+Note: unfortunately, loading the old URLs takes a very long time...
+
 ### Type checking
 
 Some of the code I have annotated with
