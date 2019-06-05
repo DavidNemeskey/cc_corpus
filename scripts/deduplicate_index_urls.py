@@ -191,6 +191,7 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
         with openall(index_file, 'rt') as inf:
             uniqs = {}  # type: UrlIndexDict
             file_id = file_name_p.search(index_file).group(1)
+            line_no = 0
             for line_no, line in enumerate(map(str.strip, inf), start=1):
                 try:
                     # After filtering, the line is prepended with the "domain"
@@ -205,6 +206,10 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
                     logging.exception(
                         'Exception in file {}:{}'.format(index_file, line_no))
                     break
+
+            if line_no == 0:
+                logging.info('File {} is empty; returning...'.format(index_file))
+                return
             logging.info('Self-deduplicated {} URLs in {} to {}; skipped {}.'.format(
                 line_no, index_file, len(uniqs), stats.skipped))
 
