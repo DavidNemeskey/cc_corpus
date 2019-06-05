@@ -226,6 +226,18 @@ class Stats:
         ret += other
         return ret
 
+    def __getitem__(self, key):
+        try:
+            return getattr(self, key)
+        except:
+            raise KeyError('No slot called `{}`'.format(key))
+
+    def __setitem__(self, key, value):
+        if key in self.__slots__:
+            setattr(self, key, value)
+        else:
+            raise KeyError('No slot called `{}`'.format(key))
+
     def __repr__(self):
         """Generic string representation."""
         return '{}({})'.format(

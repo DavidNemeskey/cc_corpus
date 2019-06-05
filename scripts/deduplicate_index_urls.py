@@ -4,7 +4,7 @@
 """Deduplicates the urls in the index."""
 
 from argparse import ArgumentParser
-from collections import Counter
+from bisect import bisect_left
 from functools import partial
 import logging
 from multiprocessing import Manager, Pool
@@ -12,7 +12,7 @@ from multiprocessing.synchronize import RLock
 import os
 import os.path as op
 import re
-from typing import Any, Callable, Dict, Set, Union
+from typing import Any, Callable, Dict, List, Set, Union
 
 from multiprocessing_logging import install_mp_handler
 
@@ -52,11 +52,12 @@ def parse_arguments():
 
 
 Url = Union[str, int]
+UrlList = List[Url]
 UrlSet = Set[Url]
 UrlFn = Callable[[str], Url]
 
 
-def read_urls(urls_file: str, url_fn: UrlFn, url_set: UrlSet = None) -> UrlSet:
+def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
     """
     Reads URLS from the file ``urls_file``, one per line. The URLs are
     returned in a set; either as a string or as a hash value,
@@ -69,17 +70,9 @@ def read_urls(urls_file: str, url_fn: UrlFn, url_set: UrlSet = None) -> UrlSet:
     slooooooooow. This also means that versions of the same URL might stay in
     the index, including http / https versions. Hopefully,
     document deduplication will take care of this.
-
-    :param urls_file: the name of the file to load
-    :param url_fn: the URL transformation function to apply to each URL. In the
-                   scope of this program, this is either hashing or nothing.
-    :param url_set: a set that will contain the result. If ``None``
-                    (the default), a new set will be created. This parameter is
-                    useful if we want to fill a specific set; e.g. one created
-                    by a :class:`SyncManager`
     """
-    urls = url_set if url_set is not None else set()
     with openall(urls_file) as inf:
+        urls = set()
         for no_urls, url in enumerate(map(str.strip, inf), start=1):
             urls.add(url_fn(url))
             if no_urls % 1000000 == 0:
@@ -136,6 +129,19 @@ class IndexRecord():
 UrlIndexDict = Dict[Url, IndexRecord]
 
 
+# -------------------------------- Collection ----------------------------------
+
+
+CollectStats = Stats.create(
+    'overwrite', 'new', 'reject', 'skipped')  # type: Any
+
+
+def in_sorted_list(l, e):
+    """Checks if ``e`` is in ``l``, a sorted list."""
+    i = bisect_left(l, e)
+    return i != len(l) and l[i] == e
+
+
 def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
                 keep: str) -> str:
     """
@@ -160,7 +166,7 @@ def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
     return ret
 
 
-def file_to_dict(index_file: str, keep: str, skip_urls: UrlSet, url_fn: UrlFn,
+def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
                  global_uniqs: UrlIndexDict, lock: RLock):
     """
     Collects all URLs from an index file and deduplicats in two phrases:
@@ -172,13 +178,14 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlSet, url_fn: UrlFn,
 
     :param index_file: the name of the input file
     :param keep: which record should win: the ``latest`` or ``biggest``
-    :param skip_urls: the set of URLs to skip (e.g. because we already have them)
+    :param skip_urls: the list of URLs to skip (e.g. because we already have them)
     :param url_fn: the URL transformation function to apply to each URL. In the
                    scope of this program, this is either hashing or nothing.
     :param global_uniqs: the shared dictionary of unique URLs
     :param lock: regulates access to ``global_uniqs``
     """
     logging.info('Collecting URLs from {}...'.format(index_file))
+    stats = CollectStats()
     try:
         # In-file deduplication
         with openall(index_file, 'rt') as inf:
@@ -189,25 +196,27 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlSet, url_fn: UrlFn,
                     # After filtering, the line is prepended with the "domain"
                     # I skip that and extract it myself
                     url, warc, offset, length = line.split()[:7][-6:-2]
-                    record = IndexRecord(warc, offset, length, file_id)
-                    uniq_record(url_fn(url), record, uniqs, keep)
+                    if in_sorted_list(skip_urls, url):
+                        stats.skipped += 1
+                    else:
+                        record = IndexRecord(warc, offset, length, file_id)
+                        uniq_record(url_fn(url), record, uniqs, keep)
                 except:
                     logging.exception(
                         'Exception in file {}:{}'.format(index_file, line_no))
                     break
-            logging.info('Self-deduplicated {} URLs in {} to {}.'.format(
-                line_no, index_file, len(uniqs)))
+            logging.info('Self-deduplicated {} URLs in {} to {}; skipped {}.'.format(
+                line_no, index_file, len(uniqs), stats.skipped))
 
         # Global deduplication
         with lock:
-            counts = Counter(uniq_record(url, record, global_uniqs, keep)
-                             for url, record in uniqs.items())
-            num_uniqs = counts['new'] + counts['overwrite']
+            for url, record in uniqs.items():
+                stats[uniq_record(url, record, global_uniqs, keep)] += 1
 
         logging.info('Cross-deduplicated {} URLs in {} to '
                      '{} (overwrote {}; {} new).'.format(
-                         len(uniqs), index_file, num_uniqs,
-                         counts['overwrite'], counts['new']))
+                         len(uniqs), index_file, stats.new + stats.overwrite,
+                         stats.overwrite, stats.new))
     except:
         logging.exception(
             'Exception in file {}'.format(index_file))
@@ -275,6 +284,9 @@ def main():
     )
     install_mp_handler()
 
+    url_fn = hash_normalize if args.hash else noop_normalize
+    skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
+
     basenames = os.listdir(args.input_dir)
     input_files = [op.join(args.input_dir, f) for f in basenames]
 
@@ -284,11 +296,12 @@ def main():
     # Collect the representative records for all URLs
     m = Manager()
     global_uniqs = m.dict()
-    skip_urls = m.set()
+    global_urls = m.list()
     lock = m.RLock()
 
-    url_fn = hash_normalize if args.hash else noop_normalize
-    read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
+    for url in skip_urls:
+        global_urls.append(url)
+        global_urls.sort()
 
     with Pool(args.processes) as pool:
         f = partial(file_to_dict, keep=args.keep, skip_urls=skip_urls,
