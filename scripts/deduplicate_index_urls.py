@@ -301,7 +301,7 @@ def main():
 
     for url in skip_urls:
         global_urls.append(url)
-        global_urls.sort()
+    global_urls.sort()
 
     with Pool(args.processes) as pool:
         f = partial(file_to_dict, keep=args.keep, skip_urls=global_urls,
