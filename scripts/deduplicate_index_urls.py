@@ -304,7 +304,7 @@ def main():
         global_urls.sort()
 
     with Pool(args.processes) as pool:
-        f = partial(file_to_dict, keep=args.keep, skip_urls=skip_urls,
+        f = partial(file_to_dict, keep=args.keep, skip_urls=global_urls,
                     url_fn=url_fn, global_uniqs=global_uniqs, lock=lock)
         pool.map(f, input_files)
         logging.info('Total number of unique URLs found: {}'.format(
