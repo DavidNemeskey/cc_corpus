@@ -70,6 +70,9 @@ def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
         urls = set()
         for no_urls, url in enumerate(map(str.strip, inf), start=1):
             urls.add(url_fn(url))
+            if no_urls % 1000000 == 0:
+                logging.debug('Loaded {} urls from {}...'.format(
+                    no_urls, urls_file))
         logging.info('Loaded {} urls from {}; {} unique.'.format(
             no_urls, urls_file, len(urls)))
         return urls
