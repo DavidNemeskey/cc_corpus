@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.2.1',
+      version='1.2.2',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -54,6 +54,7 @@ setup(name='commoncrawl-downloader',
           'scripts/cdx-index-client.py',
           'scripts/get_indexfiles.py',
           'scripts/filter_index.py',
+          'scripts/deduplicate_index_urls.py',
           'scripts/deduplicate_index_urls_redis.py',
           'scripts/filter_corpus.py',
           'scripts/filter_known_urls.py',

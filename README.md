@@ -76,6 +76,32 @@ This script writes 5 files:
   / mime types in the index, along with their count and percentage
 - `stats.tsv` contains general statistics, such as the total number of documents
 
+#### Index deduplication
+
+Once the index is filtered, it should be deduplicated, because the same URLs
+are re-downloaded time and again (as many times as 240 in 4 month). The first
+step is to collect all URLs we have already downloaded in a previous batch.
+For example, if we already have the (deduplicated) URLs of the previous year,
+we should do something like this first:
+```
+zcat 2018/cc_index_dedup/*.gz | cut -d' ' -f2 | sort | gzip > 2018_index_urls.gz
+```
+
+Alternatively, the URLs can be extracted from an already existing corpus:
+```
+extract_attributes.py -i 2018/cc_corpus/ -a url -o 2018_urls.tsv.gz -P 12 2> /dev/null
+```
+
+Generally, it is better to collect the list from the index, because the corpus
+might already have been filtered (based on language, length, etc.), which means
+a lot of URLs that we have downloaded and discarded don't appear in it, so we'll
+just re-download them again.
+
+Once the list of URLs to skip is complete, the index can be deduplicated like
+```
+deduplicate_index_urls.py -i 2019/cc_index_filtered/ -o 2019/cc_index_dedup/ -s 2018_index_urls.gz -k biggest -P 12
+```
+
 ### Type checking
 
 Some of the code I have annotated with
