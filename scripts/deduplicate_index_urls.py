@@ -4,17 +4,13 @@
 """Deduplicates the urls in the index."""
 
 from argparse import ArgumentParser
-from bisect import bisect_left
 from functools import partial
+from itertools import starmap
 import logging
-from multiprocessing import Manager, Pool
-from multiprocessing.synchronize import RLock
 import os
 import os.path as op
 import re
 from typing import Any, Callable, Dict, List, Set, Union
-
-from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.utils import notempty, openall, Stats
 
@@ -37,17 +33,10 @@ def parse_arguments():
     parser.add_argument('--keep', '-k', choices=['latest', 'biggest'],
                         default='biggest',
                         help='which occurrence to keep. Default: biggest.')
-    parser.add_argument('--processes', '-P', type=int, default=1,
-                        help='number of worker processes to use (max is the '
-                             'num of cores, default: 1)')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
-    num_procs = len(os.sched_getaffinity(0))
-    if args.processes < 1 or args.processes > num_procs:
-        parser.error('Number of processes must be between 1 and {}'.format(
-            num_procs))
     return args
 
 
@@ -75,7 +64,7 @@ def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
         urls = set()
         for no_urls, url in enumerate(map(str.strip, inf), start=1):
             urls.add(url_fn(url))
-            if no_urls % 1000000 == 0:
+            if no_urls % 5000000 == 0:
                 logging.debug('Loaded {} urls from {}...'.format(
                     no_urls, urls_file))
         logging.info('Loaded {} urls from {}; {} unique.'.format(
@@ -136,12 +125,6 @@ CollectStats = Stats.create(
     'overwrite', 'new', 'reject', 'skipped')  # type: Any
 
 
-def in_sorted_list(l, e):
-    """Checks if ``e`` is in ``l``, a sorted list."""
-    i = bisect_left(l, e)
-    return i != len(l) and l[i] == e
-
-
 def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
                 keep: str) -> str:
     """
@@ -167,7 +150,7 @@ def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
 
 
 def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
-                 global_uniqs: UrlIndexDict, lock: RLock):
+                 global_uniqs: UrlIndexDict):
     """
     Collects all URLs from an index file and deduplicats in two phrases:
 
@@ -182,7 +165,6 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
     :param url_fn: the URL transformation function to apply to each URL. In the
                    scope of this program, this is either hashing or nothing.
     :param global_uniqs: the shared dictionary of unique URLs
-    :param lock: regulates access to ``global_uniqs``
     """
     logging.info('Collecting URLs from {}...'.format(index_file))
     stats = CollectStats()
@@ -197,7 +179,7 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
                     # After filtering, the line is prepended with the "domain"
                     # I skip that and extract it myself
                     url, warc, offset, length = line.split()[:7][-6:-2]
-                    if in_sorted_list(skip_urls, url):
+                    if url in skip_urls:
                         stats.skipped += 1
                     else:
                         record = IndexRecord(warc, offset, length, file_id)
@@ -214,9 +196,8 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
                 line_no, index_file, len(uniqs), stats.skipped))
 
         # Global deduplication
-        with lock:
-            for url, record in uniqs.items():
-                stats[uniq_record(url, record, global_uniqs, keep)] += 1
+        for url, record in uniqs.items():
+            stats[uniq_record(url, record, global_uniqs, keep)] += 1
 
         logging.info('Cross-deduplicated {} URLs in {} to '
                      '{} (overwrote {}; {} new).'.format(
@@ -287,7 +268,6 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    install_mp_handler()
 
     url_fn = hash_normalize if args.hash else noop_normalize
     skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
@@ -299,43 +279,28 @@ def main():
         len(input_files), args.input_dir))
 
     # Collect the representative records for all URLs
-    m = Manager()
-    global_uniqs = m.dict()
-    global_urls = m.list()
-    lock = m.RLock()
+    global_uniqs = {}
 
-    for url in skip_urls:
-        global_urls.append(url)
-    global_urls.sort()
-
-    with Pool(args.processes) as pool:
-        f = partial(file_to_dict, keep=args.keep, skip_urls=global_urls,
-                    url_fn=url_fn, global_uniqs=global_uniqs, lock=lock)
-        pool.map(f, input_files)
-        logging.info('Total number of unique URLs found: {}'.format(
-            len(global_uniqs)))
-
-        pool.close()
-        pool.join()
+    for input_file in input_files:
+        file_to_dict(input_file, args.keep, skip_urls, url_fn, global_uniqs)
+    logging.info('Total number of unique URLs found: {}'.format(
+        len(global_uniqs)))
 
     # And filter from the files all non-representative URLs
     if not os.path.isdir(args.output_dir):
         os.mkdir(args.output_dir)
     tasks = zip(input_files, [op.join(args.output_dir, f) for f in basenames])
-    with Pool(args.processes) as pool:
-        f = partial(filter_file, uniqs=global_uniqs, url_fn=url_fn)
-        sum_stats = FilterStats()
-        for stats in pool.starmap(f, tasks):
-            sum_stats += stats
 
-        pool.close()
-        pool.join()
+    f = partial(filter_file, uniqs=global_uniqs, url_fn=url_fn)
+    sum_stats = FilterStats()
+    for stats in starmap(f, tasks):
+        sum_stats += stats
 
-        logging.info(
-            'Done filtering index: index files {} -> {}, URLs {} -> {}.'.format(
-                sum_stats.old_files, sum_stats.new_files,
-                sum_stats.old_urls, sum_stats.new_urls)
-        )
+    logging.info(
+        'Done filtering index: index files {} -> {}, URLs {} -> {}.'.format(
+            sum_stats.old_files, sum_stats.new_files,
+            sum_stats.old_urls, sum_stats.new_urls)
+    )
 
 
 if __name__ == '__main__':
