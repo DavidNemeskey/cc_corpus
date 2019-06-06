@@ -228,7 +228,7 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn) -> FilterStats:
     logging.info('Filtering file {}...'.format(input_file))
     stats = FilterStats(old_files=1)
     with openall(input_file, 'rt') as inf, notempty(openall(output_file, 'wt')) as outf:
-        lines_printed = 0
+        line_no = lines_printed = 0
         for line_no, line in enumerate(map(str.strip, inf), start=1):
             try:
                 url, warc, offset, length = line.split()[:7][-6:-2]
@@ -239,12 +239,17 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn) -> FilterStats:
             except:
                 logging.exception(
                     'Exception in file {}:{}'.format(input_file, line_no))
+
+    if line_no:
         logging.info('Kept {} URLs out of {} in {}.'.format(
             lines_printed, line_no, input_file))
         stats.old_urls = line_no
-        if lines_printed:
-            stats.new_files = 1
-            stats.new_urls = lines_printed
+    else:
+        logging.info('File {} was empty.'.format(input_file))
+
+    if lines_printed:
+        stats.new_files = 1
+        stats.new_urls = lines_printed
     return stats
 
 
