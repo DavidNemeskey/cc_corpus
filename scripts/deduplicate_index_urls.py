@@ -4,9 +4,10 @@
 """Deduplicates the urls in the index."""
 
 from argparse import ArgumentParser
-from functools import partial
+from functools import partial, reduce
 from itertools import starmap
 import logging
+import operator
 import os
 import os.path as op
 import re
@@ -292,9 +293,7 @@ def main():
     tasks = zip(input_files, [op.join(args.output_dir, f) for f in basenames])
 
     f = partial(filter_file, uniqs=global_uniqs, url_fn=url_fn)
-    sum_stats = FilterStats()
-    for stats in starmap(f, tasks):
-        sum_stats += stats
+    sum_stats = reduce(operator.add, starmap(f, tasks), FilterStats())
 
     logging.info(
         'Done filtering index: index files {} -> {}, URLs {} -> {}.'.format(
