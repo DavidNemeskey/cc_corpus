@@ -5,6 +5,6 @@ windows:
       - shell_command:
         - source {{ virtualenv_dir }}/bin/activate
         - cd {{ working_dir }}
-        - {{ python_script }} -P {{ processes }} {{ full_argument_line }} > {{ per_host_log_file }} 2>&1
+        - {{ python_script }} --processes {{ processes }} {{ full_argument_line }} > {{ per_host_log_file }} 2>&1
         - deactivate
         - exit
