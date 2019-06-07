@@ -114,7 +114,31 @@ download_pages.py -o 2019/cc_downloaded -e warc.gz --preprocessed -i '2019/cc_in
 ```
 
 This step takes a while, so it probably make sense to [distribute the work among
-a cluster of machines](#tech).
+a cluster of machines](#tech). However, it is a bit more involved than
+distributing other scripts, as this one has been inherited from the old
+repository. The differences are:
+
+1. The script requires a `glob` (possibly wildcard) expression that expands to
+   a list of input files, and not an input directory. So the place of the host
+   name in the value to the `-i` argument must be specified manually (with
+   `{}`, see below)
+1. The number of processes must be set to 0. This eliminates the `-P` argument
+   from the Python command line. We need to do this because first, `-P` means
+   something else in `download_pages.py`, and second, the script uses threads
+   anyway.
+
+```
+ansible-playbook -i hosts distribute_files.yml -e
+    '{"input_dir": "/mnt/data/lang/Hungarian/cc_corpus/2019/cc_index_dedup",
+      "output_dir": "/mnt/data/lang/Hungarian/cc_corpus/2019"}'
+
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "download_pages.py",
+      "log_file": "2019_download.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-o 2019/cc_downloaded -e warc.gz --preprocessed -i $input_glob ",
+      "per_host_args": {"input_glob": "\"2019/cc_index_dedup_{}/*.gz\""}, "processes": 0}'
+```
 
 ### Type checking
 
