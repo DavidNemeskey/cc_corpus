@@ -36,6 +36,14 @@
 - name: setting up the log file
   set_fact:
     per_host_log_file: "{{ log_file|distribute(inventory_hostname) }}"
+- name: setting up process number
+  set_fact:
+    process_bit: "-P {{ processes }}"
+  when: processes > 0
+- name: deleting process argument
+  set_fact:
+    process_bit: ""
+  when: processes == 0
 - name: upload the tmuxp configuration template
   template:
     src: tmuxp.yml.j2
