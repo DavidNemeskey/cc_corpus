@@ -319,7 +319,7 @@ if __name__ == '__main__':
     args = get_args()
 
     logging.basicConfig(
-        level=getattr(logging, logging.INFO),
+        level=logging.INFO,
         format='%(asctime)s - %(threadName)-10s)- %(levelname)s - %(message)s'
     )
 
