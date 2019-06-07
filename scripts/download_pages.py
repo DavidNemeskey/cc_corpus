@@ -220,8 +220,8 @@ def preprocessed_stream(stream):
 def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
     start_t = time.time()
     for num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type in prefilter_stream(stream):
-        if num % 100 == 0:
-            logging.info('Downloading {}th URL  {}'.format(num, url))
+        # if num % 100 == 0:
+        #     logging.info('Downloading {}th URL  {}'.format(num, url))
         logging.debug('Downloading URL ({0}) {1}'.format(num, url))  # Print every url in debug mode
 
         filename_str = os.path.basename(filename.replace('.gz', ''))
