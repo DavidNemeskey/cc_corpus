@@ -33,44 +33,6 @@ from botocore.vendored.requests.packages.urllib3.exceptions import ReadTimeoutEr
 import justext
 from lxml.etree import ParserError
 
-
-# Logging
-def setup_logging(log_dir):
-    mkdir_p(os.path.abspath(log_dir))
-    hostname = socket.gethostname()
-    pid = str(os.getpid()) + ' ' + str(datetime.datetime.now())
-    out_filename = os.path.join(log_dir, '{0}_{1}_download.log'.format(hostname, pid))
-    logging.basicConfig(filename=out_filename,
-                        level=logging.INFO,
-                        format='(%(asctime)-15s ('
-                               + hostname + '(' + pid + ')) %(threadName)-10s) %(levelname)s:%(name)s %(message)s',
-                        filemode='a')
-
-    class StreamToLogger(object):
-        """
-        Fake file-like stream object that redirects writes to a logger instance.
-        """
-
-        def __init__(self, logger, log_level=logging.INFO):
-            self.logger = logger
-            self.log_level = log_level
-            self.linebuf = ''
-
-        def write(self, buf):
-            for line in buf.rstrip().splitlines():
-                self.logger.log(self.log_level, line.rstrip())
-
-        def flush(self):
-            pass  # https://stackoverflow.com/a/20525834
-
-    # Logger
-    stdout_logger = logging.getLogger('STDOUT')
-    so = StreamToLogger(stdout_logger)
-    sys.stdout = so
-    stderr_logger = logging.getLogger('STDERR')
-    se = StreamToLogger(stderr_logger, logging.ERROR)
-    sys.stderr = se
-
 # -------------------------------------------------Download-------------------------------------------------
 
 
@@ -132,7 +94,7 @@ class RotatedGzip:
     def __init__(self, out_d, batch_name, chunk_size, name, padding, ext):
         self.chunk_size = chunk_size
         if name is None:
-            logging.warning('No output filename specified using batch name: {0}'.format(batch_name))
+            logging.info('No output filename specified using batch name: {0}'.format(batch_name))
             name = batch_name
         mkdir_p(os.path.abspath(out_d))
         self.out_dir = out_d
@@ -199,7 +161,7 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
             # https://stackoverflow.com/a/2695575
             decompressed_text = zlib.decompress(gzip_text, zlib.MAX_WBITS | 32)
         except zlib.error:
-            logging.exception('Decompression error is occured ({0}):\t\t{1}\t\t'.format(retry_left, entry_str))
+            logging.exception('Decompression error occured ({0}):\t\t{1}\t\t'.format(retry_left, entry_str))
             decompressed_text = b''
         except:
             logging.exception('Some other error while decompressing')
@@ -218,7 +180,7 @@ def preproc_stream(stream):
         filename, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', maxsplit=6)
 
         if response != '200':
-            logging.warning('Skipping entry because response is not 200 ({0}) {1}'.format(num, response))
+            logging.debug('Skipping entry because response is not 200 ({0}) {1}'.format(num, response))
             continue
         if url.endswith('/robots.txt'):
             logging.debug('Skipping robots.txt URL {0}'.format(url))
@@ -234,7 +196,7 @@ def preproc_stream(stream):
                              'text/htm', 'texthtml', 'text/HTML', 'Text/html', 'TEXT/HTML', 'text/html', 'text/rss+xml',
                              'text/text', 'text/txt', 'text/x-httpd-php', 'text/xml', 'txt/html', 'unk',
                              'unknown/unknown', 'x-unknown/unknown'}:
-            logging.warning('Skipping entry because response mime-type not in list ({0}) {1}'.format(num, mime_type))
+            logging.debug('Skipping entry because response mime-type not in list ({0}) {1}'.format(num, mime_type))
             continue
 
         m = domain_re.match(url)
@@ -259,7 +221,7 @@ def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
     start_t = time.time()
     for num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type in prefilter_stream(stream):
         if num % 100 == 0:
-            logging.warning('Downloading URL ({0}) {1}'.format(num, url))
+            logging.info('Downloading {}th URL  {}'.format(num, url))
         logging.debug('Downloading URL ({0}) {1}'.format(num, url))  # Print every url in debug mode
 
         filename_str = os.path.basename(filename.replace('.gz', ''))
@@ -301,11 +263,12 @@ def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_in
 
 
 def process_index_gz_file(conn, filename, out_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort):
-    logging.warning('Starting batch {0}'.format(filename))
+    logging.info('Starting batch {}...'.format(filename))
     filename_str = filename.replace('.gz', '')
     with gzip.open(filename) as inpfh:
         process_stream(conn, (' '.join((filename_str, line.decode('UTF-8'))) for line in inpfh),
                        out_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort)
+    logging.info('Finished batch {}.'.format(batch_name))
 
 
 # -------------------------------------------------END Download-------------------------------------------------
@@ -344,8 +307,8 @@ def get_args():
 
     r.remove_boilerplate = r.boilerplate_language is not None
     if not r.single_threaded and r.input_pattern is None:
-        print('Must choose singlethreaded to read from STDIN or supply an input pattern!', file=sys.stderr)
-        exit(1)
+        parser.error('Must choose singlethreaded to read from STDIN or supply '
+                     'an input pattern!')
 
     return r
 
@@ -354,6 +317,12 @@ if __name__ == '__main__':
 
     # Parse arguments
     args = get_args()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(threadName)-10s)- %(levelname)s - %(message)s'
+    )
+
     single_threaded = args.single_threaded
     remove_boilerplate_content = args.remove_boilerplate
     stopwordlist_lang = args.boilerplate_language
@@ -377,10 +346,8 @@ if __name__ == '__main__':
         try:
             stoplist = justext.get_stoplist(stopwordlist_lang)
         except ValueError as e:
-            print(e, file=sys.stderr)
+            logging.exception('Error while reading boilerplate stoplist.')
             exit(1)
-
-    setup_logging(output_dir)
 
     if single_threaded:
         # Boto3 Amazon anonymous login
