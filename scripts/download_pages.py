@@ -268,7 +268,7 @@ def process_index_gz_file(conn, filename, out_dir, remove_boilerplate, num_retri
     with gzip.open(filename) as inpfh:
         process_stream(conn, (' '.join((filename_str, line.decode('UTF-8'))) for line in inpfh),
                        out_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort)
-    logging.info('Finished batch {}.'.format(batch_name))
+    logging.info('Finished batch {}.'.format(filename))
 
 
 # -------------------------------------------------END Download-------------------------------------------------
