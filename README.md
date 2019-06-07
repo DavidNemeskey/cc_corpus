@@ -99,10 +99,22 @@ just re-download them again.
 
 Once the list of URLs to skip is complete, the index can be deduplicated like
 ```
-deduplicate_index_urls.py -i 2019/cc_index_filtered/ -o 2019/cc_index_dedup/ -s 2018_index_urls.gz -k biggest -P 12
+deduplicate_index_urls.py -i 2019/cc_index_filtered/ -o 2019/cc_index_dedup/ -s 2018_index_urls.gz -k biggest
 ```
 
-Note: unfortunately, loading the old URLs takes a very long time...
+Note: unfortunately, loading the old URLs takes a very long time... also, the
+script runs in a single process as Python's shared memory performance is
+abysmal.
+
+#### Download pages
+
+Pages in the (filtered, deduplicated) index can be downloaded by the command
+```
+download_pages.py -o 2019/cc_downloaded -e warc.gz --preprocessed -i '2019/cc_index_dedup/*.gz'
+```
+
+This step takes a while, so it probably make sense to [distribute the work among
+a cluster of machines](#tech).
 
 ### Type checking
 
@@ -115,7 +127,7 @@ switches:
 mypy --python-version 3.5 --no-strict-optional --ignore-missing-imports scripts/frequent_paragraphs.py
 ```
 
-### Technicalities
+### <a name="tech"></a>Technicalities
 
 Most of the tasks can be executed on a single server, albeit a little patience
 is in order. Others (mostly anything related to minhashing, especially
