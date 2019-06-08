@@ -45,7 +45,7 @@ arrive at a corpus.
 The script `get_indexfiles.py` can be used to download the index for a
 specific collection. The example below downloads the index for January 2019:
 ```
-get_indexfiles.py -q *.hu -o 2019/cc_download -l 2019_01.log -m 5 -c CC-MAIN-2019-04
+get_indexfiles.py -q *.hu -o 2019/cc_index -l 2019_01.log -m 5 -c CC-MAIN-2019-04
 ```
 
 Note that `get_indexfiles.py` is a replacement for the original
@@ -136,8 +136,9 @@ ansible-playbook -i hosts python.yml -e
     '{"python_script": "download_pages.py",
       "log_file": "2019_download.log",
       "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
-      "arguments": "-o 2019/cc_downloaded -e warc.gz --preprocessed -i $input_glob ",
-      "per_host_args": {"input_glob": "\"2019/cc_index_dedup_{}/*.gz\""}, "processes": 0}'
+      "arguments": "-o $output_dir -e warc.gz --preprocessed -i $input_glob ",
+      "per_host_args": {"input_glob": "\"2019/cc_index_dedup_{}/*.gz\"",
+                        "output_dir": "2019/cc_downloaded/"}, "processes": 0}'
 ```
 
 ### Type checking
