@@ -99,13 +99,10 @@ setup(name='commoncrawl-downloader',
           # Language identification
           'cld2-cffi', 'langid',
           # WARC 3 library
-          'warc',
+          # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
+          'warc @ git+git://github.com/erroneousboat/warc3.git#egg=warc',
           # Type hints for Python < 3.5
           'typing',
-      ],
-      dependency_links=[
-          # WARC 3 library
-          'git+git://github.com/erroneousboat/warc3.git#egg=warc'
       ],
       # zip_safe=False,
       use_2to3=False)
