@@ -13,11 +13,17 @@ import queue
 import sys
 import threading
 import time
+from typing import Any
+import zlib
 
 # Boto3
 import boto3
 from botocore.client import Config
 from botocore import UNSIGNED
+
+# Boto3 Error handling
+from botocore.exceptions import ClientError, EndpointConnectionError
+from botocore.vendored.requests.packages.urllib3.exceptions import ReadTimeoutError
 
 
 def parse_arguments():
@@ -134,7 +140,7 @@ class FilePerDocument:
         Writes ``document`` to ``file_name``. Creates all the intermediary
         directories.
         """
-        os.makedirs(os.path.dirname(out_gz_file_name), exist_ok=True)
+        os.makedirs(os.path.dirname(file_name), exist_ok=True)
         with gzip.open(file_name, 'wb') as f:
             f.write(decompressed_text)
 
@@ -143,7 +149,58 @@ class FilePerDocument:
         pass
 
 
-def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
+def download_file(s3: Any, warc_file_name: str, offset: int, length: int,
+                  entry_str: str, retry_left: int) -> bytes:
+    """
+    Downloads a document and returns it decompressed.
+    :param s3: the connection handle to _s3_.
+    :param warc_file_name: the name of the WARC file to download from.
+    :param offset: the offset of the document in the WARC file.
+    :param length: the (compressed) size of the document.
+    :param entry_str: the index line that corresponds to the document being
+                      downloaded. For logging purposes only.
+    :param retry_left: the number of retries left.
+    """
+    offset_end = offset + length - 1
+    byte_range = 'bytes={offset}-{end}'.format(offset=offset, end=offset_end)
+    decompressed_text = b''
+    while len(decompressed_text) == 0 and retry_left > 0:
+        retry_left -= 1
+        # This is a gzip bytearray (str)
+        try:
+            gzip_text = s3.get_object(
+                Bucket='commoncrawl', Key=warc_file_name, Range=byte_range
+            )['Body'].read()
+        except (ClientError, ReadTimeoutError, EndpointConnectionError) as ex:
+            if hasattr(ex, 'response') and ex.response['Error']['Code'] == 'NoSuchKey':
+                logging.exception('NoSuchKey: {}'.format(entry_str))
+                retry_left = 0  # Skip later probes
+            # ReadTimeoutError has no property response
+            elif hasattr(ex, 'response') and ex.response['Error']['Code'] == 'InternalError' or \
+                    ex.__class__.__name__ in {'ReadTimeoutError', 'EndpointConnectionError'}:
+                logging.exception('InternalError({}): {}'.format(ex, entry_str))
+            else:  # This shouldn't happen...
+                logging.exception('Other Error({}): {}'.format(ex, entry_str))
+                retry_left = 0  # Skip later probes
+            continue  # Skip decompression test
+        except:
+            logging.exception('Some other error while downloading')
+
+        try:  # Test decompression to avoid decompression errors later
+            # https://stackoverflow.com/a/2695575
+            decompressed_text = zlib.decompress(gzip_text, zlib.MAX_WBITS | 32)
+        except zlib.error:
+            logging.exception(
+                'Decompression error occured ({0}):\t\t{1}\t\t'.format(
+                    retry_left, entry_str))
+            decompressed_text = b''
+        except:
+            logging.exception('Some other error while decompressing')
+
+    return decompressed_text
+
+
+def filter_stream(stream, output_dir, conn, retries, prefilter_stream):
     start_time = time.time()
     for line_no, line in enumerate(stream, start=1):
         (filename, domain, url, warc_file, offset_str,
@@ -151,8 +208,8 @@ def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
         # Print every url in debug mode
         logging.debug('Downloading URL #{0}: {1}'.format(line_no, url))
 
-        filename_str = os.path.basename(filename.replace('.gz', ''))
-        line = ' '.join((filename_str, domain, url, warc_file, offset_str,
+        batch_name = os.path.basename(filename.replace('.gz', ''))
+        line = ' '.join((batch_name, domain, url, warc_file, offset_str,
                          length_str, response, mime_type))
 
         document = download_file(conn, warc_file, int(offset_str),
@@ -161,8 +218,9 @@ def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
         if len(document) > 0:
             out_file = warc_file.replace('/', '_').replace(
                 '.warc.gz', '-{0}-{1}.warc.gz'.format(offset_str, length_str))
-            out_gz_file_name = os.path.join(out_dir, 'pages', domain, filename_str, out_file)
-            yield filename_str, domain, line, document, out_gz_file_name
+            out_gz_file_name = os.path.join(output_dir, 'pages', domain,
+                                            batch_name, out_file)
+            yield batch_name, line, document, out_gz_file_name
         else:
             logging.info('Could not download URL {}'.format(url))
     else:
@@ -180,14 +238,26 @@ def process_stream(conn, stream, output_dir, retries, rotate_info):
     """
     # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to
     # be grouped by filename
-    for batch_name, group in itertools.groupby(filter_stream(stream, output_dir, conn, retries), key=lambda x: x[0]):
+    for batch_name, group in itertools.groupby(
+        filter_stream(stream, output_dir, conn, retries),
+        key=lambda x: x[0]
+    ):
         if len(rotate_info) > 0:
             writer = RotatedGzip(output_dir, batch_name, *rotate_info)
         else:
             writer = FilePerDocument()
         with closing(writer) as w:
-            for _, _, line, document, out_file_name in group:
+            for _, line, document, out_file_name in group:
                 w.write(document, out_file_name)
+
+
+def process_index_gz_file(conn, filename, output_dir, retries, rotate_info):
+    batch_name = filename.replace('.gz', '')
+    logging.info('Starting batch {}...'.format(batch_name))
+    with gzip.open(filename) as inpfh:
+        process_stream(conn, (' '.join((batch_name, line.decode('UTF-8'))) for line in inpfh),
+                       output_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort)
+    logging.info('Finished batch {}.'.format(batch_name))
 
 
 if __name__ == '__main__':
