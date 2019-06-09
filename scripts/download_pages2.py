@@ -8,12 +8,13 @@ import gzip
 import itertools
 import logging
 import multiprocessing
+from operator import itemgetter
 import os
 import queue
 import sys
 import threading
 import time
-from typing import Any, TextIO
+from typing import Any, Generator, TextIO, Tuple
 import zlib
 
 # Boto3
@@ -137,13 +138,19 @@ class FilePerDocument:
     Writes each document to its own file name. An alternative to
     :class:`RotatedGzip`.
     """
+    def __init__(self, output_dir):
+        """
+        :param output_dir: the base of the output directory hierarchy.
+        """
+        self.output_dir = output_dir
+
     def write(self, decompressed_text, file_name):
         """
-        Writes ``document`` to ``file_name``. Creates all the intermediary
-        directories.
+        Writes ``document`` to :attr:`FilePerDocument.output_dir`/``file_name``.
+        Creates all the intermediary directories.
         """
         os.makedirs(os.path.dirname(file_name), exist_ok=True)
-        with gzip.open(file_name, 'wb') as f:
+        with gzip.open(os.path.join(self.output_dir, file_name), 'wb') as f:
             f.write(decompressed_text)
 
     def close(self):
@@ -203,8 +210,22 @@ def download_file(s3: Any, warc_file_name: str, offset: int, length: int,
     return decompressed_text
 
 
-def filter_stream(stream, output_dir, s3, retries):
+def download_stream(s3: Any, stream: TextIO, retries: int) -> Generator[
+    Tuple[str, str, bytes, str], None, None
+]:
+    """
+    Downloads all documents in the stream and yields all information necessary
+    to process each: the batch name (name of the index file), the index line,
+    the decompressed document and the name of the individual output file. The
+    latter might or might not be used by the caller (depending on the value of
+    the file-per-doc option).
+
+    :param s3: the connection handle to _s3_.
+    :param stream: the index stream.
+    :param retries: the number of times download is attempted for a document.
+    """
     start_time = time.time()
+    line_no = 0
     for line_no, line in enumerate(stream, start=1):
         (filename, domain, url, warc_file, offset_str,
          length_str, response, mime_type) = line.split(' ', maxsplit=7)
@@ -221,18 +242,13 @@ def filter_stream(stream, output_dir, s3, retries):
         if len(document) > 0:
             out_file = warc_file.replace('/', '_').replace(
                 '.warc.gz', '-{0}-{1}.warc.gz'.format(offset_str, length_str))
-            out_gz_file_name = os.path.join(output_dir, 'pages', domain,
-                                            batch_name, out_file)
+            out_gz_file_name = os.path.join('pages', domain, batch_name, out_file)
             yield batch_name, line, document, out_gz_file_name
         else:
             logging.info('Could not download URL {}'.format(url))
     else:
-        try:
-            # Raises NameError if the stream is empty
-            logging.info('Downloaded a total of {} URLs in {} seconds.'.format(
-                line_no, time.time() - start_time))
-        except NameError:
-            pass
+        logging.info('Downloaded a total of {} URLs in {} seconds.'.format(
+            line_no, time.time() - start_time))
 
 
 def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
@@ -253,13 +269,12 @@ def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
     # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to
     # be grouped by filename
     for batch_name, group in itertools.groupby(
-        filter_stream(stream, output_dir, s3, retries),
-        key=lambda x: x[0]
+        download_stream(stream, s3, retries), key=itemgetter(0)
     ):
         if len(rotate_info) > 0:
             writer = RotatedGzip(output_dir, batch_name, *rotate_info)
         else:
-            writer = FilePerDocument()
+            writer = FilePerDocument(output_dir)
         with closing(writer) as w:
             for _, line, document, out_file_name in group:
                 w.write(document, out_file_name)
@@ -271,7 +286,7 @@ def process_index_file(s3: Any, filename: str, output_dir: str, retries: int,
     Processes an index file: downloads all URLs in it. This functions is
     basically a wrapper to :func:`process_stream`. ``filename`` is the name of
     the index file; the rest of the parameters are the same as for
-    :func:`process_stream`. 
+    :func:`process_stream`.
     """
     logging.info('Starting file {}...'.format(filename))
     with openall(filename) as inpfh:
