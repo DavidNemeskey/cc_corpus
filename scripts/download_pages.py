@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Standard lib
 import argparse
-import datetime
-import errno
+from contextlib import closing
 import glob
 import gzip
 import itertools
 import logging
 import multiprocessing
+from operator import itemgetter
 import os
 import queue
-import re
-import socket
 import sys
 import threading
 import time
-import xml.sax.saxutils
+from typing import Any, Generator, TextIO, Tuple
 import zlib
 
 # Boto3
@@ -29,111 +26,152 @@ from botocore import UNSIGNED
 from botocore.exceptions import ClientError, EndpointConnectionError
 from botocore.vendored.requests.packages.urllib3.exceptions import ReadTimeoutError
 
-# JusText
-import justext
-from lxml.etree import ParserError
-
-# -------------------------------------------------Download-------------------------------------------------
+from cc_corpus.utils import openall
 
 
-def skip_action(warc1, warc2, name, entry_str):
-    out = '\r\n\r\n'.join((warc1, warc2)).replace('\n', '\t')
-    logging.warning('Skipping({0}):\t\t{1}\t\t{2}'.format(name, entry_str, out))
+def parse_arguments():
+    parser = argparse.ArgumentParser('CDX Index Batch Document Downloader')
+    parser.add_argument('-o', '--output-dir', required=True,
+                        help='Output dir of log files and pages directory')
+    parser.add_argument('-of', '--out-filename', default=None,
+                        help='Output filename part (default: batch name or '
+                             'input file name)')
+    parser.add_argument('-r', '--retry', type=int, default=10,
+                        help='Number of retries on downloading or '
+                             'decompression errors (default: 10)')
+    parser.add_argument('-c', '--chunksize', type=int, default=99*1000*1000,
+                        help='Chunk size in bytes (default: 99 MB)')
+    parser.add_argument('-e', '--ext', default='txt.gz',
+                        help='Out file extension (default: txt.gz)')
+    parser.add_argument('-p', '--padding', default=4,
+                        help='Padding for chunk numbering (default: 4)')
+    parser.add_argument('-P', '--perdoc', action='store_true',
+                        help='One file per document grouped by the TLD (default: no)')
+    parser.add_argument('-L', '--log-level', type=str, default='info',
+                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        help='the logging level.')
 
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-s', '--single-threaded', action='store_true',
+                       help='Singlethreaded (read from STDIN). '
+                            'Use multithreaded for reading multiple files '
+                            'with glob pattern (default: multithreaded)')
+    group.add_argument('-i', '--input-pattern',
+                       help='Input glob pattern, with full path')
 
-def boilerplate_remove(inp_text, stopwordlist, entry_str):
-    warc1, warc2, text = inp_text.split(b'\r\n\r\n', maxsplit=2)
-    warc1 = warc1.decode('UTF-8').replace('\r\n', '\n')
-    warc2 = warc2.decode('UTF-8').replace('\r\n', '\n')
-    length = len(text)
-    if length <= 13:  # Threshold minimum: '<html></html>' is 13 long
-        skip_action(warc1, warc2, 'LengthError({0})'.format(length), entry_str)
-        return None
-    try:
-        paragraphs = justext.justext(text, stopwordlist)
-    # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
-    except (ParserError, UnicodeDecodeError, TypeError, AssertionError, ValueError) as err:
-        # Do not distinguish between the different errors
-        skip_action(warc1, warc2, err.__class__.__name__ + str(length), entry_str)
-        return None
+    args = parser.parse_args()
 
-    # Escape paragraph for parsable XML
-    text_removed = '\n\n'.join(('<p>\n{0}\n</p>'.format(xml.sax.saxutils.escape(paragraph.text))
-                                for paragraph in paragraphs if not paragraph.is_boilerplate))
-    if len(text_removed) == 0:
-        skip_action(warc1, warc2, 'JusTextBadError({0})'.format(length), entry_str)
-        return None
-
-    filename, domain, url, warc_file, offset_str, length_str, response, mime_type = entry_str.split(' ', maxsplit=8)
-    filename = filename.replace('.gz', '')
-    return '<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" offset="{4}" length="{5}" response="{6}"' \
-           ' mime-type="{7}">\n<meta>\n<request>\n{8}\n</request>\n' \
-           '<response>\n{9}\n</response>\n</meta>\n{10}\n</doc>\n\n\n'.\
-        format(domain, filename, url, warc_file, offset_str, length_str, response, mime_type, warc1, warc2,
-               text_removed).encode('UTF-8')
-
-
-def mkdir_p(out_file_name_w_path):
-    # Write to file
-    # https://stackoverflow.com/a/12517490
-    if not os.path.exists(out_file_name_w_path):
-        try:
-            os.makedirs(out_file_name_w_path)
-        except OSError as exc:  # Guard against race condition
-            if exc.errno != errno.EEXIST:
-                raise
-
-
-def write_gzip(decompressed_text, out_gz_file_name):
-    mkdir_p(os.path.dirname(out_gz_file_name))
-    with gzip.open(out_gz_file_name, 'wb') as f:
-        f.write(decompressed_text)
+    if not args.single_threaded and args.input_pattern is None:
+        parser.error('Must choose singlethreaded to read from STDIN or supply '
+                     'an input pattern!')
+    return args
 
 
 class RotatedGzip:
-    def __init__(self, out_d, batch_name, chunk_size, name, padding, ext):
+    """
+    Writes all documents into a "single" rotated file. The file name contains a
+    chunk counter. When the file reaches a certain size, it is closed and a new
+    one is opened with increased chunk counter.
+    """
+    def __init__(self, output_dir: str, batch_name: str, chunk_size: int,
+                 name: str = None, padding: int = 4, extension: str = 'txt.gz'):
+        """
+        :param output_dir: the output directory.
+        TODO
+        :param batch_name: the "name" of the batch. This is the "base name"
+                     (without the extension) of the original index file.
+        :param chunk_size: the maximum size of a file chunk (in bytes).
+        :param file_name: the name of the output file. If not specified, it
+                          defaults to ``batch_name``.
+        :param padding: the width of the chunk counter, padded with 0s.
+        :param extension: the extension of the output file.
+        """
         self.chunk_size = chunk_size
         if name is None:
-            logging.info('No output filename specified using batch name: {0}'.format(batch_name))
+            logging.info('No output filename specified; using batch name: '
+                         '{0}'.format(batch_name))
             name = batch_name
-        mkdir_p(os.path.abspath(out_d))
-        self.out_dir = out_d
-        self.format_string = name + '_{0:0' + str(padding) + 'd}.' + ext
-        self.counter = 0
-        self.total = 0
+        os.makedirs(os.path.abspath(output_dir), exist_ok=True)
+        self.output_dir = output_dir
+        self.format_string = name + '_{0:0' + str(padding) + 'd}.' + extension
+        self.counter = -1
         self._fh = None
         self.open_file()
 
-    def __del__(self):
-        self._fh.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        self.__del__()
-
-    def write(self, item, _):
+    def write(self, item, *args):
+        """
+        Writes ``item`` (a gzipped data chunk) into the current file. The
+        varargs are not used.
+        """
+        # TODO decompressed text?
         size = len(item)
         if self.total + size > self.chunk_size:  # Rotate
-            self._fh.close()
-            self.counter += 1
+            self.close()
             self.open_file()
         self._fh.write(item)
         self.total += size
 
     def open_file(self):
+        """Opens a new chunk."""
         self.total = 0
-        self._fh = None
+        self.counter += 1
+        # Handle the case when some chunks already exist. Should they though?
         while self._fh is None:
-            self.current_file = os.path.join(os.path.realpath(self.out_dir), os.path.basename(self.format_string.format(self.counter)))
-            try:  # Atomically open create a new file or increment counter till can not create it...
+            self.current_file = os.path.join(
+                os.path.realpath(self.output_dir),
+                os.path.basename(self.format_string.format(self.counter))
+            )
+            try:
                 self._fh = gzip.open(self.current_file, 'xb')
             except FileExistsError:
                 self.counter += 1
 
+    def close(self):
+        """Closes the file handle of the file currently being written."""
+        if self._fh:
+            self._fh.close()
+            self._fh = None
 
-def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
+
+class FilePerDocument:
+    """
+    Writes each document to its own file name. An alternative to
+    :class:`RotatedGzip`.
+    """
+    def __init__(self, output_dir):
+        """
+        :param output_dir: the base of the output directory hierarchy.
+        """
+        self.output_dir = output_dir
+
+    def write(self, decompressed_text, file_name):
+        """
+        Writes ``document`` to :attr:`FilePerDocument.output_dir`/``file_name``.
+        Creates all the intermediary directories.
+        """
+        full_path = os.path.join(self.output_dir, file_name)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with gzip.open(full_path, 'wb') as f:
+            f.write(decompressed_text)
+
+    def close(self):
+        """Just so that it is compatible with :class:`RotatedGzip`."""
+        pass
+
+
+def download_file(s3: Any, warc_file_name: str, offset: int, length: int,
+                  entry_str: str, retry_left: int) -> bytes:
+    """
+    Downloads a document and returns it decompressed.
+
+    :param s3: the connection handle to _s3_.
+    :param warc_file_name: the name of the WARC file to download from.
+    :param offset: the offset of the document in the WARC file.
+    :param length: the (compressed) size of the document.
+    :param entry_str: the index line that corresponds to the document being
+                      downloaded. For logging purposes only.
+    :param retry_left: the number of retries left.
+    """
     offset_end = offset + length - 1
     byte_range = 'bytes={offset}-{end}'.format(offset=offset, end=offset_end)
     decompressed_text = b''
@@ -141,17 +179,19 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
         retry_left -= 1
         # This is a gzip bytearray (str)
         try:
-            gzip_text = s3.get_object(Bucket='commoncrawl', Key=warc_file_name, Range=byte_range)['Body'].read()
+            gzip_text = s3.get_object(
+                Bucket='commoncrawl', Key=warc_file_name, Range=byte_range
+            )['Body'].read()
         except (ClientError, ReadTimeoutError, EndpointConnectionError) as ex:
             if hasattr(ex, 'response') and ex.response['Error']['Code'] == 'NoSuchKey':
-                logging.exception('NoSuchKey: {0}'.format(entry_str))
+                logging.exception('NoSuchKey: {}'.format(entry_str))
                 retry_left = 0  # Skip later probes
             # ReadTimeoutError has no property response
             elif hasattr(ex, 'response') and ex.response['Error']['Code'] == 'InternalError' or \
                     ex.__class__.__name__ in {'ReadTimeoutError', 'EndpointConnectionError'}:
-                logging.exception('InternalError({0}): {1}'.format(ex, entry_str))
+                logging.exception('InternalError({}): {}'.format(ex, entry_str))
             else:  # This shouldn't happen...
-                logging.exception('Other Error({0}): {1}'.format(ex, entry_str))
+                logging.exception('Other Error({}): {}'.format(ex, entry_str))
                 retry_left = 0  # Skip later probes
             continue  # Skip decompression test
         except:
@@ -161,7 +201,9 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
             # https://stackoverflow.com/a/2695575
             decompressed_text = zlib.decompress(gzip_text, zlib.MAX_WBITS | 32)
         except zlib.error:
-            logging.exception('Decompression error occured ({0}):\t\t{1}\t\t'.format(retry_left, entry_str))
+            logging.exception(
+                'Decompression error occured ({0}):\t\t{1}\t\t'.format(
+                    retry_left, entry_str))
             decompressed_text = b''
         except:
             logging.exception('Some other error while decompressing')
@@ -169,163 +211,100 @@ def download_file(s3, warc_file_name, offset, length, entry_str, retry_left):
     return decompressed_text
 
 
-def preproc_stream(stream):
-    # Do preprocess now (filter everything and compute domain)
-    # Regexes
-    domain_re = re.compile('^https?://((www|ww2|ww3|www2|www3)[.])?([^/]+)(:[0-9]+)?/?.*')
-    replace_re = re.compile('[?].*')
+def download_stream(s3: Any, stream: TextIO, retries: int) -> Generator[
+    Tuple[str, str, bytes, str], None, None
+]:
+    """
+    Downloads all documents in the stream and yields all information necessary
+    to process each: the batch name (name of the index file), the index line,
+    the decompressed document and the name of the individual output file. The
+    latter might or might not be used by the caller (depending on the value of
+    the file-per-doc option).
 
-    for num, line in enumerate(stream):
-        line = line.strip()
-        filename, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', maxsplit=6)
+    :param s3: the connection handle to _s3_.
+    :param stream: the index stream.
+    :param retries: the number of times download is attempted for a document.
+    """
+    start_time = time.time()
+    line_no = 0
+    for line_no, line in enumerate(stream, start=1):
+        (filename, domain, url, warc_file, offset_str,
+         length_str, response, mime_type) = line.split(' ', maxsplit=7)
+        # Print every url in debug mode
+        logging.debug('Downloading URL #{0}: {1}'.format(line_no, url))
 
-        if response != '200':
-            logging.debug('Skipping entry because response is not 200 ({0}) {1}'.format(num, response))
-            continue
-        if url.endswith('/robots.txt'):
-            logging.debug('Skipping robots.txt URL {0}'.format(url))
-            continue
-        mime_type = mime_type.replace(';', ' ').replace(',', ' ').replace('\\"', '').replace('"', '').\
-            split(maxsplit=1)[0]
-        if mime_type not in {'*/*', 'all', 'aplication/pdf', 'aplication/valami', 'application/atom+xml',
-                             'application/pls+xml', 'application/rss+xml', 'application/smil+xml', 'application/text',
-                             'application/unknown', 'application/valami', 'application/x-dtbresource+xml',
-                             'application/xhtml+xml', 'application/xml', 'application/xml+rss', 'application/x-rss+xml',
-                             'application/x-unknown-content-type', 'charset=iso-8859-2', 'charset=ISO-8859-2',
-                             'charset=utf-8', 'charset=UTF-8', 'Document', 'file', 'file/unknown', 'text', 'text/*',
-                             'text/htm', 'texthtml', 'text/HTML', 'Text/html', 'TEXT/HTML', 'text/html', 'text/rss+xml',
-                             'text/text', 'text/txt', 'text/x-httpd-php', 'text/xml', 'txt/html', 'unk',
-                             'unknown/unknown', 'x-unknown/unknown'}:
-            logging.debug('Skipping entry because response mime-type not in list ({0}) {1}'.format(num, mime_type))
-            continue
+        batch_name = os.path.basename(filename.replace('.gz', ''))
+        line = ' '.join((batch_name, domain, url, warc_file, offset_str,
+                         length_str, response, mime_type))
 
-        m = domain_re.match(url)
-        if m:
-            domain = replace_re.sub('', m.group(3))
-        else:
-            domain = 'NONE'
-
-        yield num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type
-
-
-def preprocessed_stream(stream):
-    # Already preprocessed (everything is filtered and domain is computed)
-    for num, line in enumerate(stream):
-        line = line.strip()
-        filename, domain, url, warc_file, offset_str, length_str, response, mime_type = line.split(' ', maxsplit=7)
-
-        yield num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type
-
-
-def filter_stream(stream, out_dir, conn, retries, prefilter_stream):
-    start_t = time.time()
-    for num, filename, domain, url, warc_file, offset_str, length_str, response, mime_type in prefilter_stream(stream):
-        # if num % 100 == 0:
-        #     logging.info('Downloading {}th URL  {}'.format(num, url))
-        logging.debug('Downloading URL ({0}) {1}'.format(num, url))  # Print every url in debug mode
-
-        filename_str = os.path.basename(filename.replace('.gz', ''))
-        line = ' '.join((filename_str, domain, url, warc_file, offset_str, length_str, response, mime_type))
-
-        document = download_file(conn, warc_file, int(offset_str), int(length_str), line, retries)
+        document = download_file(s3, warc_file, int(offset_str),
+                                 int(length_str), line, retries)
         # None or gzip_text
         if len(document) > 0:
-            out_file = warc_file.replace('/', '_').replace('.warc.gz',
-                                                           '-{0}-{1}.warc.gz'.format(offset_str, length_str))
-            out_gz_file_name = os.path.join(out_dir, 'pages', domain, filename_str, out_file)
-            yield filename_str, domain, line, document, out_gz_file_name
+            out_file = warc_file.replace('/', '_').replace(
+                '.warc.gz', '-{0}-{1}.warc.gz'.format(offset_str, length_str))
+            out_gz_file_name = os.path.join('pages', domain, batch_name, out_file)
+            yield batch_name, line, document, out_gz_file_name
         else:
             logging.info('Could not download URL {}'.format(url))
     else:
-        try:
-            # Raises NameError if the stream is empty
-            logging.info('Downloaded a total of {} URLs in {} seconds.'.format(
-                num, time.time() - start_t))
-        except NameError:
-            pass
+        logging.info('Downloaded a total of {} URLs in {} seconds.'.format(
+            line_no, time.time() - start_time))
 
 
-def process_stream(conn, stream, out_dir, remove_boilerplate, retries, rotate_info, filter_and_sort_funs):
-    filter_fun, sort_fun = filter_and_sort_funs
-    # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to be grouped by filename
-    for batch_name, group in itertools.groupby(sort_fun(filter_stream(stream, out_dir, conn, retries, filter_fun)),
-                                               key=lambda x: x[0]):
+def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
+                   rotate_info: Tuple):
+    """
+    Processes a stream of index lines: downloads the URLs corresponding to each.
+
+    :param s3: the connection handle to _s3_.
+    :param stream: the index stream. Each line must contain the following seven
+                   fields, separated by spaces: index file name, domain, url,
+                   the WARC file that contains the document, its offset and
+                   length, the HTML status code and mime type of the document.
+    :param output_dir: the directory to which the documents are downloaded.
+    :param retries: the number of times download is attempted for a document.
+    :param rotate_info: details for gzip file rotation. If empty: each
+                        document is written to a separate file.
+    """
+    # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to
+    # be grouped by filename
+    for batch_name, group in itertools.groupby(
+        download_stream(s3, stream, retries), key=itemgetter(0)
+    ):
         if len(rotate_info) > 0:
-            write_file = RotatedGzip(out_dir, batch_name, *rotate_info).write
+            writer = RotatedGzip(output_dir, batch_name, *rotate_info)
         else:
-            write_file = write_gzip
-        for _, _, line, document, out_file_name in group:
-            if remove_boilerplate[0]:
-                document = boilerplate_remove(document, remove_boilerplate[1], line)
-                if document is None:
-                    continue
-            write_file(document, out_file_name)
+            writer = FilePerDocument(output_dir)
+        with closing(writer) as w:
+            for _, line, document, out_file_name in group:
+                w.write(document, out_file_name)
 
 
-def process_index_gz_file(conn, filename, out_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort):
-    logging.info('Starting batch {}...'.format(filename))
-    filename_str = filename.replace('.gz', '')
-    with gzip.open(filename) as inpfh:
-        process_stream(conn, (' '.join((filename_str, line.decode('UTF-8'))) for line in inpfh),
-                       out_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort)
-    logging.info('Finished batch {}.'.format(filename))
-
-
-# -------------------------------------------------END Download-------------------------------------------------
-
-
-def get_args():
-    parser = argparse.ArgumentParser('CDX Index Batch Document Downloader')
-
-    parser.add_argument('-b', '--boilerplate-language', default=None,
-                        help='Boilerplate removal language (e.g. Hungarian, default: no boilerlplate removal)')
-    parser.add_argument('-o', '--output-dir', default=os.path.dirname(os.path.realpath(__file__)),
-                        help='Output dir of log files and pages directory (default: the current script\'s dir)')
-    parser.add_argument('-of', '--out-filename',
-                        help='Output filename part (default: batch name or input file name)')
-    parser.add_argument('-r', '--retry', default=10,
-                        help='Num. of retries on downloading or decompression errors (default: 10)')
-    parser.add_argument('-c', '--chunksize', default=99*1000*1000,
-                        help='Chunk size (default: 99 MB)')
-    parser.add_argument('-e', '--ext', default='txt.gz',
-                        help='Out file extension (default: txt.gz)')
-    parser.add_argument('-p', '--padding', default=4,
-                        help='Padding for numbering (default: 4)')
-    parser.add_argument('-P', '--perdoc', action='store_true',
-                        help='One file per document grouped by the TLD (default: no)')
-    parser.add_argument('--preprocessed', action='store_true',
-                        help='Index filtered, and domain computed fro url (default: no)')
-
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('-s', '--single-threaded', action='store_true',
-                       help='Singlethreaded (read from STDIN).'
-                             ' Use multithreaded for reading multiple files with glob pattern (default: singlethreaded')
-    group.add_argument('-i', '--input-pattern',
-                       help='Input glob pattern, with full path')
-
-    r = parser.parse_args()
-
-    r.remove_boilerplate = r.boilerplate_language is not None
-    if not r.single_threaded and r.input_pattern is None:
-        parser.error('Must choose singlethreaded to read from STDIN or supply '
-                     'an input pattern!')
-
-    return r
+def process_index_file(s3: Any, filename: str, output_dir: str, retries: int,
+                       rotate_info: Tuple):
+    """
+    Processes an index file: downloads all URLs in it. This functions is
+    basically a wrapper to :func:`process_stream`. ``filename`` is the name of
+    the index file; the rest of the parameters are the same as for
+    :func:`process_stream`.
+    """
+    logging.info('Starting file {}...'.format(filename))
+    with openall(filename) as inpfh:
+        process_stream(s3, ('{} {}'.format(filename, line) for line in inpfh),
+                       output_dir, retries, rotate_info)
+    logging.info('Finished file {}.'.format(filename))
 
 
 if __name__ == '__main__':
-
-    # Parse arguments
-    args = get_args()
+    args = parse_arguments()
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(threadName)-10s)- %(levelname)s - %(message)s'
     )
 
     single_threaded = args.single_threaded
-    remove_boilerplate_content = args.remove_boilerplate
-    stopwordlist_lang = args.boilerplate_language
     output_dir = args.output_dir
     glob_pattern = args.input_pattern
     retry = args.retry
@@ -334,53 +313,38 @@ if __name__ == '__main__':
     else:
         rotate_details = ()
 
-    if not args.preprocessed:
-        filter_and_sort_opts = (preproc_stream,
-                                lambda x: sorted(x, key=lambda y: y[0:1]))
-    else:
-        filter_and_sort_opts = (preprocessed_stream,
-                                lambda x: x)
-
-    stoplist = None
-    if remove_boilerplate_content:
-        try:
-            stoplist = justext.get_stoplist(stopwordlist_lang)
-        except ValueError as e:
-            logging.exception('Error while reading boilerplate stoplist.')
-            exit(1)
-
     if single_threaded:
         # Boto3 Amazon anonymous login
         session = boto3.session.Session()
         c = session.client('s3', config=Config(signature_version=UNSIGNED))
 
-        process_stream(c, sys.stdin, output_dir, (remove_boilerplate_content, stoplist), retry, rotate_details,
-                       filter_and_sort_opts)
-
+        process_stream(c, sys.stdin, output_dir, retry, rotate_details)
     else:
         num_of_threads = int(multiprocessing.cpu_count() * 5)  # Heuristic number...
         q = queue.Queue(maxsize=2 * num_of_threads)
 
-        # In a presistent connection process a whole gz file and ask for another
-        def worker(conn, out_dir, stopwords):
+        # In a persistent connection process a whole gz file and ask for another
+        def worker(s3):
             while True:
-                fn, rem_bp = q.get()
-                process_index_gz_file(conn, fn, out_dir, (rem_bp, stopwords), retry, rotate_details,
-                                      filter_and_sort_opts)
+                file_name = q.get()
+                process_index_file(s3, file_name, output_dir,
+                                   retry, rotate_details)
                 q.task_done()
 
         # Initate boto3 sessions...
         session = boto3.session.Session()
-        # Start num_of_threads many boto session to process a gzip file with worker
+        # Start num_of_threads many boto sessions to process a gzip file with worker
         for i in range(num_of_threads):
             logging.warning('Creating thread no. {0}'.format(i))
             c = session.client('s3', config=Config(signature_version=UNSIGNED))
-            t = threading.Thread(target=worker, args=(c, output_dir, stoplist,))
+            t = threading.Thread(target=worker, args=(c,))
             t.daemon = True
             t.start()
 
         # Put the gzip files into the queue to be processed
         for fname in glob.glob(glob_pattern):
-            q.put((fname, remove_boilerplate_content))
+            q.put(fname)
 
         q.join()  # block until all tasks are done
+
+    logging.info('Done.')
