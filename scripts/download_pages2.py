@@ -269,7 +269,7 @@ def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
     # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to
     # be grouped by filename
     for batch_name, group in itertools.groupby(
-        download_stream(stream, s3, retries), key=itemgetter(0)
+        download_stream(s3, stream, retries), key=itemgetter(0)
     ):
         if len(rotate_info) > 0:
             writer = RotatedGzip(output_dir, batch_name, *rotate_info)
