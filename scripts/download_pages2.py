@@ -149,8 +149,9 @@ class FilePerDocument:
         Writes ``document`` to :attr:`FilePerDocument.output_dir`/``file_name``.
         Creates all the intermediary directories.
         """
-        os.makedirs(os.path.dirname(file_name), exist_ok=True)
-        with gzip.open(os.path.join(self.output_dir, file_name), 'wb') as f:
+        full_path = os.path.join(self.output_dir, file_name)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with gzip.open(full_path, 'wb') as f:
             f.write(decompressed_text)
 
     def close(self):
