@@ -13,7 +13,7 @@ import queue
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, TextIO
 import zlib
 
 # Boto3
@@ -24,6 +24,8 @@ from botocore import UNSIGNED
 # Boto3 Error handling
 from botocore.exceptions import ClientError, EndpointConnectionError
 from botocore.vendored.requests.packages.urllib3.exceptions import ReadTimeoutError
+
+from cc_corpus.utils import openall
 
 
 def parse_arguments():
@@ -153,6 +155,7 @@ def download_file(s3: Any, warc_file_name: str, offset: int, length: int,
                   entry_str: str, retry_left: int) -> bytes:
     """
     Downloads a document and returns it decompressed.
+
     :param s3: the connection handle to _s3_.
     :param warc_file_name: the name of the WARC file to download from.
     :param offset: the offset of the document in the WARC file.
@@ -200,7 +203,7 @@ def download_file(s3: Any, warc_file_name: str, offset: int, length: int,
     return decompressed_text
 
 
-def filter_stream(stream, output_dir, conn, retries, prefilter_stream):
+def filter_stream(stream, output_dir, s3, retries):
     start_time = time.time()
     for line_no, line in enumerate(stream, start=1):
         (filename, domain, url, warc_file, offset_str,
@@ -212,7 +215,7 @@ def filter_stream(stream, output_dir, conn, retries, prefilter_stream):
         line = ' '.join((batch_name, domain, url, warc_file, offset_str,
                          length_str, response, mime_type))
 
-        document = download_file(conn, warc_file, int(offset_str),
+        document = download_file(s3, warc_file, int(offset_str),
                                  int(length_str), line, retries)
         # None or gzip_text
         if len(document) > 0:
@@ -232,14 +235,25 @@ def filter_stream(stream, output_dir, conn, retries, prefilter_stream):
             pass
 
 
-def process_stream(conn, stream, output_dir, retries, rotate_info):
+def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
+                   rotate_info: Tuple):
     """
-    Processes
+    Processes a stream of index lines: downloads the URLs corresponding to each.
+
+    :param s3: the connection handle to _s3_.
+    :param stream: the index stream. Each line must contain the following seven
+                   fields, separated by spaces: index file name, domain, url,
+                   the WARC file that contains the document, its offset and
+                   length, the HTML status code and mime type of the document.
+    :param output_dir: the directory to which the documents are downloaded.
+    :param retries: the number of times download is attempted for a document.
+    :param rotate_info: details for gzip file rotation. If empty: each
+                        document is written to a separate file.
     """
     # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to
     # be grouped by filename
     for batch_name, group in itertools.groupby(
-        filter_stream(stream, output_dir, conn, retries),
+        filter_stream(stream, output_dir, s3, retries),
         key=lambda x: x[0]
     ):
         if len(rotate_info) > 0:
@@ -251,13 +265,19 @@ def process_stream(conn, stream, output_dir, retries, rotate_info):
                 w.write(document, out_file_name)
 
 
-def process_index_gz_file(conn, filename, output_dir, retries, rotate_info):
-    batch_name = filename.replace('.gz', '')
-    logging.info('Starting batch {}...'.format(batch_name))
-    with gzip.open(filename) as inpfh:
-        process_stream(conn, (' '.join((batch_name, line.decode('UTF-8'))) for line in inpfh),
-                       output_dir, remove_boilerplate, num_retries, rotate_det, filter_cond_and_sort)
-    logging.info('Finished batch {}.'.format(batch_name))
+def process_index_file(s3: Any, filename: str, output_dir: str, retries: int,
+                       rotate_info: Tuple):
+    """
+    Processes an index file: downloads all URLs in it. This functions is
+    basically a wrapper to :func:`process_stream`. ``filename`` is the name of
+    the index file; the rest of the parameters are the same as for
+    :func:`process_stream`. 
+    """
+    logging.info('Starting file {}...'.format(filename))
+    with openall(filename) as inpfh:
+        process_stream(s3, ('{} {}'.format(filename, line) for line in inpfh),
+                       output_dir, retries, rotate_info)
+    logging.info('Finished file {}.'.format(filename))
 
 
 if __name__ == '__main__':
@@ -277,9 +297,6 @@ if __name__ == '__main__':
     else:
         rotate_details = ()
 
-    # filter_and_sort_opts = (preprocessed_stream,
-    #                         lambda x: x)
-
     if single_threaded:
         # Boto3 Amazon anonymous login
         session = boto3.session.Session()
@@ -291,11 +308,11 @@ if __name__ == '__main__':
         q = queue.Queue(maxsize=2 * num_of_threads)
 
         # In a persistent connection process a whole gz file and ask for another
-        def worker(conn):
+        def worker(s3):
             while True:
                 file_name = q.get()
-                process_index_gz_file(conn, file_name, output_dir,
-                                      retry, rotate_details)
+                process_index_file(s3, file_name, output_dir,
+                                   retry, rotate_details)
                 q.task_done()
 
         # Initate boto3 sessions...
