@@ -110,10 +110,10 @@ abysmal.
 
 Pages in the (filtered, deduplicated) index can be downloaded by the command
 ```
-download_pages.py -o 2019/cc_downloaded -e warc.gz --preprocessed -i '2019/cc_index_dedup/*.gz'
+download_pages.py -o 2019/cc_downloaded -e warc.gz -i '2019/cc_index_dedup/*.gz'
 ```
 
-This step takes a while, so it probably make sense to [distribute the work among
+This step takes a while, so it make sense to [distribute the work among
 a cluster of machines](#tech). However, it is a bit more involved than
 distributing other scripts, as this one has been inherited from the old
 repository. The differences are:
@@ -136,9 +136,25 @@ ansible-playbook -i hosts python.yml -e
     '{"python_script": "download_pages.py",
       "log_file": "2019_download.log",
       "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
-      "arguments": "-o $output_dir -e warc.gz --preprocessed -i $input_glob ",
+      "arguments": "-o $output_dir -e warc.gz -i $input_glob",
       "per_host_args": {"input_glob": "\"2019/cc_index_dedup_{}/*.gz\"",
                         "output_dir": "2019/cc_downloaded/"}, "processes": 0}'
+```
+
+#### Remove boilerplate
+
+Boilerplate code is removed with `justext`, which also splits the data into
+paragraphs. The script to run is `remove_boilerplate.py`. Since we have already
+split up the data between hosts, we can distribute boilerplate removal as well.
+```
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "remove_boilerplate.py",
+      "log_file": "2019_remove_boilerplate.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-i $index -w $warc -o $output",
+      "per_host_args": {"index": "2019/cc_index_dedup/",
+                        "warc": "2019/cc_downloaded/",
+                        "output": "2019/cc_corpus/"}}'
 ```
 
 ### Type checking
