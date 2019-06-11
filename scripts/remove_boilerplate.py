@@ -23,6 +23,8 @@ from lxml.etree import ParserError
 from multiprocessing_logging import install_mp_handler
 import warc
 
+from cc_corpus.utils import unquote_inf
+
 
 IndexTuple = namedtuple('IndexTuple', ['index', 'domain', 'url', 'warc',
                                        'offset', 'length', 'status', 'mime'])
@@ -69,7 +71,7 @@ class IndexWarcReader:
             url = warc_record['WARC-Target-URI']
             for index in index_iter:
                 index_id += 1
-                if index.url == url:
+                if unquote_inf(index.url) == unquote_inf(url):
                     self.process_record(index_id, index, warc_record)
                     break
             else:

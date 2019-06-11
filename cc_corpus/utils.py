@@ -13,6 +13,7 @@ from itertools import zip_longest
 import os
 import os.path as op
 import pickle
+from urllib.parse import unquote
 
 try:
     import idzip
@@ -282,3 +283,17 @@ def grouper2(iterable, n, fillvalue=None):
 
 class IllegalStateError(RuntimeError):
     """Thrown when a method is invoked on an object in inappropriate state."""
+
+
+def unquote_inf(url: str) -> str:
+    """
+    Runs :meth:`urllib.parse.unquote` on ``url`` repeatedly until there is no
+    change to it. Sometimes parts of a URL might get quoted more than once
+    (e.g. when quoting a URL with already-quoted form data).
+    """
+    while True:
+        mod = unquote(url)
+        if mod == url:
+            return mod
+        else:
+            url = mod
