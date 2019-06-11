@@ -157,6 +157,29 @@ ansible-playbook -i hosts python.yml -e
                         "output": "2019/cc_corpus/"}}'
 ```
 
+#### Filtering
+
+After boilerplate removal, the corpus is in its final format. However, to
+increase its quality, we also filter out certain pages: those not in Hungarian
+and those shorter than 1500 characters.
+```
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "filter_corpus.py",
+      "log_file": "2019_filter_corpus.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-i $input -o $output -l hu",
+      "per_host_args": {"input": "2019/cc_corpus/",
+                        "output": "2019/cc_corpus_hu/"}}'
+
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "filter_corpus.py",
+      "log_file": "2019_filter_length.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-i $input -o $output -m 1500c",
+      "per_host_args": {"input": "2019/cc_corpus_hu/",
+                        "output": "2019/cc_corpus_hu_1500c/"}}'
+```
+
 ### Type checking
 
 Some of the code I have annotated with
