@@ -90,7 +90,7 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
             doc_ids, new_doc_ids = results['id'], []
             total_read += len(doc_ids)
             input_duplicate_urls = 0
-            for doc_id, minhash in zip(results['id'], results['minhash']):
+            for doc_id, minhash in zip(doc_ids, minhashes):
                 key = '_'.join(doc_id)
                 if key in lsh:
                     input_duplicate_urls += 1
@@ -108,7 +108,7 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
                               input_file, input_duplicate_urls))
     logging.info('Deduplicated batch {}; kept {} documents out of {}; '
                  '{} duplicate urls.'.format(
-                 file_base, bw.total_written, total_read, duplicate_urls))
+                     file_base, bw.total_written, total_read, duplicate_urls))
     return bw.total_written, total_read
 
 
@@ -235,7 +235,8 @@ def self_main(args):
         os.makedirs(working_dir)
 
     batch_prefixes = find_all_batches(args.input_dir)
-    logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
+    logging.info('Found a total of {} batches in {}.'.format(
+        len(batch_prefixes), args.input_dir))
 
     # First, deduplicate documents _within_ the same batch
     original_doc_num, self_doc_num, final_doc_num = 0, 0, 0
@@ -286,11 +287,12 @@ def other_main(args):
         os.makedirs(args.output_dir)
 
     batch_prefixes = find_all_batches(args.input_dir)
-    logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
+    logging.info('Found a total of {} batches in {}.'.format(
+        len(batch_prefixes), args.input_dir))
 
     batches_to_subtract = find_all_batches(args.cross_dir)
-    logging.info('Found a total of {} batches to deduplicate against.'.format(
-        len(batches_to_subtract)))
+    logging.info('Found a total of {} batches in {}to deduplicate against.'.format(
+        len(batches_to_subtract), args.cross_dir))
 
     with ProcessPoolExecutor(max_workers=args.processes) as executor:
         f = partial(deduplicate_other, batches_to_subtract=batches_to_subtract,
