@@ -11,6 +11,7 @@ from concurrent.futures import ProcessPoolExecutor
 from contextlib import closing
 from functools import partial
 import logging
+from math import log10
 from multiprocessing import Pool
 import os
 import os.path as op
@@ -24,9 +25,13 @@ from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
 
 def parse_arguments():
     parser = ArgumentParser(__doc__)
-    parser.add_argument('--input-dir', '-i', required=True,
+    parser.add_argument('--input-dir', '-i', required=True, action='append',
+                        dest='input_dirs',
                         help='the input directory that contains the minhash '
-                             'batches to deduplicate.')
+                             'batches to deduplicate. Might be specified more '
+                             'than once for self-deduplication. If it is, the '
+                             'resulting batches will be assigned new numbers; '
+                             'otherwise, the batch numbers are kept as-is.')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the directory to which the updated minhash '
                              'files are written.')
@@ -66,31 +71,45 @@ def parse_arguments():
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
-    if args.command == 'other' and not op.isdir(args.cross_dir):
-        parser.error('The minhash directory for the other corpus (-c) must exist.')
+    if args.command == 'other':
+        if not op.isdir(args.cross_dir):
+            parser.error(
+                'The minhash directory for the other corpus (-c) must exist.')
+        if not len(args.input_dirs) == 1:
+            parser.error(
+                'May only specify one input directory for cross-deduplication.')
     return args
 
 
-def deduplicate_self(file_prefix, output_dir, threshold, permutations):
+def deduplicate_self(input_prefix, output_prefix, output_dir, threshold,
+                     permutations, num_zeroes=0):
     """
     Deduplicates a set of minhashed documents (3 files with the same minhash
     prefix) and writes them to output_dir.
 
     Warning: only works for full documents at this point!
+
+    :param input_prefix: the prefix of the input file (with full path).
+    :param output_prefix: the prefix of the output file (base name).
+    :param output_dir: the output directory.
+    :param threshold: the Jaccard threshold for document similarity.
+    :param permutations: the number of permutations used in the minhashes.
+    :param num_zeroes: the width of the number in the output batches' names,
+                       padded with zeroes. The default (0) means no padding.
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    file_base = op.basename(file_prefix)
-    logging.info('Processing batch {}...'.format(file_base))
+    logging.info('Processing batch {}...'.format(input_prefix))
     total_read = 0
     duplicate_urls = 0
     with closing(BatchWriter(sys.maxsize, output_dir,
-                             len(file_base), int(file_base))) as bw:
-        for input_file, results in read_batch(file_prefix):
+                             num_zeroes or len(output_prefix),
+                             int(output_prefix))) as bw:
+        for input_file, results in read_batch(input_prefix):
             minhashes, new_minhashes = results['minhash'], []
             doc_ids, new_doc_ids = results['id'], []
             total_read += len(doc_ids)
             input_duplicate_urls = 0
-            for doc_id, minhash in zip(results['id'], results['minhash']):
+            for doc_id, minhash in zip(doc_ids, minhashes):
                 key = '_'.join(doc_id)
                 if key in lsh:
                     input_duplicate_urls += 1
@@ -108,7 +127,7 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
                               input_file, input_duplicate_urls))
     logging.info('Deduplicated batch {}; kept {} documents out of {}; '
                  '{} duplicate urls.'.format(
-                 file_base, bw.total_written, total_read, duplicate_urls))
+                     input_prefix, bw.total_written, total_read, duplicate_urls))
     return bw.total_written, total_read
 
 
@@ -234,15 +253,27 @@ def self_main(args):
     if not os.path.isdir(working_dir):
         os.makedirs(working_dir)
 
-    batch_prefixes = find_all_batches(args.input_dir)
+    batch_prefixes = [prefix for input_dir in args.input_dirs
+                      for prefix in find_all_batches(input_dir)]
     logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
+
+    # If a single directory: keep prefixes. Otherwise, since all batches will
+    # be output to the working directory, we renumber them.
+    if len(args.input_dirs) > 1:
+        input_prefixes = [(e, str(i)) for i, e in
+                          enumerate(batch_prefixes, start=1)]
+        num_zeroes = int(log10(len(input_prefixes))) + 1
+    else:
+        input_prefixes = [(e, op.basename(e)) for e in batch_prefixes]
+        num_zeroes = 0
 
     # First, deduplicate documents _within_ the same batch
     original_doc_num, self_doc_num, final_doc_num = 0, 0, 0
     with Pool(args.processes) as pool:
         f = partial(deduplicate_self, output_dir=working_dir,
-                    threshold=args.threshold, permutations=args.permutations)
-        for new_num, old_num in pool.map(f, batch_prefixes):
+                    threshold=args.threshold, permutations=args.permutations,
+                    num_zeroes=num_zeroes)
+        for new_num, old_num in pool.map(f, input_prefixes):
             original_doc_num += old_num
             self_doc_num += new_num
     pool.close()
@@ -285,7 +316,8 @@ def other_main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    batch_prefixes = find_all_batches(args.input_dir)
+    input_dir = args.input_dirs[0]
+    batch_prefixes = find_all_batches(input_dir)
     logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
 
     batches_to_subtract = find_all_batches(args.cross_dir)
