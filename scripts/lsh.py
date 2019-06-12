@@ -273,7 +273,7 @@ def self_main(args):
         f = partial(deduplicate_self, output_dir=working_dir,
                     threshold=args.threshold, permutations=args.permutations,
                     num_zeroes=num_zeroes)
-        for new_num, old_num in pool.starmap(f, input_prefixes):
+        for new_num, old_num in pool.map(f, input_prefixes):
             original_doc_num += old_num
             self_doc_num += new_num
     pool.close()
