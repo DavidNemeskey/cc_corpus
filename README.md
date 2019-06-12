@@ -190,7 +190,7 @@ likely isn't); and second, the same news item / poem / etc. might have been
 published on different domains. So we need document-level deduplication.
 
 Unfortunately, deduplication is not a one-step process. First, the documents
-have to be _minhash_ed:
+have to be <em>minhash</em>ed:
 ```
 ansible-playbook -i hosts python.yml -e
     '{"python_script": "minhash.py",
