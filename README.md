@@ -201,6 +201,13 @@ ansible-playbook -i hosts python.yml -e
                         "output": "2019/minhashes/"}}'
 ```
 
+Since the command above output the files into separate directories, they need
+to be copied into one:
+```
+renumber_minhash.py -i 2019/minhashes_host1 -i 2019/minhashes_host2
+                    -o 2019/minhashes/ -k -Z 1
+```
+
 ### Type checking
 
 Some of the code I have annotated with
