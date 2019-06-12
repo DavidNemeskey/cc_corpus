@@ -180,6 +180,27 @@ ansible-playbook -i hosts python.yml -e
                         "output": "2019/cc_corpus_hu_1500c/"}}'
 ```
 
+#### Document deduplication
+
+Although we have filtered the index for duplicate _URLs_, the corpus might still
+contain duplicate _documents_. The reason is twofold: first, we cannot filter
+variations of the same URL, because there is no way to know which parameters
+are important to the content (e.g. _doc_id_ probably is, while _token_ most
+likely isn't); and second, the same news item / poem / etc. might have been
+published on different domains. So we need document-level deduplication.
+
+Unfortunately, deduplication is not a one-step process. First, the documents
+have to be _minhash_ed:
+```
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "minhash.py",
+      "log_file": "2019_minhash.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-i $input -o $output -b 3000000 -u doc -p 256 -n 5 -Z 1",
+      "per_host_args": {"input": "2019/cc_corpus_hu_1500c/",
+                        "output": "2019/minhashes/"}}'
+```
+
 ### Type checking
 
 Some of the code I have annotated with
