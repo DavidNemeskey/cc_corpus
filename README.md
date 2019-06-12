@@ -208,6 +208,21 @@ renumber_minhash.py -i 2019/minhashes_host1 -i 2019/minhashes_host2
                     -o 2019/minhashes/ -k -Z 1
 ```
 
+The script `lsh.py` then can be used to deduplicate documents based on their
+minhashes. It has two modi operandi:
+
+- <em>self</em>-deduplication: removes all documents that occur in one directory
+  of minhash files
+- <em>cross</em>-deduplication: removes all documents from a directory of
+  minhash files that are already contained in another (e.g. last year's)
+
+Usually one runs both like so:
+```
+lsh.py -i 2019/minhashes/ -o 2019/minhashes_self/ -t 0.95 -p 256 -P 12 self
+lsh.py -i 2019/minhashes_self/ -o 2019/minhashes_full/ -t 0.95 -p 256
+       -P 12 cross -c 2018/minhashes_full
+```
+
 ### Type checking
 
 Some of the code I have annotated with
