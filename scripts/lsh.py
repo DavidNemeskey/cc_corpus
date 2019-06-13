@@ -167,65 +167,70 @@ def deduplicate_other_old(file_prefix, input_dir, output_dir,
 
 def deduplicate_other(main_batch, batches_to_subtract, output_dir,
                       threshold, permutations):
-    """
-    Removes all documents from a set of minhashed documents (3 files with the
-    same minhash prefix) that occur in other batches. Both main_batch and
-    batches_to_subtract should be batch prefixes.
+    try:
+        """
+        Removes all documents from a set of minhashed documents (3 files with the
+        same minhash prefix) that occur in other batches. Both main_batch and
+        batches_to_subtract should be batch prefixes.
 
-    Warning: only works for full documents at this point!
-    """
-    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    main_base = op.basename(main_batch)
-    logging.info('Processing batch {}...'.format(main_base))
+        Warning: only works for full documents at this point!
+        """
+        lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+        main_base = op.basename(main_batch)
+        logging.info('Processing input batch {}...'.format(main_base))
 
-    # First, load the (already deduplicated) batch...
-    for input_file, results in read_batch(main_batch):
-        for doc_id, minhash in zip(results['id'], results['minhash']):
-            lsh.insert('\t'.join(doc_id), minhash)
-    initial_len = len(lsh.keys)
-
-    # Now, remove all documents in it that are contained in th batches
-    # to subtract
-    content_duplicates, url_duplicates = 0, 0
-    for batch in batches_to_subtract:
-        batch_content_duplicates, batch_url_duplicates = 0, 0
-        initial_batch_len = len(lsh.keys)
-        for _, results in read_batch(batch):
-            for doc_id, minhash in zip(results['id'], results['minhash']):
-                key = '_'.join(doc_id)
-                if key in lsh:
-                    batch_url_duplicates += 1
-                    lsh.remove(key)
-                else:
-                    for duplicate in lsh.query(minhash):
-                        lsh.remove(duplicate)
-                        batch_content_duplicates += 1
-        logging.info(
-            'Cross-deduplicated batch {} with batch {}: {} -> {} documents '
-            '(removed {} by url, {} by content).'.format(
-                main_base, op.basename(batch), initial_batch_len, len(lsh.keys),
-                batch_url_duplicates, batch_content_duplicates)
-        )
-        content_duplicates += batch_content_duplicates
-        url_duplicates += batch_url_duplicates
-
-    # Finally, we print the documents left. Unfortunately, in order to
-    # keep the format, we have to read the original batch again.
-    with closing(BatchWriter(sys.maxsize, output_dir,
-                             len(main_base), int(main_base))) as bw:
-        # OK, we need to re-read the batch unfortunately
+        # First, load the (already deduplicated) batch...
         for input_file, results in read_batch(main_batch):
-            doc_ids, minhashes = [], []
             for doc_id, minhash in zip(results['id'], results['minhash']):
-                if '\t'.join(doc_id) in lsh:
-                    doc_ids.append(doc_id)
-                    minhashes.append(minhash)
-            bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
-    logging.info('Processed batch {}; kept {} out of {} documents '
-                 '(removed {} by url, {} by content).'.format(
-                     main_base, len(lsh.keys), initial_len,
-                     url_duplicates, content_duplicates))
-    return len(lsh.keys), initial_len
+                lsh.insert('\t'.join(doc_id), minhash)
+        initial_len = len(lsh.keys)
+
+        # Now, remove all documents in it that are contained in th batches
+        # to subtract
+        content_duplicates, url_duplicates = 0, 0
+        for batch in batches_to_subtract:
+            batch_content_duplicates, batch_url_duplicates = 0, 0
+            initial_batch_len = len(lsh.keys)
+            for _, results in read_batch(batch):
+                for doc_id, minhash in zip(results['id'], results['minhash']):
+                    key = '_'.join(doc_id)
+                    if key in lsh:
+                        batch_url_duplicates += 1
+                        lsh.remove(key)
+                    else:
+                        for duplicate in lsh.query(minhash):
+                            lsh.remove(duplicate)
+                            batch_content_duplicates += 1
+            logging.info(
+                'Cross-deduplicated input batch {} with cross batch {}: {} -> {} '
+                'documents (removed {} by url, {} by content).'.format(
+                    main_base, op.basename(batch), initial_batch_len, len(lsh.keys),
+                    batch_url_duplicates, batch_content_duplicates)
+            )
+            content_duplicates += batch_content_duplicates
+            url_duplicates += batch_url_duplicates
+
+        # Finally, we print the documents left. Unfortunately, in order to
+        # keep the format, we have to read the original batch again.
+        with closing(BatchWriter(sys.maxsize, output_dir,
+                                 len(main_base), int(main_base))) as bw:
+            # OK, we need to re-read the batch unfortunately
+            for input_file, results in read_batch(main_batch):
+                doc_ids, minhashes = [], []
+                for doc_id, minhash in zip(results['id'], results['minhash']):
+                    if '\t'.join(doc_id) in lsh:
+                        doc_ids.append(doc_id)
+                        minhashes.append(minhash)
+                bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
+        logging.info('Processed input batch {}; kept {} out of {} documents '
+                     '(removed {} by url, {} by content).'.format(
+                         main_base, len(lsh.keys), initial_len,
+                         url_duplicates, content_duplicates))
+        return len(lsh.keys), initial_len
+    except:
+        logging.exception('Exception while processing batch {}.'.format(
+            main_batch))
+        raise
 
 
 def self_main(args):
