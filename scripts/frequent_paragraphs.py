@@ -63,7 +63,7 @@ def parse_arguments():
 
     parser_distribute = subparsers.add_parser(
         'distribute_index', aliases=['distribute', 'dist'],
-        help='Distributes the index file into separate files for running on'
+        help='Distributes the index file into separate files for running on '
              'separate machines. Each host can have their own weight.'
     )
     parser_distribute.set_defaults(command='distribute')
