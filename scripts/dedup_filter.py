@@ -77,7 +77,7 @@ def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None,
         file_base = op.basename(input_file)
         url_set = set('_'.join(doc_id) for doc_id in results['id'])
         input_file = op.join(input_dir, file_base) if input_dir else input_file
-        try:
+        if os.isfile(input_file):
             with notempty(openall(op.join(output_dir, file_base), 'wt')) as outf:
                 for doc_no, doc in enumerate(parse_file(input_file), start=1):
                     if doc.attrs['url'] in url_set:
@@ -85,12 +85,12 @@ def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None,
                         kept += 1
                 total += doc_no
             num_files += 1
-        except FileNotFoundError:
-            if ignore_missing_files:
-                logging.debug('Input file {} was not found; ignoring...'.format(
-                    input_file))
-            else:
-                raise
+        elif ignore_missing_files:
+            logging.debug('Input file {} was not found; ignoring...'.format(
+                input_file))
+        else:
+            raise FileNotFoundError(
+                'Input file {} not found.'.format(input_file))
 
     logging.info('Filtered batch {} of {} files; '
                  'kept {} documents out of {}.'.format(
