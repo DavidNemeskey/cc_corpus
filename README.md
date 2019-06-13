@@ -223,6 +223,18 @@ lsh.py -i 2019/minhashes_self/ -o 2019/minhashes_full/ -t 0.95 -p 256
        -P 12 cross -c 2018/minhashes_full
 ```
 
+Here, the directory `2018/minhashes_full` contains the minhashes for documents
+in the 2018 corpus. We deduplicate with them to make sure we get rid of all
+documents we already have.
+
+Once the minhashes in `2019/minhashes_full/` are done, we could create a
+"minhashes of documents thus far" directory that includes all documents from
+2018 and 2019 by running
+```
+renumber_minhash.py -i 2018/minhashes_full -i 2019/minhashes_full
+                    -o all_time_minhashes -b 3000000 -Z 2
+```
+
 ### Type checking
 
 Some of the code I have annotated with
