@@ -11,6 +11,7 @@ import os
 import os.path as op
 import pickle
 import re
+import shutil
 
 from datasketch import MinHash, LeanMinHash
 
@@ -50,6 +51,19 @@ class BatchWriter:
             self.di_offset += self.doc_idf.write(
                 '{}\n'.format('\t'.join(str(f) for f in id_fields)).encode('utf-8'))
         self.p_written += len(results['minhash'])
+
+    def copy_file(self, input_prefix):
+        """
+        Opens (a set of) new files and copies the data from ``input_prefix``
+        into them.
+        """
+        self.new_file()
+        self.close()
+
+        prefix = os.path.join(
+            self.out_dir, '{{:0{}}}'.format(self.zeroes).format(self.batch))
+        for ext in ['.minhashes', '.doc_ids', '.files']:
+            shutil.copy(input_prefix + ext, prefix + ext)
 
     def new_file(self):
         """Closes the old file and opens a new one."""

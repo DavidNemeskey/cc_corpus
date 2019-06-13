@@ -61,6 +61,17 @@ def main():
     logging.info('Found a total of {} input batches.'.format(len(input_batches)))
     logging.info('Writing files to {}...'.format(args.output_dir))
 
+    batch_size = args.batch_size if not args.keep_sizes else sys.maxsize
+    with closing(BatchWriter(batch_size, args.output_dir, args.zeroes)) as bw:
+        for input_batch in input_batches:
+            if not args.keep_sizes:
+                logging.info('Reading batch {}...'.format(input_batch))
+                for input_file, results in read_batch(input_batch):
+                    bw.write_results(input_file, results)
+            else:
+                logging.info('Copying batch {}...'.format(input_batch))
+                bw.copy_file(input_batch)
+
     # TODO: keep_sizes don't need BatchWriter, just a copy...
     batch_size = args.batch_size if not args.keep_sizes else sys.maxsize
     with closing(BatchWriter(batch_size, args.output_dir, args.zeroes)) as bw:
