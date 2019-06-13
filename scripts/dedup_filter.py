@@ -77,7 +77,7 @@ def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None,
         file_base = op.basename(input_file)
         url_set = set('_'.join(doc_id) for doc_id in results['id'])
         input_file = op.join(input_dir, file_base) if input_dir else input_file
-        if os.isfile(input_file):
+        if os.path.isfile(input_file):
             with notempty(openall(op.join(output_dir, file_base), 'wt')) as outf:
                 for doc_no, doc in enumerate(parse_file(input_file), start=1):
                     if doc.attrs['url'] in url_set:
