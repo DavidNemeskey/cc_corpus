@@ -31,7 +31,7 @@ def parse_arguments():
                              'batches to deduplicate. The .files file contains '
                              'the names of the (corpus) input files.')
     parser.add_argument('--output-dir', '-o', required=True,
-                        help='the directory to which the updated minhash '
+                        help='the directory to which the filtered corpus '
                              'files are written.')
     parser.add_argument('--input-dir', '-i',
                         help='the directory that contains the corpus files to '
