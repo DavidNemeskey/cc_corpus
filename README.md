@@ -235,6 +235,35 @@ renumber_minhash.py -i 2018/minhashes_full -i 2019/minhashes_full
                     -o all_time_minhashes -b 3000000 -Z 2
 ```
 
+Finally, we filter corpus to contain only the unique documents:
+```
+dedup_filter.py -o 2019/cc_corpus_hu_1500c_dedup/ -m 2019/minhashes/minhashes_full --ignore-missing-files
+```
+
+#### Delete frequent paragraphs
+
+Some sites contain "boilerplate" paragraphs that occur in many of their documents.
+We get rid of such paragraphs so that they do not skew the language model
+probabilities, word statistics, etc.
+
+It is a four-step process, this time each of which is implemented by the same
+script: `frequent_paragraphs.py`.
+
+The first step creates an index of the documents in the corpus, sorted by
+domain:
+```
+frequent_paragraphs.py --index 2019/index.gz -P 12 index_docs
+                       -i 2019/cc_corpus_hu_1500c_dedup/
+```
+
+Then, since we are going to compute the minhashes for each _paragraph_ in the
+corpus, we definitely need to do it in a distributed fashion. The next step is
+then the distribution of the index:
+```
+frequent_paragraphs.py --index 2019/index.gz -P 12 distribute -H host1 -H host2:1.5 ...
+```
+
+
 ### Type checking
 
 Some of the code I have annotated with
