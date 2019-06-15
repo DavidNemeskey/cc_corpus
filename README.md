@@ -263,6 +263,38 @@ then the distribution of the index:
 frequent_paragraphs.py --index 2019/index.gz -P 12 distribute -H host1 -H host2:1.5 ...
 ```
 
+And then, we collect the frequent paragraphs. The script implements the
+"frequent item search in streams" algorithm in Mining Massive Datasets. Run it
+as follows:
+```
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "frequent_paragraphs.py",
+      "log_file": "2019_fp_collect.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-L debug --index $index collect -t 0.95 -c 0.9999
+                    -o $output --docs-per-batch 1000
+		    --decay-filter \"score < 0.5 and count == 1\"
+		    --wrap-filter \"count >= 1\" -b frequent_ps/2018_all",
+      "per_host_args": {"index": "2019/index.gz", "output": "2019/frequent_ps"}}'
+```
+
+The script above doesn't exactly run as advertised: first, it collects all
+paragraphs, not just the frequent ones. The reason for this is that the "stream"
+doesn't start in 2019 -- we already have data from earlier years. Hence, we
+bootstrap (`-b`) with the paragraph data from earlier years, and we also keep
+all paragraphs so that we preserve the whole "stream" for future runs.
+
+In order to identify the frequent paragraphs, we first merge the chunks created
+by the distributed hosts:
+```
+merge_files.py -t pdata -o 2019/all_ps 2019/frequent_ps_host1 2019/frequent_ps_host2 ...
+```
+
+`merge_files.py` can also be used for filtering. So now that we have the file that
+contains all paragraphs, we create another that lists only the frequent ones.
+```
+merge_files.py -t pdata -o 2019/frequent_ps 2019/all_ps -f "pdata.count >= 3 or pdata.count / float(docs) >= 0.5"
+```
 
 ### Type checking
 
