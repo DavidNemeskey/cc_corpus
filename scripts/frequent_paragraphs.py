@@ -399,6 +399,9 @@ class FrequentCollector:
     :func:`collect_frequent` have been moved here to make the code more
     readable.
     """
+    # The default (dummy) bootstrap tuple used when there is no bootstrap data
+    BOOTSTRAP_TUPLE = (None, 0, [])
+
     def __init__(self, threshold: float, permutations: int, decay: float,
                  min_freq: int,
                  bootstrap: Union[RandomPDataReader, None] = None,
@@ -416,13 +419,14 @@ class FrequentCollector:
 
     def reset(self, domain):
         """Resets the bookkeeping and statistics objects."""
-        self.stats = CollectStats(domains=1)
         self.lsh = MinHashLSH(threshold=self.threshold,
                               num_perm=self.permutations)
         self.freq_ps = {}  # type: Dict[str, PData]
         self.num_dup = 0
         # Bootstrap the domain frequency counts if previous data is available
-        for pdata_id, pdata in enumerate(self.bootstrap.get(domain, []), start=1):
+        _, docs, pdatas = self.bootstrap.get(domain, self.BOOTSTRAP_TUPLE)
+        self.stats = CollectStats(domains=1, docs=docs)
+        for pdata_id, pdata in enumerate(pdatas, start=1):
             self.lsh.insert(str(pdata_id), pdata.minhash)
             self.freq_ps[str(pdata_id)] = pdata
 

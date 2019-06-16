@@ -168,16 +168,16 @@ class RandomPDataReader(PDataIO):
             ret[domain] = (offset, length, num, docs)
         return ret
 
-    def get(self, key: str, default: List[PData] = []):
+    def get(self, domain: str, default: List[PData] = []):
         try:
-            return self[key]
+            return self[domain]
         except KeyError:
-            return []
+            return (domain, 0, [])
 
-    def __getitem__(self, key: str) -> List[PData]:
-        offset, length, num, docs = self.index[key]
+    def __getitem__(self, domain: str) -> List[PData]:
+        offset, length, num, docs = self.index[domain]
         self.pdata.seek(offset)
-        return [PData.read_from(self.pdata) for _ in range(num)]
+        return domain, docs, [PData.read_from(self.pdata) for _ in range(num)]
 
     def __setitem__(self, key: str, value: Any):
         raise NotImplementedError('Index values are not settable.')
