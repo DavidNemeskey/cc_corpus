@@ -725,7 +725,7 @@ def main_filter(args):
         args.index))
 
     with Pool(args.processes, initializer=init_filter,
-              initargs=[args.old_frequents]) as pool:
+              initargs=[args.frequents, args.old_frequents]) as pool:
         m = Manager()
         frequents_seen = m.dict()
         lock = m.RLock()
