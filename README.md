@@ -296,6 +296,26 @@ contains all paragraphs, we create another that lists only the frequent ones.
 merge_files.py -t pdata -o 2019/frequent_ps 2019/all_ps -f "pdata.count >= 3 or pdata.count / float(docs) >= 0.5"
 ```
 
+And we use this file to filter the frequent paragraphs from the corpus like so:
+```
+ansible-playbook -i hosts2 python.yml -e
+    '{"python_script": "frequent_paragraphs.py",
+      "log_file": "2019_fp_filter.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-L debug --index $index filter -t 0.95 -o $output -d 2000
+                    -z 4 --frequents 2019/frequent_ps
+		    --old-frequents 2018/frequent_ps",
+      "per_host_args": {"index": "2019/index.gz",
+                        "output": "2019/cc_corpus_hu_1500c_final/"}}'
+```
+
+Finally, since the distributed script above creates as many output directories
+as there are hosts (and we lost the original file structure as the documents
+have been sorted by domain), we need to merge these sub-corpora into one:
+```
+renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_final -k -Z 4 -L debug 2019/cc_corpus_hu_1500c_final_*
+```
+
 ### Type checking
 
 Some of the code I have annotated with
