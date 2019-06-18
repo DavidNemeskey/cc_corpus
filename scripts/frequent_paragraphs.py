@@ -63,7 +63,7 @@ def parse_arguments():
 
     parser_distribute = subparsers.add_parser(
         'distribute_index', aliases=['distribute', 'dist'],
-        help='Distributes the index file into separate files for running on'
+        help='Distributes the index file into separate files for running on '
              'separate machines. Each host can have their own weight.'
     )
     parser_distribute.set_defaults(command='distribute')
@@ -137,6 +137,14 @@ def parse_arguments():
     parser_filter.add_argument('--frequents', required=True,
                                help='the prefix to the frequent paragraph files '
                                     '(written by the `collect` task).')
+    parser_filter.add_argument('--old-frequents', default=None,
+                               help='the prefix to the "old" frequent paragraph '
+                                    'files (written by the `collect` task). '
+                                    'What "old" means in this case is that '
+                                    'one instance of each paragraph is already '
+                                    'part of the corpus, so all occurrences '
+                                    'will be removed (as opposed to '
+                                    '--frequents, where the first is kept).')
     parser_filter.add_argument(
         '--output-dir', '-o', required=True,
         help='the output directory. The *last directory* of the input path '
@@ -399,6 +407,9 @@ class FrequentCollector:
     :func:`collect_frequent` have been moved here to make the code more
     readable.
     """
+    # The default (dummy) bootstrap tuple used when there is no bootstrap data
+    BOOTSTRAP_TUPLE = (None, 0, [])
+
     def __init__(self, threshold: float, permutations: int, decay: float,
                  min_freq: int,
                  bootstrap: Union[RandomPDataReader, None] = None,
@@ -416,13 +427,14 @@ class FrequentCollector:
 
     def reset(self, domain):
         """Resets the bookkeeping and statistics objects."""
-        self.stats = CollectStats(domains=1)
         self.lsh = MinHashLSH(threshold=self.threshold,
                               num_perm=self.permutations)
         self.freq_ps = {}  # type: Dict[str, PData]
         self.num_dup = 0
         # Bootstrap the domain frequency counts if previous data is available
-        for pdata_id, pdata in enumerate(self.bootstrap.get(domain, []), start=1):
+        _, docs, pdatas = self.bootstrap.get(domain, self.BOOTSTRAP_TUPLE)
+        self.stats = CollectStats(domains=1, docs=docs)
+        for pdata_id, pdata in enumerate(pdatas, start=1):
             self.lsh.insert(str(pdata_id), pdata.minhash)
             self.freq_ps[str(pdata_id)] = pdata
 
@@ -600,6 +612,23 @@ FilterStats = Stats.create(
     'old_ps', 'new_ps', 'old_docs', 'new_docs')  # type: Any
 
 
+# RandomPDataReaders for each process
+filter_frequents = None
+filter_old_frequents = None
+
+
+def init_filter(frequents: str, old_frequents: str):
+    """
+    Opens :data:`filter_frequents` and :data:`filter_old_frequents` if
+    ``old_frequents`` is not ``None``.
+
+    """
+    global filter_frequents, filter_old_frequents
+    filter_frequents = RandomPDataReader(frequents)
+    if old_frequents:
+        filter_old_frequents = RandomPDataReader(old_frequents)
+
+
 def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
                 frequents_seen: Dict[str, Any], lock: RLock):
     def seen_enough_of(domain: str, ps: List[int]) -> Set[int]:
@@ -610,8 +639,6 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
             frequents_seen[domain] = freq_counter
             return set(p for p in ps if freq_counter[p] >= args.min_freq)
 
-    # TODO to initializer
-    frequents = RandomPDataReader(args.frequents)
     sum_stats = FilterStats()
     minhasher = MinHasher(args.permutations, args.n)
     with closing(BatchWriter(sys.maxsize, args.output_dir,
@@ -619,13 +646,21 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
         for domain, group in group_index(index_lines):
             logging.debug('Filtering domain {}...'.format(domain))
             stats = FilterStats()
-            # Build the LSH
-            lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
-            for pdata_id, pdata in enumerate(frequents.get(domain), start=1):
+            # Build the LSHs
+            lsh = MinHashLSH(threshold=args.threshold,
+                             num_perm=args.permutations)
+            _, _, pdatas = filter_frequents.get(domain)
+            for pdata_id, pdata in enumerate(pdatas, start=1):
                 lsh.insert(str(pdata_id), pdata.minhash)
+            old_lsh = MinHashLSH(threshold=args.threshold,
+                                 num_perm=args.permutations)
+            if (filter_old_frequents):
+                _, _, pdatas = filter_old_frequents.get(domain)
+                for pdata_id, pdata in enumerate(pdatas, start=1):
+                    old_lsh.insert(str(pdata_id), pdata.minhash)
 
             doc_it = read_group_documents(group)
-            if not lsh.keys:
+            if not lsh.keys and not old_lsh.keys:
                 # There are no frequent paragraphs in the domain: just write
                 # documents to file
                 for doc_no, doc in enumerate(doc_it, start=1):
@@ -642,21 +677,30 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
                     stats.old_docs += 1
                     stats.old_ps += len(doc.paragraphs)
 
+                    minhashes = {p_id: minhasher.minhash(p) for p_id, p in
+                                 enumerate(doc.paragraphs, start=1)}
+                    # Just get rid of everything in old_frequents
+                    old_frequents_found = {p_id for p_id, mh in minhashes.items()
+                                           if old_lsh.query(mh)}
+                    minhashes = {p_id: mh for p_id, mh in minhashes.items()
+                                 if p_id not in old_frequents_found}
+                    # And now deal with the "new" frequents. Remember, we have
+                    # to keep each first occurrence
                     frequents_found = {}
-                    for p_id, p in enumerate(doc.paragraphs, start=1):
-                        for freq_id in lsh.query(minhasher.minhash(p)):
+                    for p_id, mh in minhashes.items():
+                        for freq_id in lsh.query(mh):
                             frequents_found[p_id] = int(freq_id)
                             break
                     if frequents_found:
                         seen_enough = seen_enough_of(
                             domain, set(frequents_found.values()))
-                        frequents_found = set(
+                        frequents_set = set(
                             p_id for p_id, freq_id in frequents_found.items()
                             if freq_id in seen_enough
-                        )
+                        ) | old_frequents_found
                         doc.paragraphs = [
                             p for p_id, p in enumerate(doc.paragraphs, start=1)
-                            if p_id not in frequents_found
+                            if p_id not in frequents_set
                         ]
                     if doc.paragraphs:
                         stats.new_docs += 1
@@ -680,7 +724,8 @@ def main_filter(args):
     logging.info('Filtering frequent paragraphs from index {}...'.format(
         args.index))
 
-    with Pool(args.processes) as pool:
+    with Pool(args.processes, initializer=init_filter,
+              initargs=[args.frequents, args.old_frequents]) as pool:
         m = Manager()
         frequents_seen = m.dict()
         lock = m.RLock()

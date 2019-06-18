@@ -10,6 +10,7 @@ import logging
 import os
 from queue import Empty, Queue
 import re
+import shutil
 
 from cc_corpus.utils import openall
 
@@ -322,6 +323,18 @@ class BatchWriter:
 
         print(document, file=self.outf)
         self.doc_written += 1
+
+    def copy_file(self, input_file):
+        """
+        Opens a file and makes it a copy of ``input_file``.
+        """
+        self.new_file()
+        self.close()
+
+        new_file = os.path.join(
+            self.out_dir, '{}{{:0{}}}.txt.gz'.format(
+                self.name_prefix, self.zeroes).format(self.batch))
+        shutil.copy(input_file, new_file)
 
     def new_file(self):
         """Closes the old file and opens a new one."""

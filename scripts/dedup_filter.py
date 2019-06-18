@@ -31,7 +31,7 @@ def parse_arguments():
                              'batches to deduplicate. The .files file contains '
                              'the names of the (corpus) input files.')
     parser.add_argument('--output-dir', '-o', required=True,
-                        help='the directory to which the updated minhash '
+                        help='the directory to which the filtered corpus '
                              'files are written.')
     parser.add_argument('--input-dir', '-i',
                         help='the directory that contains the corpus files to '
@@ -39,6 +39,12 @@ def parse_arguments():
                              'of the input files, this argument is only '
                              'necessary if that information is outdated, e.g. '
                              'the files have been moved.')
+    parser.add_argument('--ignore-missing-files', '-f', action='store_true',
+                        help='normally, if the index contains a file that does '
+                             'not exist, the program exits with an error. '
+                             'Setting this option tells the script to silently '
+                             'ignore such errors. Useful when running the '
+                             'script in a distributed fashion.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1).')
@@ -53,7 +59,8 @@ def parse_arguments():
     return args
 
 
-def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None):
+def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None,
+                                ignore_missing_files=False):
     """
     Filters documents not present in the batch and writes the filtered corpus
     files to output_dir. As above, input_dir can be specified if the location
@@ -65,19 +72,29 @@ def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None):
     logging.info('Filtering batch {}...'.format(batch_base))
 
     kept, total = 0, 0
+    num_files = 0
     for input_file, results in read_batch(batch_prefix):
         file_base = op.basename(input_file)
         url_set = set('_'.join(doc_id) for doc_id in results['id'])
         input_file = op.join(input_dir, file_base) if input_dir else input_file
-        with notempty(openall(op.join(output_dir, file_base), 'wt')) as outf:
-            for doc_no, doc in enumerate(parse_file(input_file), start=1):
-                if doc.attrs['url'] in url_set:
-                    print(doc, file=outf)
-                    kept += 1
-            total += doc_no
+        if os.path.isfile(input_file):
+            with notempty(openall(op.join(output_dir, file_base), 'wt')) as outf:
+                for doc_no, doc in enumerate(parse_file(input_file), start=1):
+                    if doc.attrs['url'] in url_set:
+                        print(doc, file=outf)
+                        kept += 1
+                total += doc_no
+            num_files += 1
+        elif ignore_missing_files:
+            logging.debug('Input file {} was not found; ignoring...'.format(
+                input_file))
+        else:
+            raise FileNotFoundError(
+                'Input file {} not found.'.format(input_file))
 
-    logging.info('Filtered batch {}; kept {} documents out of {}.'.format(
-        batch_base, kept, total))
+    logging.info('Filtered batch {} of {} files; '
+                 'kept {} documents out of {}.'.format(
+                     batch_base, num_files, kept, total))
     return kept, total
 
 
@@ -98,7 +115,8 @@ def main():
 
     with Pool(args.processes) as pool:
         f = partial(deduplicate_batch_documents,
-                    output_dir=args.output_dir, input_dir=args.input_dir)
+                    output_dir=args.output_dir, input_dir=args.input_dir,
+                    ignore_missing_files=args.ignore_missing_files)
         kept, total = 0, 0
         for batch_kept, batch_total in pool.imap(f, batch_prefixes):
             kept += batch_kept

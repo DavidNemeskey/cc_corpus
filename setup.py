@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.2.1',
+      version='1.3.0',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -51,7 +51,12 @@ setup(name='commoncrawl-downloader',
       packages=find_packages(exclude=['scripts']),
       # Install the scripts
       scripts=[
+          'scripts/cdx-index-client.py',
+          'scripts/get_indexfiles.py',
+          'scripts/filter_index.py',
+          'scripts/deduplicate_index_urls.py',
           'scripts/deduplicate_index_urls_redis.py',
+          'scripts/download_pages.py',
           'scripts/filter_corpus.py',
           'scripts/filter_known_urls.py',
           'scripts/find_finished_downloads.py',
@@ -94,13 +99,10 @@ setup(name='commoncrawl-downloader',
           # Language identification
           'cld2-cffi', 'langid',
           # WARC 3 library
-          'warc',
+          # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
+          'warc @ git+git://github.com/erroneousboat/warc3.git#egg=warc',
           # Type hints for Python < 3.5
-          'typing'
-      ],
-      dependency_links=[
-          # WARC 3 library
-          'git+git://github.com/erroneousboat/warc3.git#egg=warc'
+          'typing',
       ],
       # zip_safe=False,
       use_2to3=False)

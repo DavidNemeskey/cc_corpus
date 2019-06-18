@@ -17,7 +17,7 @@ def parse_arguments():
                         help='the index directory')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory')
-    parser.add_argument('--processes', '-p', type=int, default=1,
+    parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
     args = parser.parse_args()

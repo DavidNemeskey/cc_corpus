@@ -69,7 +69,8 @@ def main():
     out = openall(args.output_file, 'wt') if args.output_file else sys.stdout
 
     attributes = list(map(str.lower, args.attributes))
-    print('\t'.join(attributes), file=out)
+    if args.write_headers:
+        print('\t'.join(attributes), file=out)
 
     with Pool(args.processes) as pool:
         f = partial(extract_attrs_fields, attrs=attributes)

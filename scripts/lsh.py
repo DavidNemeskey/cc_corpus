@@ -18,6 +18,7 @@ import shutil
 import sys
 
 from datasketch import MinHashLSH
+from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
 
@@ -90,7 +91,7 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
             doc_ids, new_doc_ids = results['id'], []
             total_read += len(doc_ids)
             input_duplicate_urls = 0
-            for doc_id, minhash in zip(results['id'], results['minhash']):
+            for doc_id, minhash in zip(doc_ids, minhashes):
                 key = '_'.join(doc_id)
                 if key in lsh:
                     input_duplicate_urls += 1
@@ -108,7 +109,7 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
                               input_file, input_duplicate_urls))
     logging.info('Deduplicated batch {}; kept {} documents out of {}; '
                  '{} duplicate urls.'.format(
-                 file_base, bw.total_written, total_read, duplicate_urls))
+                     file_base, bw.total_written, total_read, duplicate_urls))
     return bw.total_written, total_read
 
 
@@ -176,7 +177,7 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
     main_base = op.basename(main_batch)
-    logging.info('Processing batch {}...'.format(main_base))
+    logging.info('Processing input batch {}...'.format(main_base))
 
     # First, load the (already deduplicated) batch...
     for input_file, results in read_batch(main_batch):
@@ -201,8 +202,8 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
                         lsh.remove(duplicate)
                         batch_content_duplicates += 1
         logging.info(
-            'Cross-deduplicated batch {} with batch {}: {} -> {} documents '
-            '(removed {} by url, {} by content).'.format(
+            'Cross-deduplicated input batch {} with cross batch {}: {} -> {} '
+            'documents (removed {} by url, {} by content).'.format(
                 main_base, op.basename(batch), initial_batch_len, len(lsh.keys),
                 batch_url_duplicates, batch_content_duplicates)
         )
@@ -221,7 +222,7 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
                     doc_ids.append(doc_id)
                     minhashes.append(minhash)
             bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
-    logging.info('Processed batch {}; kept {} out of {} documents '
+    logging.info('Processed input batch {}; kept {} out of {} documents '
                  '(removed {} by url, {} by content).'.format(
                      main_base, len(lsh.keys), initial_len,
                      url_duplicates, content_duplicates))
@@ -235,7 +236,8 @@ def self_main(args):
         os.makedirs(working_dir)
 
     batch_prefixes = find_all_batches(args.input_dir)
-    logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
+    logging.info('Found a total of {} batches in {}.'.format(
+        len(batch_prefixes), args.input_dir))
 
     # First, deduplicate documents _within_ the same batch
     original_doc_num, self_doc_num, final_doc_num = 0, 0, 0
@@ -286,19 +288,19 @@ def other_main(args):
         os.makedirs(args.output_dir)
 
     batch_prefixes = find_all_batches(args.input_dir)
-    logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
+    logging.info('Found a total of {} batches in {}.'.format(
+        len(batch_prefixes), args.input_dir))
 
     batches_to_subtract = find_all_batches(args.cross_dir)
-    logging.info('Found a total of {} batches to deduplicate against.'.format(
-        len(batches_to_subtract)))
+    logging.info('Found a total of {} batches in {}to deduplicate against.'.format(
+        len(batches_to_subtract), args.cross_dir))
 
     with ProcessPoolExecutor(max_workers=args.processes) as executor:
         f = partial(deduplicate_other, batches_to_subtract=batches_to_subtract,
                     output_dir=args.output_dir,
                     threshold=args.threshold, permutations=args.permutations)
         original_doc_num, final_doc_num = 0, 0
-        for new_num, old_num in sum(num for num, _ in
-                                    executor.map(f, batch_prefixes)):
+        for new_num, old_num in executor.map(f, batch_prefixes):
             original_doc_num += old_num
             final_doc_num += new_num
 
@@ -314,6 +316,7 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
+    install_mp_handler()
     os.nice(20)
 
     self_main(args) if args.command == 'self' else other_main(args)

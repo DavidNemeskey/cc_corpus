@@ -11,6 +11,7 @@ from contextlib import closing
 import logging
 import os
 import os.path as op
+import sys
 
 from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
 
@@ -25,11 +26,15 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the directory to which the updated minhash '
                              'files are written.')
-    parser.add_argument('--batch-size', '-b', type=int, default=1000000,
-                        help='the number of units in a single batch. '
-                             'This is not an exact number, as documents in '
-                             'the same data files are always put into the same '
-                             'batch.')
+    batch_group = parser.add_mutually_exclusive_group()
+    batch_group.add_argument('--batch-size', '-b', type=int, default=1000000,
+                             help='the number of units in a single batch. '
+                                  'This is not an exact number, as documents '
+                                  'in the same data files are always put into '
+                                  'the same batch.')
+    batch_group.add_argument('--keep-sizes', '-k', action='store_true',
+                             help='do not merge or split batch files; i.e. '
+                                  'only copies files to the output directory.')
     parser.add_argument('--zeroes', '-Z', type=int, default=4,
                         help='the number of zeroes in the batch files\' names.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
@@ -54,13 +59,18 @@ def main():
                      for batch_prefix in find_all_batches(input_dir)]
 
     logging.info('Found a total of {} input batches.'.format(len(input_batches)))
+    logging.info('Writing files to {}...'.format(args.output_dir))
 
-    with closing(BatchWriter(args.batch_size, args.output_dir,
-                             args.zeroes)) as bw:
+    batch_size = args.batch_size if not args.keep_sizes else sys.maxsize
+    with closing(BatchWriter(batch_size, args.output_dir, args.zeroes)) as bw:
         for input_batch in input_batches:
-            logging.info('Reading batch {}...'.format(input_batch))
-            for input_file, results in read_batch(input_batch):
-                bw.write_results(input_file, results)
+            if not args.keep_sizes:
+                logging.info('Reading batch {}...'.format(input_batch))
+                for input_file, results in read_batch(input_batch):
+                    bw.write_results(input_file, results)
+            else:
+                logging.info('Copying batch {}...'.format(input_batch))
+                bw.copy_file(input_batch)
 
     logging.info('Done; renumbered {} documents.'.format(bw.total_written))
 

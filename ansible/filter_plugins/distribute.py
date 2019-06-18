@@ -19,10 +19,32 @@ class FilterModule:
         return {'distribute': self.distribute}
 
     def distribute(self, path, host_name):
-        # Ensure that there is at most one slash at the end
-        m = self.slashp.search(path)
-        if m:
-            return '{}_{}{}'.format(path[:m.start()], host_name, os.sep)
+        """
+        Adds ``host_name`` to ``path``. The insertion point depends on whether
+        ``path`` denotes a directory or a file: for a directory, it is put
+        just before the ending path separator (``/`` or ``\``, depending on the
+        OS); for files, before the extension.
+
+        There are two caveats:
+
+        1. At this point we don't know if ``path`` is *actually* a directory.
+           If it ends in a path separator, it is a directory; otherwise, it
+           isn't.
+        2. In some cases, we might want to insert the host name somewhere else.
+           In this case, the insertion point can be marked with a pair of
+           braces (``{}``), e.g. ``path/to_{}/file.ext``.
+        """
+        parts = path.split('{}')
+        if len(parts) > 1:
+            return host_name.join(parts)
         else:
-            root, ext = os.path.splitext(path)
-            return '{}_{}{}'.format(root, host_name, ext)
+            # Check if path is a directory; i.e. there is a slash at the end
+            # while also ensuring there is at most one
+            m = self.slashp.search(path)
+            if m:
+                # Directory
+                return '{}_{}{}'.format(path[:m.start()], host_name, os.sep)
+            else:
+                # File
+                root, ext = os.path.splitext(path)
+                return '{}_{}{}'.format(root, host_name, ext)
