@@ -23,26 +23,17 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory.')
     size_group = parser.add_mutually_exclusive_group()
-    size_group.add_argument('--documents', '-d', required=True,
+    size_group.add_argument('--documents', '-d', type=int,
                             help='the number of documents a file should contain.')
     size_group.add_argument('--keep-sizes', '-k', action='store_true',
                             help='do not merge or split files; i.e. only '
                                  'copies files to the output directory.')
     parser.add_argument('--zeroes', '-Z', type=int, default=4,
                         help='the number of zeroes in the output files\' names.')
-    parser.add_argument('--processes', '-P', type=int, default=1,
-                        help='number of worker processes to use (max is the '
-                             'num of cores, default: 1).')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
-    args = parser.parse_args()
-
-    num_procs = len(os.sched_getaffinity(0))
-    if args.processes < 1 or args.processes > num_procs:
-        parser.error('Number of processes must be between 1 and {}'.format(
-            num_procs))
-    return args
+    return parser.parse_args()
 
 
 def main():
