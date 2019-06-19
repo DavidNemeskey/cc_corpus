@@ -47,7 +47,7 @@ CollectStats = Stats.create('docs', 'ps', 'affected_docs',
 def collect_stats(input_file: str) -> Dict[str, CollectStats]:
     """Collects statistics about the prevalence of the phenomenon in domains."""
     stats = {}
-    for doc in parse_file(input_file, True, False, False):
+    for doc in parse_file(input_file, True, False, True):
         domain = urlsplit(doc.attrs['url']).netloc
         stat = stats.setdefault(domain, CollectStats())
         stat.docs += 1
@@ -58,6 +58,7 @@ def collect_stats(input_file: str) -> Dict[str, CollectStats]:
         for p, freq in c.most_common():
             if freq == 1:
                 break
+            logging.debug('{}: {} x {}'.format(doc.attrs['url'], freq, p))
             doc_affected = True
             stat.affected_ps += 1
             stat.ps_copies += freq - 1
@@ -76,7 +77,7 @@ def main():
     )
     install_mp_handler()
 
-    input_files = collect_inputs(args.input_dir)
+    input_files = collect_inputs([args.input_dir])
     logging.info('Scheduled {} files for filtering.'.format(len(input_files)))
 
     with Pool(args.processes) as pool:
@@ -88,9 +89,10 @@ def main():
         pool.join()
 
     for domain, stat in sum_stats.items():
-        print('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
-            domain, stat.docs, stat.ps, stat.affected_docs,
-            stat.affected_ps, stat.ps_copies))
+        if stat.affected_docs > 0:
+            print('{}\t{}\t{}\t{}\t{}\t{}'.format(
+                domain, stat.docs, stat.ps, stat.affected_docs,
+                stat.affected_ps, stat.ps_copies))
 
     logging.info('Done.')
 
