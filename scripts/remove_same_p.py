@@ -25,6 +25,8 @@ def parse_arguments():
     parser = ArgumentParser(__doc__)
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the corpus directory')
+    parser.add_argument('--min-length', '-l', type=int, default=1,
+                        help='the minimum paragraph length in characters.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -44,7 +46,7 @@ CollectStats = Stats.create('docs', 'ps', 'affected_docs',
                             'affected_ps', 'ps_copies')  # type: Any
 
 
-def collect_stats(input_file: str) -> Dict[str, CollectStats]:
+def collect_stats(input_file: str, min_length: int) -> Dict[str, CollectStats]:
     """Collects statistics about the prevalence of the phenomenon in domains."""
     stats = {}
     for doc in parse_file(input_file, True, False, True):
@@ -53,7 +55,7 @@ def collect_stats(input_file: str) -> Dict[str, CollectStats]:
         stat.docs += 1
         stat.ps += len(doc.paragraphs)
 
-        c = Counter(doc.paragraphs)
+        c = Counter([p for p in doc.paragraphs if len(p) >= min_length])
         doc_affected = False
         for p, freq in c.most_common():
             if freq == 1:
