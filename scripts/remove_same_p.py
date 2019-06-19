@@ -9,6 +9,7 @@ And the speed, of course, as this one is much faster to run...
 
 from argparse import ArgumentParser
 from collections import defaultdict, Counter
+from functools import partial
 import logging
 from multiprocessing import Pool
 import os
@@ -83,8 +84,9 @@ def main():
     logging.info('Scheduled {} files for filtering.'.format(len(input_files)))
 
     with Pool(args.processes) as pool:
+        f = partial(collect_stats, min_length=args.min_length)
         sum_stats = defaultdict(CollectStats)
-        for stats in pool.imap_unordered(collect_stats, input_files):
+        for stats in pool.imap_unordered(f, input_files):
             for domain, stat in stats.items():
                 sum_stats[domain] += stat
         pool.close()
