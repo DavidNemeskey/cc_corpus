@@ -88,7 +88,7 @@ def main():
         pool.close()
         pool.join()
 
-    for domain, stat in sum_stats.items():
+    for domain, stat in sorted(sum_stats.items()):
         if stat.affected_docs > 0:
             print('{}\t{}\t{}\t{}\t{}\t{}'.format(
                 domain, stat.docs, stat.ps, stat.affected_docs,
