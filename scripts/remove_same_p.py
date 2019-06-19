@@ -81,7 +81,7 @@ def main():
 
     with Pool(args.processes) as pool:
         sum_stats = defaultdict(CollectStats)
-        for stats in pool.imap_unordered(input_files):
+        for stats in pool.imap_unordered(collect_stats, input_files):
             for domain, stat in stats.items():
                 sum_stats[domain] += stat
         pool.close()
