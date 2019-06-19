@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import Stats
+from cc_corpus.utils import collect_inputs, Stats
 
 
 def parse_arguments():
@@ -76,7 +76,7 @@ def main():
     )
     install_mp_handler()
 
-    input_files = os.listdir(args.input_dir)
+    input_files = collect_inputs(args.input_dir)
     logging.info('Scheduled {} files for filtering.'.format(len(input_files)))
 
     with Pool(args.processes) as pool:
