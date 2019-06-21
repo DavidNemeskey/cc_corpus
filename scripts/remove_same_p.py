@@ -131,6 +131,8 @@ def main():
     else:
         f = partial(remove_same_ps, min_length=args.min_length,
                     output_dir=args.output_dir)
+        if not op.isdir(args.output_dir):
+            os.makedirs(args.output_dir)
 
     with Pool(args.processes) as pool:
         sum_stats = defaultdict(CollectStats)
