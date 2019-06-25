@@ -107,7 +107,7 @@ def remove_same_ps(input_file: str, min_length: int,
                     stat.ps_copies += 1
 
             if len(doc.paragraphs) != len(kept_ps):
-                stats.affected_docs += 1
+                stat.affected_docs += 1
                 doc.paragraphs = kept_ps
             print(doc, file=outf)
 
@@ -152,8 +152,10 @@ def main():
         sum_stat = CollectStats()
         for stat in sum_stats.values():
             sum_stat += stat
-        logging.info('Filtered {} paragraphs from {} affected documents.'.format(
-            sum_stat.ps_copies, sum_stat.affected_docs))
+        logging.info('Filtered {} paragraphs from {} affected documents '
+                     '(out of {} in {}).'.format(
+            sum_stat.ps_copies, sum_stat.affected_docs,
+            sum_stat.ps, sum_stat.docs))
 
     logging.info('Done.')
 
