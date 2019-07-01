@@ -129,7 +129,7 @@ def main():
         if args.latex:
             print(' & ' + ' & '.join('{:,d}'.format(stat) if field else ''
                                      for stat, field in zip(stats, fields)) +
-                  r'\\')
+                  r' \\')
         else:
             print(' '.join(str(stat) for stat, field in zip(stats, fields)
                            if field))
