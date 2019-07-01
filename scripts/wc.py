@@ -40,6 +40,8 @@ def parse_arguments():
                         help='Count the number of characters.')
     parser.add_argument('--warc', '-W', action='store_true',
                         help='Assume ALL input files are in the WARC format.')
+    parser.add_argument('--latex', '-l', action='store_true',
+                        help='LaTeX table row-style output.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -122,10 +124,15 @@ def main():
         for sub_stats in p.map(f, files):
             for i in range(len(stats)):
                 stats[i] += sub_stats[i]
-        print(' '.join(str(stat) for stat, attr in
-                       zip(stats, [args.documents, args.paragraphs,
-                                   args.words, args.characters])
-                       if attr))
+
+        fields = [args.documents, args.paragraphs, args.words, args.characters]
+        if args.latex:
+            print(' & ' + ' & '.join('{:,d}'.format(stat) if field else ''
+                                     for stat, field in zip(stats, fields)) +
+                  r' \\')
+        else:
+            print(' '.join(str(stat) for stat, field in zip(stats, fields)
+                           if field))
         p.close()
         p.join()
     logging.info('Done.')
