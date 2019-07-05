@@ -20,14 +20,12 @@ from cc_corpus.utils import collect_inputs
 
 
 def parse_arguments():
-    parser = ArgumentParser('Counts the number of documents, paragraphs, '
-                            'words and / or characters in (a set of) '
-                            'files in WARC or the corpus format.\n\nSimilarly '
-                            'to Unix wc, any number of these switches can be '
-                            'specified, and then only those numbers are '
-                            'printed; if no flags are specified, all numbers '
-                            'are printed.\n\nFor WARC, number of paragraphs '
-                            'and words will always be 0.')
+    parser = ArgumentParser(
+        description='{}\nSimilarly to Unix wc, any number of these switches '
+                    'can be specified, and then only those numbers are '
+                    'printed; if no flags are specified, all numbers are '
+                    'printed.\n\nFor WARC, number of paragraphs and words '
+                    'will always be 0.'.format(__doc__))
     parser.add_argument('inputs', nargs='*',
                         help='the files/directories to count.')
     parser.add_argument('--documents', '-d', action='store_true',

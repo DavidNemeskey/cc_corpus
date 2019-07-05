@@ -15,9 +15,10 @@ from cc_corpus.utils import host_weight
 
 
 def parse_arguments():
-    parser = ArgumentParser('Distributes files in a directory to several '
-                            'directories so that we can distribute the '
-                            'processing as well to separate hosts.')
+    parser = ArgumentParser(
+        description='Distributes files in a directory to several directories '
+                    'so that we can distribute the processing as well to '
+                    'separate hosts.')
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the input directory.')
     parser.add_argument('--output-dir', '-o',

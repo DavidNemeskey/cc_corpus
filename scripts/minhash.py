@@ -26,7 +26,7 @@ from cc_corpus.utils import collect_inputs
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--input', '-i', dest='inputs', required=True,
                         action='append', default=[],
                         help='the files/directories to compute the minhash for.')

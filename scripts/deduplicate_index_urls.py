@@ -17,7 +17,7 @@ from cc_corpus.utils import notempty, openall, Stats
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the index directory')
     parser.add_argument('--output-dir', '-o', required=True,

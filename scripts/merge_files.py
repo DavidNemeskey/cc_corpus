@@ -16,7 +16,7 @@ from cc_corpus.frequent import open as pdata_open
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('inputs', nargs='+', help='the input files (prefixes).')
     parser.add_argument('--type', '-t', required=True, choices=['pdata'],
                         help='type of the input and output files. See above.')

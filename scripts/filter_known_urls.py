@@ -13,8 +13,9 @@ import os.path as op
 
 
 def parse_arguments():
-    parser = ArgumentParser('Filters known (already downloaded in a previous '
-                            'batch) URLs from the index.')
+    parser = ArgumentParser(
+        description='Filters known (already downloaded in '
+                    'a previous batch) URLs from the index.')
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the index directory')
     parser.add_argument('--output-dir', '-o', required=True,
@@ -75,7 +76,6 @@ def main():
     os.nice(20)  # Play nice
 
     files = os.listdir(args.input_dir)
-    to_process = [op.join(args.input_dir, f) for f in files]
     with cf.ThreadPoolExecutor(max_workers=args.parallel) as executor:
         cf.wait([executor.submit(filter_file, op.join(args.input_dir, f),
                                  op.join(args.output_dir, f), known_urls)

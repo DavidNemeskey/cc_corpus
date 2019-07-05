@@ -20,9 +20,9 @@ from cc_corpus.deduplication import BatchWriter, read_batch
 
 
 def parse_arguments():
-    parser = ArgumentParser('Deduplicates the documents with Locality '
-                            'Sensitive Hashing, based on the files written '
-                            'by minhash.py.')
+    parser = ArgumentParser(
+        description='Deduplicates the documents with Locality Sensitive '
+                    'Hashing, based on the files written by minhash.py.')
     parser.add_argument('--input', '-i', required=True,
                         help='the input file prefix.')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,

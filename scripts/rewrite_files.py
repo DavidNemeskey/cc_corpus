@@ -16,7 +16,7 @@ from cc_corpus.utils import openall
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('input_dir', help='the input directory.')
     parser.add_argument('output_dir', help='the input directory.')
     parser.add_argument('--format', '-f', required=True,

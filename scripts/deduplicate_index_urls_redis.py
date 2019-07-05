@@ -4,12 +4,10 @@
 """Deduplicates the urls in the index using redis."""
 
 from argparse import ArgumentParser
-from collections import defaultdict
 import concurrent.futures as cf
 from contextlib import contextmanager
 from functools import partial
 import gzip
-from itertools import zip_longest
 import logging
 import os
 import os.path as op
@@ -23,7 +21,7 @@ import redis
 from cc_corpus.utils import grouper
 
 
-file_name_p = re.compile('(\d{4}-\d{2}-\d+).gz$')
+file_name_p = re.compile(r'(\d{4}-\d{2}-\d+).gz$')
 
 latest_script = """
 local old_warc = redis.call('hget', KEYS[1], 'warc')
@@ -106,7 +104,7 @@ def mem_only_redis(port):
 
 
 def parse_arguments():
-    parser = ArgumentParser('Deduplicates the urls in the index.')
+    parser = ArgumentParser(description='Deduplicates the urls in the index.')
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the index directory')
     parser.add_argument('--output-dir', '-o', required=True,
