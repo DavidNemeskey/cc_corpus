@@ -20,9 +20,7 @@ from cc_corpus.utils import collect_inputs
 
 
 def parse_arguments():
-    parser = ArgumentParser('Counts the number of documents, paragraphs, '
-                            'words and / or characters in (a set of) '
-                            'files in WARC or the corpus format.\n\nSimilarly '
+    parser = ArgumentParser(__doc__ + '\n\nSimilarly '
                             'to Unix wc, any number of these switches can be '
                             'specified, and then only those numbers are '
                             'printed; if no flags are specified, all numbers '
