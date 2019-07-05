@@ -17,7 +17,7 @@ from cc_corpus.utils import collect_inputs
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('input_dirs', nargs='+',
                         help='the input directories.')
     parser.add_argument('--output-dir', '-o', required=True,

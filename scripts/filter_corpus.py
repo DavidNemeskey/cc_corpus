@@ -23,7 +23,7 @@ from cc_corpus.utils import openall
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the corpus directory')
     parser.add_argument('--output-dir', '-o', required=True,

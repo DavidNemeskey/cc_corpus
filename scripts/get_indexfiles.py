@@ -17,7 +17,7 @@ from typing import Dict, List
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--query', '-q', required=True,
                         help='the query string; e.g. "*.hu".')
     parser.add_argument('--output-dir', '-o', required=True,

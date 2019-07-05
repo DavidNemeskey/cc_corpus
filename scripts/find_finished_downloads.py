@@ -15,9 +15,9 @@ import re
 
 
 def parse_arguments():
-    parser = ArgumentParser('Finds all finished files in a download log. '
-                            'This is useful when the download process stops '
-                            'for some reason.')
+    parser = ArgumentParser(
+        description='Finds all finished files in a download log. This is '
+                    'useful when the download process stops for some reason.')
     parser.add_argument('log_file', help='the log file.')
     args = parser.parse_args()
     if not op.isfile(args.log_file):

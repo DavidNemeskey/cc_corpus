@@ -30,7 +30,7 @@ from cc_corpus.utils import grouper2, host_to_path, host_weight, openall, Stats
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--index', required=True,
                         help='the index file (output of the index task and '
                              'input to the rest.')

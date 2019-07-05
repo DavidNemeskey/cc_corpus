@@ -25,7 +25,7 @@ from cc_corpus.utils import notempty, openall
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--minhash-dir', '-m', required=True,
                         help='the input directory that contains the minhash '
                              'batches to deduplicate. The .files file contains '

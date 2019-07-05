@@ -30,7 +30,8 @@ from cc_corpus.utils import openall
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser('CDX Index Batch Document Downloader')
+    parser = argparse.ArgumentParser(
+        description='CDX Index Batch Document Downloader')
     parser.add_argument('-o', '--output-dir', required=True,
                         help='Output dir of log files and pages directory')
     parser.add_argument('-of', '--out-filename', default=None,
