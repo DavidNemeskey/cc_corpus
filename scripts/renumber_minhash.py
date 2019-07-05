@@ -17,7 +17,7 @@ from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--input-dir', '-i', required=True,
                         action='append', default=[], dest='input_dirs',
                         help='an input directory that contains the minhash '

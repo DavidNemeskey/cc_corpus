@@ -352,7 +352,7 @@ def get_args():
     select fields to include: eg, --fl url,timestamp
     """
 
-    parser = ArgumentParser('CDX Index API Client')
+    parser = ArgumentParser(description='CDX Index API Client')
 
     parser.add_argument('url',
                         help=url_help)

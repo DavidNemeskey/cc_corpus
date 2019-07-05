@@ -18,7 +18,7 @@ from cc_corpus.utils import openall
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--warc', '-w', dest='warc', required=True,
                         help='the WARC file to read.')
     input = parser.add_mutually_exclusive_group()

@@ -12,7 +12,7 @@ from urllib.parse import urljoin
 
 
 def parse_arguments():
-    parser = ArgumentParser('Collects statistics of the index.')
+    parser = ArgumentParser(description='Collects statistics of the index.')
     parser.add_argument('--input-dir', '-i', required=True,
                         help='the index directory')
     parser.add_argument('--output-dir', '-o', required=True,

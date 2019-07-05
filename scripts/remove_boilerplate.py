@@ -152,8 +152,9 @@ class IndexWarcReader:
 
 
 def parse_arguments():
-    parser = ArgumentParser('Removes boilerplate from WARC segments and ' +
-                            'converts them to the corpus\'s semi-XML format.')
+    parser = ArgumentParser(
+        description='Removes boilerplate from WARC segments and converts '
+                    'them to the corpus\'s semi-XML format.')
     parser.add_argument('--index-dir', '-i', required=True,
                         help='the index directory')
     parser.add_argument('--warc-dir', '-w', required=True,

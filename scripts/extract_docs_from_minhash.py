@@ -15,7 +15,7 @@ from cc_corpus.utils import openall
 
 
 def parse_arguments():
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('--line', '-l', dest='lines', action='append',
                         default=[],
                         help='A line in the doc_ids file to extract. It '
