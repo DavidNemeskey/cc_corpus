@@ -12,13 +12,11 @@ and disambiguation) should not cause any problems.
 
 from argparse import ArgumentParser, ArgumentTypeError
 from functools import partial
-from itertools import cycle
 import logging
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool
 from multiprocessing.managers import BaseManager
 import os
 import os.path as op
-import subprocess
 import sys
 import time
 from typing import List
@@ -59,6 +57,9 @@ def parse_arguments():
                              'port range used by the REST servers. E.g. '
                              '8888:8 means every 8th port up from 8888. The '
                              'defaults are 5000 and 10.')
+    parser.add_argument('--seconds', '-s', type=int, default=10,
+                        help='the number of seconds to wait for the Flask '
+                             'processes to initialize.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -130,6 +131,38 @@ class URIDistributor:
         self.uris.append(uri)
 
 
+def start_emtsv(port, emtsv_dir, tasks):
+    """Starts the emtsv pipeline with the specified parameters."""
+    # This is ridiculous. If you want to provide an API,
+    # do it in a Python package!
+    sys.path.insert(1, emtsv_dir)
+    from __init__ import init_everything, pipeline_rest_api, jnius_config
+    from __init__ import tools, presets
+
+    jnius_config.classpath_show_warning = False  # Suppress warning.
+    conll_comments = True
+    if len(tasks) > 0:
+        used_tools = tasks.split(',')
+        if len(used_tools) == 1 and used_tools[0] in presets:
+            # Resolve presets to module names to init only the needed modules...
+            used_tools = presets[used_tools[0]]
+
+        inited_tools = init_everything({k: v for k, v in tools.items() if k in set(used_tools)})
+    else:
+        inited_tools = init_everything(tools)
+
+    with open('/dev/null', 'wt') as null:
+        sys.stdout = sys.stderr = null
+        app = pipeline_rest_api(name='e-magyar-tsv', available_tools=inited_tools,
+                                presets=presets, conll_comments=conll_comments)
+        logging.getLogger('xtsv').setLevel(logging.WARNING)
+        logging.getLogger('werkzeug').setLevel(logging.WARNING)
+        # use_reloader=False is very important, otherwise Flask starts this script
+        # as many times as there are servers... See
+        # https://stackoverflow.com/questions/33927616/multiprocess-within-flask-app-spinning-up-2-processes
+        app.run(port=port, debug=True, use_reloader=False)
+
+
 def main():
     args = parse_arguments()
 
@@ -154,13 +187,15 @@ def main():
     output_files = [op.join(args.output_dir, op.basename(f))
                     for f in input_files]
 
-    cmd = 'python {} -e {} -c -p {{}} {}'.format(
-        op.join(op.dirname(__file__), 'emtsv_rest.py'), args.emtsv_dir, args.tasks)
-    rests = [subprocess.Popen(cmd.format(port).split(),
-                              stderr=subprocess.DEVNULL,
-                              stdout=subprocess.DEVNULL) for port in ports]
+    logging.info('Starting REST servers...')
+    rpool = Pool(args.processes)
+    rf = partial(start_emtsv, emtsv_dir=args.emtsv_dir, tasks=args.tasks)
+    rpool.map_async(rf, ports)
+    rpool.close()
 
-    time.sleep(10)
+    logging.debug('Sleping {} seconds...'.format(args.seconds))
+    time.sleep(args.seconds)
+    logging.debug('Slept.')
 
     URIManager.register('URIDistributor', URIDistributor)
     try:
@@ -168,13 +203,15 @@ def main():
             dist = manager.URIDistributor(uris)
             f = partial(analyze_file, dist=dist)
             pool.starmap(f, zip(input_files, output_files))
+            logging.debug('Joining processes...')
             pool.close()
             pool.join()
-
+            logging.debug('Joined processes.')
     finally:
-        # Stop the Flask processes
-        for rest in rests:
-            rest.terminate()
+        logging.debug('Terminating REST servers...')
+        rpool.terminate()
+        rpool.join()
+        logging.debug('Terminated REST servers...')
 
     logging.info('Done.')
 
