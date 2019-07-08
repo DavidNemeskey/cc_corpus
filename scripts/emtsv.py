@@ -14,12 +14,14 @@ from argparse import ArgumentParser, ArgumentTypeError
 from functools import partial
 from itertools import cycle
 import logging
-from multiprocessing import Pool
+from multiprocessing import Pool, Manager
+from multiprocessing.managers import BaseManager
 import os
 import os.path as op
 import subprocess
 import sys
 import time
+from typing import List
 
 from multiprocessing_logging import install_mp_handler
 import requests
@@ -72,11 +74,60 @@ def parse_arguments():
     return args
 
 
-def analyze_file(input_file, output_file, uri):
+def analyze_file(input_file, output_file, dist):
     """Analyzes *input_file* with the emtsv REST server running on *uri*."""
-    with open(input_file) as inf, open(output_file, 'wt') as outf:
-        r = requests.post(uri, files={'file': inf})
-        outf.write(r.text)
+    logging.info('Analyzing {}...'.format(input_file))
+    uri = dist.acquire()
+    logging.debug('Acquired URI {}.'.format(uri))
+    try:
+        with open(input_file) as inf, open(output_file, 'wt') as outf:
+            r = requests.post(uri, files={'file': inf})
+            outf.write(r.text)
+        logging.info('Finished {} at URI {}...'.format(input_file, uri))
+    finally:
+        dist.release(uri)
+        logging.debug('Released URI {}.'.format(uri))
+
+
+class URIManager(BaseManager):
+    """
+    A :class:`multiprocessing.managers.BaseManager` subclass for registering
+    :class:`URIDistributor`.
+    """
+    pass
+
+
+class URIDistributor:
+    """
+    Distributes emtsv URIs to processes asking for them. A URI is issued only
+    to a single process at any time; the process has to release it so that
+    others can receive it.
+    """
+    def __init__(self, uris: List[str]):
+        """
+        :param uris: the list of URIs to distribute.
+        """
+        self.uris = [uri for uri in uris]
+
+    def acquire(self) -> str:
+        """
+        Assigns a URI to a client. The URI is removed from the list of
+        available URIs until it is :meth:`release`d.
+        """
+        if self.uris:
+            return self.uris.pop()
+        else:
+            raise ValueError('No more URIs to distribute.')
+
+    def release(self, uri):
+        """
+        The client calls this function to release *uri*. Note that there are
+        no safeguards in place to make sure *uri* is valid, or that it is one
+        of the original URIs. So use this class only with friendly processes.
+
+        :param uri: the URI to release (i.e. put back to the pool).
+        """
+        self.uris.append(uri)
 
 
 def main():
@@ -111,9 +162,12 @@ def main():
 
     time.sleep(10)
 
+    URIManager.register('URIDistributor', URIDistributor)
     try:
-        with Pool(args.processes) as pool:
-            pool.starmap(analyze_file, zip(input_files, output_files, cycle(uris)))
+        with Pool(args.processes) as pool, URIManager() as manager:
+            dist = manager.URIDistributor(uris)
+            f = partial(analyze_file, dist=dist)
+            pool.starmap(f, zip(input_files, output_files))
             pool.close()
             pool.join()
 
