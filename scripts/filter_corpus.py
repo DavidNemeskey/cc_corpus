@@ -15,6 +15,7 @@ import logging
 from multiprocessing import Pool, Manager
 import os
 import re
+from urllib.parse import urlsplit
 
 from multiprocessing_logging import install_mp_handler
 
@@ -41,10 +42,18 @@ def parse_arguments():
                         help='the minimum number of characters / words in a '
                              'document. Activates length filtering. Values '
                              'are accepted in the format of e.g. 500c and 100w.')
-    parser.add_argument('--keep-urls', '-k', action='append', default=[],
-                        help='keeps only the URLs in the specified url file(s).')
-    parser.add_argument('--drop-urls', '-d', action='append', default=[],
-                        help='drop all URLs in the specified url file(s).')
+    url_group = parser.add_mutually_exclusive_group()
+    url_group.add_argument('--keep-urls', '-k', action='append', default=[],
+                           help='keeps only the URLs in the specified url file(s).')
+    url_group.add_argument('--drop-urls', '-d', action='append', default=[],
+                           help='drop all URLs in the specified url file(s).')
+    domain_group = parser.add_mutually_exclusive_group()
+    domain_group.add_argument('--keep-domains', '-K', action='append', default=[],
+                              help='keeps only the domains in the specified file(s). '
+                                   'Each file contains a list of domain regexes.')
+    domain_group.add_argument('--drop-domains', '-D', action='append', default=[],
+                              help='drop all domains in the specified file(s). '
+                                   'Each file contains a list of domain regexes.')
     parser.add_argument('--use-manager', '-M', action='store_true',
                         help='by default, with -k and -d, the url list is '
                              'loaded by each worker process. This might be '
@@ -68,7 +77,8 @@ def parse_arguments():
             num_procs))
     if args.min_len and not re.match(r'^\d+[w|c]$', args.min_len):
         parser.error('Invalid value for the minimum length parameter.')
-    if not (args.languages or args.min_len or args.keep_urls or args.drop_urls):
+    if not (args.languages or args.min_len or args.keep_urls or
+            args.drop_urls or args.keep_domains or args.drop_domains):
         parser.error('At least one filter must be specified.')
     if args.languages:
         try:
@@ -162,16 +172,27 @@ def filter_length(doc_iter, min_len_str, stats):
 # Global, because we only want to create these once per working process
 urls_to_drop = None
 urls_to_keep = None
+domains_to_drop = None
+domains_to_keep = None
 
 
-def initialize_url_filters(drop_urls, keep_urls):
-    global urls_to_drop, urls_to_keep
+def initialize_url_filters(drop_urls, keep_urls,
+                           drop_domains=None, keep_domains=None):
+    global urls_to_drop, urls_to_keep, domains_to_drop, domains_to_keep
     if drop_urls:
         urls_to_drop = read_files_into_set(drop_urls)
         logging.info('Loaded {} urls to drop.'.format(len(urls_to_drop)))
     if keep_urls:
         urls_to_keep = read_files_into_set(keep_urls)
         logging.info('Loaded {} urls to keep.'.format(len(urls_to_keep)))
+    if drop_domains:
+        regexes = read_files_into_set(drop_domains)
+        logging.info('Loaded {} domain patterns to drop.'.format(len(regexes)))
+        domains_to_drop = set_to_pattern(regexes)
+    if keep_domains:
+        regexes = read_files_into_set(keep_domains)
+        logging.info('Loaded {} domain patterns to keep.'.format(len(regexes)))
+        domains_to_keep = set_to_pattern(regexes)
 
 
 def filter_urls(doc_iter, urls_to_drop, stats):
@@ -198,6 +219,32 @@ def retain_urls(doc_iter, urls_to_keep, stats):
     stats['keep_urls'] = kept
 
 
+def filter_domains(doc_iter, stats):
+    doc_no, kept = 0, 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
+        domain = doc.attrs.get('domain') or urlsplit(doc.attrs['url']).netloc
+        if not domains_to_drop.match(domain):
+            kept += 1
+            yield doc
+    if doc_no:
+        logging.info('Filtered {} documents with a domain blacklist, kept {}'.format(
+            doc_no, kept))
+    stats['drop_domains'] = kept
+
+
+def retain_domains(doc_iter, stats):
+    doc_no, kept = 0, 0
+    for doc_no, doc in enumerate(doc_iter, start=1):
+        domain = doc.attrs.get('domain') or urlsplit(doc.attrs['url']).netloc
+        if domains_to_keep.match(domain):
+            kept += 1
+            yield doc
+    if doc_no:
+        logging.info('Filtered {} documents with a domain whitelist, kept {}'.format(
+            doc_no, kept))
+    stats['keep_domains'] = kept
+
+
 def read_files_into_set(files):
     ret = set()
     for f in files:
@@ -205,6 +252,10 @@ def read_files_into_set(files):
             for line in map(str.strip, inf):
                 ret.add(line)
     return ret
+
+
+def set_to_pattern(regexes):
+    return re.compile('|'.join('^{}$'.format(r) for r in regexes))
 
 
 def process_file(filename, input_dir, output_dir, languages,
@@ -233,6 +284,10 @@ def process_file(filename, input_dir, output_dir, languages,
         url_list = keep_urls if keep_urls.__class__.__name__ == 'DictProxy' \
                              else urls_to_keep  # noqa
         it = retain_urls(it, url_list, stats)
+    if domains_to_drop:
+        it = filter_domains(it, stats)
+    if domains_to_keep:
+        it = retain_domains(it, stats)
     try:
         with openall(output_file, 'wt') as outf:
             for doc in it:
@@ -264,10 +319,12 @@ def main():
             initialize_url_filters(args.drop_urls, args.keep_urls)
             drop_urls = manager.dict({url: None for url in urls_to_drop or {}})
             keep_urls = manager.dict({url: None for url in urls_to_keep or {}})
-            p = Pool(args.processes)
+            p = Pool(args.processes, initializer=initialize_url_filters,
+                     initargs=[[], [], args.drop_domains, args.keep_domains])
         else:
             p = Pool(args.processes, initializer=initialize_url_filters,
-                     initargs=[args.drop_urls, args.keep_urls])
+                     initargs=[args.drop_urls, args.keep_urls,
+                               args.drop_domains, args.keep_domains])
             drop_urls = args.drop_urls
             keep_urls = args.keep_urls
         f = partial(process_file, input_dir=args.input_dir,
