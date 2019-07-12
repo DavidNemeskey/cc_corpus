@@ -12,17 +12,15 @@ and disambiguation) should not cause any problems.
 
 from argparse import ArgumentParser, ArgumentTypeError
 from functools import partial
+from io import StringIO
 import logging
 from multiprocessing import Pool
-from multiprocessing.managers import BaseManager
 import os
 import os.path as op
 import sys
-import time
-from typing import List
+from typing import Any, Dict, List
 
 from multiprocessing_logging import install_mp_handler
-import requests
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.utils import collect_inputs
@@ -75,72 +73,30 @@ def parse_arguments():
     return args
 
 
-def analyze_file(input_file, output_file, dist):
-    """Analyzes *input_file* with the emtsv REST server running on *uri*."""
-    logging.info('Analyzing {}...'.format(input_file))
-    uri = dist.acquire()
-    logging.debug('Acquired URI {}.'.format(uri))
-    try:
-        with open(input_file) as inf, open(output_file, 'wt') as outf:
-            r = requests.post(uri, files={'file': inf})
-            outf.write(r.text)
-        logging.info('Finished {} at URI {}...'.format(input_file, uri))
-    finally:
-        dist.release(uri)
-        logging.debug('Released URI {}.'.format(uri))
+# The initiated emtsv tools (modules). An :module:`xtsv` detail.
+# Initialized in :func:`start_emtsv`.
+inited_tools = None  # type: Dict[str, Any]
+# A list of the module used (same as --tasks, split)
+used_tools = None  # type: List[str]
 
 
-class URIManager(BaseManager):
+def start_emtsv(emtsv_dir: str, tasks: str):
     """
-    A :class:`multiprocessing.managers.BaseManager` subclass for registering
-    :class:`URIDistributor`.
+    Starts the emtsv pipeline with the specified parameters and sets up the
+    environment.
+
+    :param emtsv_dir: the directory of emtsv repo. Yes, I know: this is
+                      ridiculous. If you want to provide an API, do it in a
+                      Python package!
+    :param tasks: the tasks to run. Module names separated by commas.
     """
-    pass
-
-
-class URIDistributor:
-    """
-    Distributes emtsv URIs to processes asking for them. A URI is issued only
-    to a single process at any time; the process has to release it so that
-    others can receive it.
-    """
-    def __init__(self, uris: List[str]):
-        """
-        :param uris: the list of URIs to distribute.
-        """
-        self.uris = [uri for uri in uris]
-
-    def acquire(self) -> str:
-        """
-        Assigns a URI to a client. The URI is removed from the list of
-        available URIs until it is :meth:`release`d.
-        """
-        if self.uris:
-            return self.uris.pop()
-        else:
-            raise ValueError('No more URIs to distribute.')
-
-    def release(self, uri):
-        """
-        The client calls this function to release *uri*. Note that there are
-        no safeguards in place to make sure *uri* is valid, or that it is one
-        of the original URIs. So use this class only with friendly processes.
-
-        :param uri: the URI to release (i.e. put back to the pool).
-        """
-        self.uris.append(uri)
-
-
-def start_emtsv(port, emtsv_dir, tasks):
-    """Starts the emtsv pipeline with the specified parameters."""
-    # This is ridiculous. If you want to provide an API,
-    # do it in a Python package!
+    global inited_tools, used_tools
+    # For the emtsv import. Pathetic...
     sys.path.insert(1, emtsv_dir)
-    from __init__ import init_everything, pipeline_rest_api, jnius_config
-    from __init__ import tools, presets
+    # from __init__ import init_everything, jnius_config, tools, presets
+    from __init__ import init_everything, tools, presets
 
-    jnius_config.classpath_show_warning = False  # Suppress warning.
-    conll_comments = True
+    # jnius_config.classpath_show_warning = False  # Suppress warning.
     if len(tasks) > 0:
         used_tools = tasks.split(',')
         if len(used_tools) == 1 and used_tools[0] in presets:
@@ -151,16 +107,32 @@ def start_emtsv(port, emtsv_dir, tasks):
     else:
         inited_tools = init_everything(tools)
 
-    with open('/dev/null', 'wt') as null:
-        sys.stdout = sys.stderr = null
-        app = pipeline_rest_api(name='e-magyar-tsv', available_tools=inited_tools,
-                                presets=presets, conll_comments=conll_comments)
-        logging.getLogger('xtsv').setLevel(logging.WARNING)
-        logging.getLogger('werkzeug').setLevel(logging.WARNING)
-        # use_reloader=False is very important, otherwise Flask starts this script
-        # as many times as there are servers... See
-        # https://stackoverflow.com/questions/33927616/multiprocess-within-flask-app-spinning-up-2-processes
-        app.run(port=port, debug=True, use_reloader=False)
+    logging.getLogger('xtsv').setLevel(logging.WARNING)
+
+
+def analyze_file(input_file: str, output_file: str):
+    """
+    Analyzes *input_file* with emtsv and writes the results to *output_file*.
+    """
+    logging.info('Analyzing {}...'.format(input_file))
+    from __init__ import build_pipeline
+
+    header_written = False
+    try:
+        with open(input_file) as inf, open(output_file, 'wt') as outf:
+            for line in inf:
+                last_prog = build_pipeline(
+                    StringIO(line), used_tools, inited_tools, {}, True)
+                for rline in last_prog:
+                    if not header_written:
+                        header_written = True
+                        outf.write(rline)
+                    break
+                for rline in last_prog:
+                    outf.write(rline)
+        logging.info('Finished {}.'.format(input_file))
+    except:
+        logging.exception('Error in file {}!'.format(input_file))
 
 
 def main():
@@ -179,39 +151,17 @@ def main():
     input_files = sorted(collect_inputs(args.inputs))
     logging.info('Found a total of {} input files.'.format(len(input_files)))
 
-    # Create the Flask processes
-    ports = list(range(sys.maxsize)[args.ports][:args.processes])
-    uris = [
-        'http://127.0.0.1:{}/{}'.format(port, '/'.join(args.tasks.split(',')))
-        for port in ports]
     output_files = [op.join(args.output_dir, op.basename(f))
                     for f in input_files]
 
-    logging.info('Starting REST servers...')
-    rpool = Pool(args.processes)
-    rf = partial(start_emtsv, emtsv_dir=args.emtsv_dir, tasks=args.tasks)
-    rpool.map_async(rf, ports)
-    rpool.close()
-
-    logging.debug('Sleping {} seconds...'.format(args.seconds))
-    time.sleep(args.seconds)
-    logging.debug('Slept.')
-
-    URIManager.register('URIDistributor', URIDistributor)
-    try:
-        with Pool(args.processes) as pool, URIManager() as manager:
-            dist = manager.URIDistributor(uris)
-            f = partial(analyze_file, dist=dist)
-            pool.starmap(f, zip(input_files, output_files))
-            logging.debug('Joining processes...')
-            pool.close()
-            pool.join()
-            logging.debug('Joined processes.')
-    finally:
-        logging.debug('Terminating REST servers...')
-        rpool.terminate()
-        rpool.join()
-        logging.debug('Terminated REST servers...')
+    with Pool(args.processes, initializer=start_emtsv,
+              initargs=[args.emtsv_dir, args.tasks]) as pool:
+        f = partial(analyze_file)
+        pool.starmap(f, zip(input_files, output_files))
+        logging.debug('Joining processes...')
+        pool.close()
+        pool.join()
+        logging.debug('Joined processes.')
 
     logging.info('Done.')
 
