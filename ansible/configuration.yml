@@ -58,15 +58,21 @@
       - name: install requirements for the submodules
         pip:
             name:
-              - emmorphpy/requirements.txt
-              - hunspellpy/requirements.txt
-              - purepospy/requirements.txt
-              - emdeppy/requirements.txt
-              - HunTag3/requirements.txt
-              - emudpipe/requirements.txt
+              - "{{ module }}/requirements.txt"
             virtualenv: "{{ virtualenv_dir }}"
             chdir: "{{ emtsv_dir }}"
             extra_args: "-r"
+        loop:
+          - emmorphpy
+          - hunspellpy
+          - purepospy
+          - emdeppy
+          - HunTag3
+          - emudpipe
+        loop_control:
+          loop_var: module
+        tags:
+          - install_emtsv
       - name: download quntoken
         make:
           chdir: "{{ emtsv_dir }}/emtokenpy"
