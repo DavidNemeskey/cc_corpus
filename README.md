@@ -370,6 +370,13 @@ used to {un}install the code -- this is a prerequisite of the next steps:
 ansible-playbook -i hosts configuration.yml --tags {install,cleanup}
 ```
 
+In order to use `emtsv.py`, [emtsv](https://github.com/dlt-rilmta/emtsv) must
+be installed on the cluster. This can be done with the following commands:
+```
+ansible-galaxy install -r requirements.yml
+ansible-playbook -i hosts configuration.yml --tags install_emtsv
+```
+
 #### Data distribution
 
 Most task take one (or more) input directories, process the files in them
