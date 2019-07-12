@@ -110,6 +110,12 @@ def start_emtsv(emtsv_dir: str, tasks: str):
     logging.getLogger('xtsv').setLevel(logging.WARNING)
 
 
+def analyze_file_stats(input_file: str, output_file: str):
+    import cProfile
+    cProfile.runctx('analyze_file(input_file, output_file)',
+                    globals(), locals(), output_file + '.stats')
+
+
 def analyze_file(input_file: str, output_file: str):
     """
     Analyzes *input_file* with emtsv and writes the results to *output_file*.
@@ -119,17 +125,18 @@ def analyze_file(input_file: str, output_file: str):
 
     header_written = False
     try:
-        with open(input_file) as inf, open(output_file, 'wt') as outf:
-            for line in inf:
-                last_prog = build_pipeline(
-                    StringIO(line), used_tools, inited_tools, {}, True)
-                for rline in last_prog:
-                    if not header_written:
-                        header_written = True
+        with open(output_file, 'wt') as outf:
+            for doc in parse_file(input_file):
+                for p_no, p in enumerate(doc.paragraphs, start=1):
+                    last_prog = build_pipeline(
+                        StringIO(p), used_tools, inited_tools, {}, True)
+                    for rline in last_prog:
+                        if not header_written:
+                            header_written = True
+                            outf.write(rline)
+                        break
+                    for rline in last_prog:
                         outf.write(rline)
-                    break
-                for rline in last_prog:
-                    outf.write(rline)
         logging.info('Finished {}.'.format(input_file))
     except:
         logging.exception('Error in file {}!'.format(input_file))
