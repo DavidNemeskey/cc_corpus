@@ -4,5 +4,6 @@
 github_repo_dir: "~/commoncrawl_downloader"
 github_key_file: "~/.ssh/id_rsa"
 virtualenv_dir: "~/venvs/cc_downloader_env"
+emtsv_dir: "~/emtsv"
 
 processes: 6

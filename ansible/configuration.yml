@@ -36,6 +36,56 @@
         tags:
             - install
 
+# Install emtsv
+- hosts: slaves
+  tasks:
+      - name: install emtsv
+        git:
+          repo: git@github.com:DavidNemeskey/emtsv.git
+          dest: "{{ emtsv_dir }}"
+          key_file: "{{ github_key_file }}"
+          accept_hostkey: yes
+          version: quntoken_v1
+        tags:
+          - install_emtsv
+      - name: install ctyhon
+        pip:
+            name:
+              - cython
+            virtualenv: "{{ virtualenv_dir }}"
+        tags:
+          - install_emtsv
+      - name: install requirements for the submodules
+        pip:
+            name:
+              - emmorphpy/requirements.txt
+              - hunspellpy/requirements.txt
+              - purepospy/requirements.txt
+              - emdeppy/requirements.txt
+              - HunTag3/requirements.txt
+              - emudpipe/requirements.txt
+            virtualenv: "{{ virtualenv_dir }}"
+            chdir: "{{ emtsv_dir }}"
+            extra_args: "-r"
+      - name: download quntoken
+        make:
+          chdir: "{{ emtsv_dir }}/emtokenpy"
+          target: all
+        tags:
+          - install_emtsv
+
+
+# Clean up emtsv
+- hosts: slaves
+  tasks:
+      - name: delete emtsv repo
+        file:
+          path: "{{ emtsv_dir }}"
+          state: absent
+        tags:
+          - cleanup_emtsv
+
+
 # Cleanup
 
 - hosts: slaves
