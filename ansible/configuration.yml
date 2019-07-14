@@ -108,8 +108,13 @@
         name: git-lfs
         state: present
       become: yes
+    - name: install package prerequisites for emtsv (components)
+      apt:
+        name: libhunspell-dev
+        state: present
+      become: yes
   tags:
-    - git_lfs
+    - emtsv_prereq
 
 
 # Clean up emtsv
