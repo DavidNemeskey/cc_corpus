@@ -377,6 +377,16 @@ ansible-galaxy install -r requirements.yml
 ansible-playbook -i hosts configuration.yml --tags install_emtsv
 ```
 
+#### Python version
+
+It is possible to set up the virtualenv to use a specific Python version
+(i.e. one from Anaconda). In order to do that, specify the `path` variable on
+the command line when calling the install tasks:
+```
+ansible-playbook -i hosts configuration.yml --tags install
+-e '{"path": "/home/user/anaconda3/bin"}'
+```
+
 #### Data distribution
 
 Most task take one (or more) input directories, process the files in them
