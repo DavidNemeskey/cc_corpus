@@ -76,6 +76,7 @@ setup(name='commoncrawl-downloader',
           'scripts/merge_files.py',
           'scripts/rewrite_files.py',
           'scripts/remove_same_p.py',
+          'scripts/emtsv.py',
       ],
       install_requires=[
           'beautifulsoup4',
