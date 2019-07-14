@@ -81,16 +81,29 @@
           - install_emtsv
 
 
-# Install git lfs on the cluster. Note that in order to do this, the git lfs
-# role must be installed by:
-# ansible-galaxy install -r requirements.yml
+# Install git lfs on the cluster. This is the only task that requires privilege
+# elevation. If you need to enter a sudo password, run the comman with -K.
 - hosts: slaves
   tasks:
-    - name: install git lfs
-      roles:
-        - suzuki-shunsuke.git-lfs-ubuntu
-      tags:
-        - git_lfs
+    - name: wget the packagecloud script
+      get_url:
+        url: https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh
+        dest: /tmp/ansible.apt.sh
+        mode: '0555'
+    - name: run the packagecloud script
+      shell: "bash /tmp/ansible.apt.sh"
+      become: yes
+    - name: delete temporary script file
+      file:
+        path: /tmp/ansible.apt.sh
+        state: absent
+    - name: install the git lfs package
+      apt:
+        name: git-lfs
+        state: present
+      become: yes
+  tags:
+    - git_lfs
 
 
 # Clean up emtsv
