@@ -11,7 +11,7 @@
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
           version: master
-      - name: initialize virtualenv + upgrade setuptools and pip
+      - name: initialize virtualenv with custom Python + upgrade setuptools and pip
         pip: 
             name:
               - setuptools>=40.0.0
