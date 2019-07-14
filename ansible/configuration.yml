@@ -2,6 +2,8 @@
 
 # Installation
 - hosts: slaves
+  vars:
+    - old_path: "{{ ansible_env.PATH }}"
   tasks:
       - git:
           repo: git@github.com:DavidNemeskey/commoncrawl-downloader2.git
@@ -9,8 +11,6 @@
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
           version: master
-        tags:
-            - install
       - name: initialize virtualenv + upgrade setuptools and pip
         pip: 
             name:
@@ -18,23 +18,29 @@
               - pip>=19.0.0
             virtualenv: "{{ virtualenv_dir }}"
             virtualenv_python: python3
-        tags:
-            - install
+        environment:
+          PATH: "/home/ndavid/anaconda3/bin:{{ old_path }}"
+        when: path is defined
+      - name: initialize virtualenv + upgrade setuptools and pip
+        pip: 
+            name:
+              - setuptools>=40.0.0
+              - pip>=19.0.0
+            virtualenv: "{{ virtualenv_dir }}"
+            virtualenv_python: python3
+        when: path is undefined
       - name: install tmuxp
         pip: 
             name:
               - tmuxp
             virtualenv: "{{ virtualenv_dir }}"
-            virtualenv_python: python3
-        tags:
-            - install
       - name: install cc_corpus
         pip:
             name: "{{ github_repo_dir }}"
             virtualenv: "{{ virtualenv_dir }}"
             extra_args: "-e"
-        tags:
-            - install
+  tags:
+    - install
 
 # Install emtsv
 - hosts: slaves
@@ -81,7 +87,7 @@
           - install_emtsv
 
 
-# Install git lfs on the cluster. This is the only task that requires privilege
+# Install git lfs on the cluster. Note that this task This is the only task that requires privilege
 # elevation. If you need to enter a sudo password, run the comman with -K.
 - hosts: slaves
   tasks:
