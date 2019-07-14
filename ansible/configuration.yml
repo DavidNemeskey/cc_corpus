@@ -91,23 +91,30 @@
 # elevation. If you need to enter a sudo password, run the comman with -K.
 - hosts: slaves
   tasks:
-    - name: wget the packagecloud script
-      get_url:
-        url: https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh
-        dest: /tmp/ansible.apt.sh
-        mode: '0555'
-    - name: run the packagecloud script
-      shell: "bash /tmp/ansible.apt.sh"
-      become: yes
-    - name: delete temporary script file
-      file:
-        path: /tmp/ansible.apt.sh
-        state: absent
-    - name: install the git lfs package
-      apt:
-        name: git-lfs
-        state: present
-      become: yes
+    - name: check whether git-lfs is already installed
+      shell: dpkg -l git-lfs | grep ^ii
+      register: git_lfs_version
+      ignore_errors: yes
+    - name: install git-lfs
+      block:
+      - name: wget the packagecloud script
+        get_url:
+          url: https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh
+          dest: /tmp/ansible.apt.sh
+          mode: '0555'
+      - name: run the packagecloud script
+        shell: "bash /tmp/ansible.apt.sh"
+        become: yes
+      - name: delete temporary script file
+        file:
+          path: /tmp/ansible.apt.sh
+          state: absent
+      - name: install the git lfs package
+        apt:
+          name: git-lfs
+          state: present
+        become: yes
+      when: git_lfs_version.rc != 0
     - name: install package prerequisites for emtsv (components)
       apt:
         name: libhunspell-dev
