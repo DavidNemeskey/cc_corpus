@@ -81,6 +81,18 @@
           - install_emtsv
 
 
+# Install git lfs on the cluster. Note that in order to do this, the git lfs
+# role must be installed by:
+# ansible-galaxy install -r requirements.yml
+- hosts: slaves
+  tasks:
+    - name: install git lfs
+      roles:
+        - suzuki-shunsuke.git-lfs-ubuntu
+      tags:
+        - git_lfs
+
+
 # Clean up emtsv
 - hosts: slaves
   tasks:
