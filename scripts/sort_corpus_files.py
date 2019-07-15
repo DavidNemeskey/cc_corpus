@@ -51,7 +51,6 @@ def main():
             url = url_p.match(header).group(1)
             first_urls.append((url, f))
     first_urls.sort()
-    print(first_urls)
 
     for old_doc, new_doc in zip(map(itemgetter(1), first_urls),
                                 sorted(input_files)):
