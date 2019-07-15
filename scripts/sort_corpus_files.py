@@ -14,9 +14,10 @@ from argparse import ArgumentParser
 import logging
 from operator import itemgetter
 import os
+import re
 import shutil
 
-from cc_corpus.corpus import parse_file
+from cc_corpus.util import openall
 
 
 def parse_arguments():
@@ -42,11 +43,13 @@ def main():
     input_files = sorted(os.listdir('.'))
     logging.info('Found a total of {} input files.'.format(len(input_files)))
 
+    url_p = re.compile(r'^<doc .*? url="([^"]+)" .*>$')
     first_urls = []
     for f in input_files:
-        for doc in parse_file(f):
-            first_urls.append((doc.attrs['url'], f))
-            break
+        with openall(f) as inf:
+            header = inf.readline()
+            url = url_p.match(header).group(1)
+            first_urls.append((url, f))
     first_urls.sort()
 
     for old_doc, new_doc in zip(sorted(input_files),
