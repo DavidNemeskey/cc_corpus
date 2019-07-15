@@ -17,7 +17,7 @@ import os
 import re
 import shutil
 
-from cc_corpus.util import openall
+from cc_corpus.utils import openall
 
 
 def parse_arguments():
@@ -51,9 +51,10 @@ def main():
             url = url_p.match(header).group(1)
             first_urls.append((url, f))
     first_urls.sort()
+    print(first_urls)
 
-    for old_doc, new_doc in zip(sorted(input_files),
-                                map(itemgetter(1), first_urls)):
+    for old_doc, new_doc in zip(map(itemgetter(1), first_urls),
+                                sorted(input_files)):
         shutil.move(old_doc, 'new_' + new_doc)
 
     for f in os.listdir('.'):
