@@ -49,15 +49,6 @@ def parse_arguments():
     parser.add_argument('--tasks', '-t', default='tok,morph,pos',
                         help='the analyzer tasks to execute. The default is '
                              'tok,morph,pos.')
-    parser.add_argument('--ports', '-p', default=slice(5000, None, 10),
-                        type=partial(parse_slice, def_begin=5000, def_end=10),
-                        help='a one- or two-element slice that describes the '
-                             'port range used by the REST servers. E.g. '
-                             '8888:8 means every 8th port up from 8888. The '
-                             'defaults are 5000 and 10.')
-    parser.add_argument('--seconds', '-s', type=int, default=10,
-                        help='the number of seconds to wait for the Flask '
-                             'processes to initialize.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -127,13 +118,23 @@ def analyze_file(input_file: str, output_file: str):
     try:
         with open(output_file, 'wt') as outf:
             for doc in parse_file(input_file):
+                doc_written = False
                 for p_no, p in enumerate(doc.paragraphs, start=1):
+                    p_written = False
+                    # Relative paragraph id, because urls are long
                     last_prog = build_pipeline(
                         StringIO(p), used_tools, inited_tools, {}, True)
                     for rline in last_prog:
                         if not header_written:
                             header_written = True
                             outf.write(rline)
+                        if not doc_written:
+                            doc_written = True
+                            print('newdoc id = {}'.format(doc.attrs['url']),
+                                  file=outf)
+                        if not p_written:
+                            p_written = True
+                            print('newpar id = p{}'.format(p_no), file=outf)
                         break
                     for rline in last_prog:
                         outf.write(rline)
