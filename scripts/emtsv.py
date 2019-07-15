@@ -17,6 +17,7 @@ import logging
 from multiprocessing import Pool
 import os
 import os.path as op
+import re
 import sys
 from typing import Any, Dict, List
 
@@ -69,6 +70,12 @@ def parse_arguments():
 inited_tools = None  # type: Dict[str, Any]
 # A list of the module used (same as --tasks, split)
 used_tools = None  # type: List[str]
+# Regex to extract a sentence from quntoken's output
+senp = re.compile(r'<s>(.+?)</s>')
+# Regex to enumerate the XML tags from the sentence in quntoken's output
+tagp = re.compile(r'<(ws?|c)>(.+?)</\1>')
+# Regex to delete the XML tags from the sentence in quntoken's output
+delp = re.compile(r'</?(?:ws?|c)>')
 
 
 def start_emtsv(emtsv_dir: str, tasks: str):
@@ -107,12 +114,25 @@ def analyze_file_stats(input_file: str, output_file: str):
                     globals(), locals(), output_file + '.stats')
 
 
+def get_sentences(xml_tokens):
+    for sen in senp.finditer(xml_tokens):
+        tsv_tokens, text_tokens = ['form'], []
+        for m in tagp.finditer(sen.group(1)):
+            if m.group(1) != 'ws':
+                tsv_tokens.append(m.group(2))
+            text_tokens.append(m.group(2))
+        yield '\n'.join(tsv_tokens) + '\n\n', ''.join(text_tokens)
+
+
 def analyze_file(input_file: str, output_file: str):
     """
     Analyzes *input_file* with emtsv and writes the results to *output_file*.
     """
     logging.info('Analyzing {}...'.format(input_file))
     from __init__ import build_pipeline
+
+    from emtokenpy.quntoken.quntoken import QunToken
+    qt = QunToken('xml', 'token', False)
 
     header_written = False
     try:
@@ -121,23 +141,28 @@ def analyze_file(input_file: str, output_file: str):
                 doc_written = False
                 for p_no, p in enumerate(doc.paragraphs, start=1):
                     p_written = False
-                    # Relative paragraph id, because urls are long
-                    last_prog = build_pipeline(
-                        StringIO(p), used_tools, inited_tools, {}, True)
-                    for rline in last_prog:
-                        if not header_written:
-                            header_written = True
+                    for sent_tsv, sent_text in get_sentences(qt.tokenize(p)):
+                        text_written = False
+                        last_prog = build_pipeline(
+                            StringIO(sent_tsv), used_tools, inited_tools, {}, True)
+                        for rline in last_prog:
+                            if not header_written:
+                                header_written = True
+                                outf.write(rline)
+                            if not doc_written:
+                                doc_written = True
+                                print('# newdoc id = {}'.format(doc.attrs['url']),
+                                      file=outf)
+                            if not p_written:
+                                # Relative paragraph id, because urls are long
+                                p_written = True
+                                print('# newpar id = p{}'.format(p_no), file=outf)
+                            if not text_written:
+                                text_written = True
+                                print('# text = {}'.format(sent_text), file=outf)
+                            break
+                        for rline in last_prog:
                             outf.write(rline)
-                        if not doc_written:
-                            doc_written = True
-                            print('newdoc id = {}'.format(doc.attrs['url']),
-                                  file=outf)
-                        if not p_written:
-                            p_written = True
-                            print('newpar id = p{}'.format(p_no), file=outf)
-                        break
-                    for rline in last_prog:
-                        outf.write(rline)
         logging.info('Finished {}.'.format(input_file))
     except:
         logging.exception('Error in file {}!'.format(input_file))
