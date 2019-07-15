@@ -47,9 +47,10 @@ def parse_arguments():
     parser.add_argument('--emtsv-dir', '-e', required=True,
                         help='the emtsv installation directory. Why it isn\'t '
                              'a proper Python package is beyond me.')
-    parser.add_argument('--tasks', '-t', default='tok,morph,pos',
+    parser.add_argument('--tasks', '-t', default='morph,pos',
                         help='the analyzer tasks to execute. The default is '
-                             'tok,morph,pos.')
+                             'morph,pos. Note that the initial tok task is '
+                             'always included implicitly.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
