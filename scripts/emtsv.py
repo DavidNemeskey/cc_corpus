@@ -17,13 +17,14 @@ import logging
 from multiprocessing import Pool
 import os
 import os.path as op
+import re
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, Generator, List, Tuple
 
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import collect_inputs
+from cc_corpus.utils import collect_inputs, ispunct
 
 
 def parse_arguments():
@@ -46,9 +47,10 @@ def parse_arguments():
     parser.add_argument('--emtsv-dir', '-e', required=True,
                         help='the emtsv installation directory. Why it isn\'t '
                              'a proper Python package is beyond me.')
-    parser.add_argument('--tasks', '-t', default='tok,morph,pos',
+    parser.add_argument('--tasks', '-t', default='morph,pos',
                         help='the analyzer tasks to execute. The default is '
-                             'tok,morph,pos.')
+                             'morph,pos. Note that the initial tok task is '
+                             'always included implicitly.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -69,6 +71,10 @@ def parse_arguments():
 inited_tools = None  # type: Dict[str, Any]
 # A list of the module used (same as --tasks, split)
 used_tools = None  # type: List[str]
+# Regex to extract a sentence from quntoken's output
+senp = re.compile(r'<s>(.+?)</s>', re.S)
+# Regex to enumerate the XML tags from the sentence in quntoken's output
+tagp = re.compile(r'<(ws?|c)>(.+?)</\1>', re.S)
 
 
 def start_emtsv(emtsv_dir: str, tasks: str):
@@ -107,13 +113,54 @@ def analyze_file_stats(input_file: str, output_file: str):
                     globals(), locals(), output_file + '.stats')
 
 
+def get_sentences(xml_tokens: str) -> Generator[Tuple[str, str], None, None]:
+    """
+    Parses the XML output of quntoken and yields the sentences one-by-one.
+    More specifically, the sentences are yielded in two formats:
+
+    1. in tsv format, to be forwarded to emtsv;
+    2. in text format, to be included in the output file as-is.
+
+    .. note::
+
+        Since quntoken returns all punctuation marks as separate tokens,
+        constructs such as ``!!!!!!!!`` would cause problems in PurePos and
+        beyond. Therefore, this function allows at most 3 punctuation tokens
+        next to each other; the surplus is dropped.
+
+    :param xml_tokens: the XML output of quntoken.
+    """
+    for sen in senp.finditer(xml_tokens):
+        tsv_tokens, text_tokens = ['form'], []
+        num_puncts = 0
+        for m in tagp.finditer(sen.group(1)):
+            if m.group(1) == 'ws':
+                # To get rid of newlines, etc. in the text version
+                text_tokens.append(' ')
+            else:
+                text_tokens.append(m.group(2))
+                if ispunct(m.group(2)):
+                    if num_puncts == 3:
+                        continue
+                    num_puncts += 1
+                else:
+                    num_puncts = 0
+                tsv_tokens.append(m.group(2))
+        yield '\n'.join(tsv_tokens) + '\n\n', ''.join(text_tokens)
+
+
 def analyze_file(input_file: str, output_file: str):
     """
-    Analyzes *input_file* with emtsv and writes the results to *output_file*.
+    Analyzes *input_file* with quntoken + emtsv and writes the results to
+    *output_file*.
     """
     logging.info('Analyzing {}...'.format(input_file))
     from __init__ import build_pipeline
 
+    from emtokenpy.quntoken.quntoken import QunToken
+    qt = QunToken('xml', 'token', False)
+
+    # TOKEN-ERROR: ⹂elbukjanak”, hogy ⹂frusztrálódjanak”… Méghozzá önállóan.
     header_written = False
     try:
         with open(output_file, 'wt') as outf:
@@ -121,23 +168,29 @@ def analyze_file(input_file: str, output_file: str):
                 doc_written = False
                 for p_no, p in enumerate(doc.paragraphs, start=1):
                     p_written = False
-                    # Relative paragraph id, because urls are long
-                    last_prog = build_pipeline(
-                        StringIO(p), used_tools, inited_tools, {}, True)
-                    for rline in last_prog:
-                        if not header_written:
-                            header_written = True
-                            outf.write(rline)
-                        if not doc_written:
-                            doc_written = True
-                            print('newdoc id = {}'.format(doc.attrs['url']),
-                                  file=outf)
-                        if not p_written:
-                            p_written = True
-                            print('newpar id = p{}'.format(p_no), file=outf)
-                        break
-                    for rline in last_prog:
-                        outf.write(rline)
+                    for sent_tsv, sent_text in get_sentences(qt.tokenize(p)):
+                        last_prog = build_pipeline(
+                            StringIO(sent_tsv), used_tools, inited_tools, {}, True)
+                        try:
+                            for rline in last_prog:
+                                if not header_written:
+                                    header_written = True
+                                    outf.write(rline)
+                                if not doc_written:
+                                    doc_written = True
+                                    print('# newdoc id = {}'.format(doc.attrs['url']),
+                                          file=outf)
+                                if not p_written:
+                                    # Relative paragraph id, because urls are long
+                                    p_written = True
+                                    print('# newpar id = p{}'.format(p_no), file=outf)
+                                break
+                            print('# text = {}'.format(sent_text), file=outf)
+                            for rline in last_prog:
+                                outf.write(rline)
+                        except:
+                            logging.exception(f'Error in file {input_file} '
+                                              f'with sentence: {sent_text}')
         logging.info('Finished {}.'.format(input_file))
     except:
         logging.exception('Error in file {}!'.format(input_file))
