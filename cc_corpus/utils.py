@@ -297,3 +297,8 @@ def unquote_inf(url: str) -> str:
             return mod
         else:
             url = mod
+
+
+def ispunct(s: str) -> bool:
+    """Checks if *s* consists purely of nonalnum characters."""
+    return not any(str.isalnum(c) for c in s)
