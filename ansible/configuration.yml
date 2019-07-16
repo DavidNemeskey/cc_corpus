@@ -10,7 +10,7 @@
           dest: "{{ github_repo_dir }}"
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
-          version: master
+          version: emtsv
       - name: initialize virtualenv with custom Python + upgrade setuptools and pip
         pip: 
             name:
@@ -52,15 +52,11 @@
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
           version: quntoken_v1
-        tags:
-          - install_emtsv
       - name: install ctyhon
         pip:
             name:
               - cython
             virtualenv: "{{ virtualenv_dir }}"
-        tags:
-          - install_emtsv
       - name: install requirements for the submodules
         pip:
             name:
@@ -77,14 +73,12 @@
           - emudpipe
         loop_control:
           loop_var: module
-        tags:
-          - install_emtsv
       - name: download quntoken
         make:
           chdir: "{{ emtsv_dir }}/emtokenpy"
           target: all
-        tags:
-          - install_emtsv
+  tags:
+    - install_emtsv
 
 
 # Install git lfs on the cluster. Note that this task This is the only task that requires privilege
