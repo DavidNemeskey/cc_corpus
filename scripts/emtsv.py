@@ -168,7 +168,15 @@ def analyze_file(input_file: str, output_file: str):
                 doc_written = False
                 for p_no, p in enumerate(doc.paragraphs, start=1):
                     p_written = False
-                    for sent_tsv, sent_text in get_sentences(qt.tokenize(p)):
+                    try:
+                        p_tokenized = qt.tokenize(p)
+                    except ValueError as ve:
+                        logging.exception(f'quntoken error in file {input_file}'
+                                          f', document {doc.attrs["url"]}, '
+                                          f'paragraph {p_no}; skipping...')
+                        # Skip paragraph if we cannot even tokenize it
+                        continue
+                    for sent_tsv, sent_text in get_sentences(p_tokenized):
                         last_prog = build_pipeline(
                             StringIO(sent_tsv), used_tools, inited_tools, {}, True)
                         try:
@@ -190,6 +198,7 @@ def analyze_file(input_file: str, output_file: str):
                                 outf.write(rline)
                         except:
                             logging.exception(f'Error in file {input_file} '
+                                              f', document {doc.attrs["url"]}, '
                                               f'with sentence: {sent_text}')
         logging.info('Finished {}.'.format(input_file))
     except:
