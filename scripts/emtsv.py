@@ -24,7 +24,7 @@ from typing import Any, Dict, Generator, List, Tuple
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import collect_inputs, ispunct
+from cc_corpus.utils import collect_inputs, ispunct, openall
 
 
 def parse_arguments():
@@ -163,14 +163,14 @@ def analyze_file(input_file: str, output_file: str):
     # TOKEN-ERROR: ⹂elbukjanak”, hogy ⹂frusztrálódjanak”… Méghozzá önállóan.
     header_written = False
     try:
-        with open(output_file, 'wt') as outf:
+        with openall(output_file, 'wt') as outf:
             for doc in parse_file(input_file):
                 doc_written = False
                 for p_no, p in enumerate(doc.paragraphs, start=1):
                     p_written = False
                     try:
                         p_tokenized = qt.tokenize(p)
-                    except ValueError as ve:
+                    except ValueError:
                         logging.exception(f'quntoken error in file {input_file}'
                                           f', document {doc.attrs["url"]}, '
                                           f'paragraph {p_no}; skipping...')
