@@ -28,15 +28,11 @@ from cc_corpus.utils import collect_inputs, ispunct, openall
 
 
 def parse_arguments():
-    def parse_slice(s, def_begin, def_step):
+    def parse_extension(s):
         try:
-            begin, _, step = s.partition(':')
-            begin = int(begin) if begin else def_begin
-            step = int(step) if step else def_step
-            return slice(begin, None, step)
+            return s.split('#', 1)
         except:
-            raise ArgumentTypeError('Invalid slice format; must be begin:step; '
-                                    'both values are optional.')
+            raise ArgumentTypeError('Invalid extension format; must be old#new.')
 
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--input', '-i', dest='inputs', required=True,
@@ -51,6 +47,10 @@ def parse_arguments():
                         help='the analyzer tasks to execute. The default is '
                              'morph,pos. Note that the initial tok task is '
                              'always included implicitly.')
+    parser.add_argument('--extension', '-x', type=parse_extension, default=None,
+                        help='the extension of the tsv files. The default is '
+                             'to keep the original filename. The format should '
+                             'be old#new; then, old will be replaced by new.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -205,6 +205,15 @@ def analyze_file(input_file: str, output_file: str):
         logging.exception('Error in file {}!'.format(input_file))
 
 
+def output_file_name(input_file, extension=None):
+    base_name = op.basename(input_file)
+    if extension:
+        old, new = extension
+        return re.sub(f'(.+){old}(.*?)', rf'\1{new}\2', base_name)
+    else:
+        return base_name
+
+
 def main():
     args = parse_arguments()
 
@@ -221,7 +230,7 @@ def main():
     input_files = sorted(collect_inputs(args.inputs))
     logging.info('Found a total of {} input files.'.format(len(input_files)))
 
-    output_files = [op.join(args.output_dir, op.basename(f))
+    output_files = [op.join(args.output_dir, output_file_name(f, args.extension))
                     for f in input_files]
 
     with Pool(args.processes, initializer=start_emtsv,
