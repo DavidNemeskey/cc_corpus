@@ -76,7 +76,7 @@ setup(name='commoncrawl-downloader',
           'scripts/merge_files.py',
           'scripts/rewrite_files.py',
           'scripts/remove_same_p.py',
-          'scripts/sort_corpus_files.py',
+          'scripts/sort_files.py',
           'scripts/emtsv.py',
       ],
       install_requires=[
