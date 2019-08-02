@@ -41,9 +41,9 @@ def create_patterns(start: str, end: str):
     """Creates the regular expression patterns used in parsing the log files."""
     global startp, endp, logp
     startp = re.compile(r'^(?P<datetime>[^ ]+ [^ ]+) - (?P<pid>\d+) - '
-                        rf'(?P<level>[^ ]+) - {start}(?P<filename>.+?)...$')
+                        rf'(?P<level>[^ ]+) - {start} (?P<filename>.+?)...$')
     endp = re.compile(r'^(?P<datetime>[^ ]+ [^ ]+) - (?P<pid>\d+) - '
-                      rf'(?P<level>[^ ]+) - {end}(?P<filename>.+?).$')
+                      rf'(?P<level>[^ ]+) - {end} (?P<filename>.+?).$')
     logp = re.compile(r'^(?P<datetime>[^ ]+ [^ ]+) - (?P<pid>\d+) - '
                       rf'(?P<level>[^ ]+) - (?P<message>.+?)$')
 
