@@ -51,6 +51,9 @@ def parse_arguments():
                         help='the extension of the tsv files. The default is '
                              'to keep the original filename. The format should '
                              'be old#new; then, old will be replaced by new.')
+    parser.add_argument('--max-sentence-length', '-s', type=int, default=500,
+                        help='limit the length of sentences (in tokens) to '
+                             'pass to emtsv. The default is 500.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -113,13 +116,14 @@ def analyze_file_stats(input_file: str, output_file: str):
                     globals(), locals(), output_file + '.stats')
 
 
-def get_sentences(xml_tokens: str) -> Generator[Tuple[str, str], None, None]:
+def get_sentences(xml_tokens: str) -> Generator[Tuple[int, str, str], None, None]:
     """
     Parses the XML output of quntoken and yields the sentences one-by-one.
-    More specifically, the sentences are yielded in two formats:
+    More specifically, the following tuple is yielded:
 
-    1. in tsv format, to be forwarded to emtsv;
-    2. in text format, to be included in the output file as-is.
+    1. the length of the sentence;
+    2. the sentence in tsv format, to be forwarded to emtsv;
+    3. the sentence in text format, to be included in the output file as-is.
 
     .. note::
 
@@ -146,21 +150,58 @@ def get_sentences(xml_tokens: str) -> Generator[Tuple[str, str], None, None]:
                 else:
                     num_puncts = 0
                 tsv_tokens.append(m.group(2))
-        yield '\n'.join(tsv_tokens) + '\n\n', ''.join(text_tokens)
+        yield len(tsv_tokens), '\n'.join(tsv_tokens) + '\n\n', ''.join(text_tokens)
 
 
-def analyze_file(input_file: str, output_file: str):
+class XtsvFilter(logging.Filter):
+    """
+    Consumes all log messages issued by xtsv and reissues them with information
+    that allows the localization of the problem.
+    """
+    def __init__(self):
+        super().__init__(name='xtsv')
+        self.file = self.url = self.sent = None
+
+    def filter(self, record: logging.LogRecord):
+        """Consumes xtsv messages and lets all others pass through."""
+        if super().filter(record):
+            logging.log(record.levelno,
+                        f'xtsv {record.levelname.lower()} in file {self.file}, '
+                        f'document {self.url}, with sentence: "{self.sent}": '
+                        f'{record.msg}.')
+            return False
+        else:
+            return True
+
+    def set(self, file: str, url: str, sent: str):
+        """Sets the parameters necessary to localize the error."""
+        self.file = file
+        self.url = url
+        self.sent = sent
+
+
+def analyze_file(input_file: str, output_file: str,
+                 max_sentence_length: int = sys.maxsize):
     """
     Analyzes *input_file* with quntoken + emtsv and writes the results to
     *output_file*.
+
+    :param max_sentence_length: sentences longer than this number will not be
+                                sent to emtsv.
     """
     logging.info('Analyzing {}...'.format(input_file))
     from __init__ import build_pipeline
 
+    # Install xtsv warning & error logging filter, so that we know where the
+    # problem happens
+    xtsv_filter = XtsvFilter()
+    logging.getLogger().handlers[0].addFilter(xtsv_filter)
+    # So that we know that everything is filtered
+    assert len(logging.getLogger().handlers) == 1
+
     from emtokenpy.quntoken.quntoken import QunToken
     qt = QunToken('xml', 'token', False)
 
-    # TOKEN-ERROR: ⹂elbukjanak”, hogy ⹂frusztrálódjanak”… Méghozzá önállóan.
     header_written = False
     try:
         with openall(output_file, 'wt') as outf:
@@ -176,7 +217,15 @@ def analyze_file(input_file: str, output_file: str):
                                           f'paragraph {p_no}; skipping...')
                         # Skip paragraph if we cannot even tokenize it
                         continue
-                    for sent_tsv, sent_text in get_sentences(p_tokenized):
+                    for sent_len, sent_tsv, sent_text in get_sentences(p_tokenized):
+                        if sent_len > max_sentence_length:
+                            logging.warning(f'In file {input_file}, '
+                                            f'document {doc.attrs["url"]}, '
+                                            f'sentence too long; skipping: '
+                                            f'"{sent_text}"')
+                            continue
+
+                        xtsv_filter.set(input_file, doc.attrs['url'], sent_text)
                         last_prog = build_pipeline(
                             StringIO(sent_tsv), used_tools, inited_tools, {}, True)
                         try:
@@ -197,9 +246,9 @@ def analyze_file(input_file: str, output_file: str):
                             for rline in last_prog:
                                 outf.write(rline)
                         except:
-                            logging.exception(f'Error in file {input_file} '
-                                              f', document {doc.attrs["url"]}, '
-                                              f'with sentence: {sent_text}')
+                            logging.exception(f'Error in file {input_file}, '
+                                              f'document {doc.attrs["url"]}, '
+                                              f'with sentence: "{sent_text}"')
         logging.info('Finished {}.'.format(input_file))
     except:
         logging.exception('Error in file {}!'.format(input_file))
@@ -235,7 +284,7 @@ def main():
 
     with Pool(args.processes, initializer=start_emtsv,
               initargs=[args.emtsv_dir, args.tasks]) as pool:
-        f = partial(analyze_file)
+        f = partial(analyze_file, max_sentence_length=args.max_sentence_length)
         pool.starmap(f, zip(input_files, output_files))
         logging.debug('Joining processes...')
         pool.close()
