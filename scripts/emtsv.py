@@ -219,9 +219,9 @@ def analyze_file(input_file: str, output_file: str,
                         continue
                     for sent_len, sent_tsv, sent_text in get_sentences(p_tokenized):
                         if sent_len > max_sentence_length:
-                            logging.warning(f'In file {input_file}, '
-                                            f'document {doc.attrs["url"]}, '
-                                            f'sentence too long; skipping: '
+                            logging.warning(f'Too long sentence in file '
+                                            f'{input_file}, document '
+                                            f'{doc.attrs["url"]}; skipping: '
                                             f'"{sent_text}"')
                             continue
 
