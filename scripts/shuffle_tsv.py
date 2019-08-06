@@ -11,7 +11,7 @@ The same number of output files will be created as input files.
 from argparse import ArgumentParser
 from functools import partial
 import logging
-from multiprocessing import Pool, Queue
+from multiprocessing import Manager, Pool
 import os
 from queue import Empty
 import random
@@ -135,7 +135,8 @@ def main():
         header = inf.readline().strip()
 
     with Pool(args.processes) as inpool, Pool(args.processes) as outpool:
-        queue = Queue(maxsize=1000)
+        m = Manager()
+        queue = m.Queue(maxsize=1000)
 
         # Each worker gets a chunk of all input / output files
         input_chunks = [input_files[i:i + args.processes]
