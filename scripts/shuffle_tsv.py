@@ -53,12 +53,15 @@ def parse_arguments():
 def consumer(input_files, queue):
     input_names = [os.basename(f) for f in input_files]
     infs = [parse_file(f) for f in input_files]
+    docs_read = 0
+
     # Get rid of the header
     for inf in infs:
         next(inf)
 
     while infs:
         i = random.randint(0, len(infs) - 1)
+        docs_read += 1
         try:
             queue.put(next(infs[i]))
         except StopIteration:
@@ -66,11 +69,15 @@ def consumer(input_files, queue):
             del infs[i]
             del input_names[i]
 
+    return docs_read
+
 
 def producer(output_files, queue, header, documents):
     output_names = [os.basename(f) for f in output_files]
     outfs = [notempty(openall(f)) for f in output_files]
     written = [0 for _ in outfs]
+    docs_written = 0
+
     # Write the header
     for outf in outfs:
         print(header, file=outf)
@@ -81,6 +88,7 @@ def producer(output_files, queue, header, documents):
             doc = queue.get(timeout=60)
             print(doc, file=outfs[i])
             written[i] += 1
+            docs_written += 1
             if written[i] == documents:
                 logging.info(f'Written {documents} documents to '
                              f'{output_names[i]}; closing...')
@@ -89,12 +97,16 @@ def producer(output_files, queue, header, documents):
                 del written[i]
                 del output_names[i]
         except Empty:
-            logging.debug('Timeout waiting for queue; exiting.')
+            logging.info('Timeout waiting for queue; cleaning up...')
             break
 
     # Close any dangling output files
-    for outf in outfs:
-        outf.close()
+    for i in range(len(outfs)):
+        logging.info(f'Written {written[i]} documents to '
+                     f'{output_names[i]}; closing...')
+        outfs[i].close()
+
+    return docs_written
 
 
 def main():
@@ -132,10 +144,10 @@ def main():
                          for i in range(0, len(output_files), args.processes)]
 
         consumer_f = partial(consumer, queue=queue)
-        inpool.map(consumer_f, input_chunks)
+        docs_read = sum(inpool.map(consumer_f, input_chunks))
         producer_f = partial(producer, queue=queue, header=header,
                              documents=args.documents)
-        outpool.map(producer_f, output_chunks)
+        docs_written = sum(outpool.map(producer_f, output_chunks))
 
         logging.debug('Joining processes...')
         inpool.close()
@@ -143,6 +155,11 @@ def main():
         inpool.join()
         outpool.join()
         logging.debug('Joined processes.')
+
+        if docs_read != docs_written:
+            logging.error(f'The number of documents read ({docs_read}) and '
+                          f'the number of documents written ({docs_written}) '
+                          f'differs!')
 
     logging.info('Done.')
 
