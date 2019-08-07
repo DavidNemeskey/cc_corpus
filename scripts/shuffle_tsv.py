@@ -50,8 +50,9 @@ def parse_arguments():
     return args
 
 
-def consumer(input_files, queue):
-    input_names = [os.basename(f) for f in input_files]
+def consumer(input_files, queue, num_readers, lock):
+    logging.info(f'Consumer started with {len(input_files)} files.')
+    input_names = [os.path.basename(f) for f in input_files]
     infs = [parse_file(f) for f in input_files]
     docs_read = 0
 
@@ -61,20 +62,34 @@ def consumer(input_files, queue):
 
     while infs:
         i = random.randint(0, len(infs) - 1)
-        docs_read += 1
         try:
-            queue.put(next(infs[i]))
-        except StopIteration:
-            logging.info(f'Finished reading {input_names[i]}.')
-            del infs[i]
-            del input_names[i]
+            try:
+                doc = next(infs[i])
+                docs_read += 1
+                if docs_read % 1000 == 0:
+                    logging.debug(f'Consumer has read {docs_read} documents.')
+                queue.put(doc)
+            except StopIteration:
+                logging.info(f'Finished reading {input_names[i]}.')
+                del infs[i]
+                del input_names[i]
+        except:
+            logging.exception(f'Exception reading {input_names[i]}!')
+            sys.exit(2)
 
+    with lock:
+        num_readers.value -= 1
+        val = num_readers.value
+
+    logging.info(f'Consumer finished; read {docs_read} documents; '
+                 f'num_readers is at {val}.')
     return docs_read
 
 
-def producer(output_files, queue, header, documents):
-    output_names = [os.basename(f) for f in output_files]
-    outfs = [notempty(openall(f)) for f in output_files]
+def producer(output_files, queue, header, documents, num_readers, lock):
+    logging.info(f'Producer started with {len(output_files)} files.')
+    output_names = [os.path.basename(f) for f in output_files]
+    outfs = [notempty(openall(f, 'wt')) for f in output_files]
     written = [0 for _ in outfs]
     docs_written = 0
 
@@ -85,10 +100,11 @@ def producer(output_files, queue, header, documents):
     while outfs:
         i = random.randint(0, len(outfs) - 1)
         try:
-            doc = queue.get(timeout=60)
-            print(doc, file=outfs[i])
+            print(queue.get(timeout=5), file=outfs[i])
             written[i] += 1
             docs_written += 1
+            if docs_written % 1000 == 0:
+                logging.debug(f'Producer has written {docs_written} documents.')
             if written[i] == documents:
                 logging.info(f'Written {documents} documents to '
                              f'{output_names[i]}; closing...')
@@ -97,8 +113,13 @@ def producer(output_files, queue, header, documents):
                 del written[i]
                 del output_names[i]
         except Empty:
-            logging.info('Timeout waiting for queue; cleaning up...')
-            break
+            with lock:
+                if num_readers.value == 0:
+                    logging.info('Timeout waiting for queue; cleaning up...')
+                    break
+        except:
+            logging.exception(f'Exception writing {output_names[i]}!')
+            sys.exit(3)
 
     # Close any dangling output files
     for i in range(len(outfs)):
@@ -106,7 +127,18 @@ def producer(output_files, queue, header, documents):
                      f'{output_names[i]}; closing...')
         outfs[i].close()
 
+    logging.info(f'Producer finished; written {docs_written} documents.')
     return docs_written
+
+
+def split_into(seq, n):
+    """Splits *seq* into *n* roughly equal parts."""
+    chunk_size = len(seq) / n
+    start = 0
+    for _ in range(n):
+        end = start + chunk_size
+        yield seq[int(start):int(end)]
+        start = end
 
 
 def main():
@@ -137,18 +169,20 @@ def main():
     with Pool(args.processes) as inpool, Pool(args.processes) as outpool:
         m = Manager()
         queue = m.Queue(maxsize=1000)
+        num_readers = m.Value('I', args.processes)
+        lock = m.Lock()
 
         # Each worker gets a chunk of all input / output files
-        input_chunks = [input_files[i:i + args.processes]
-                        for i in range(0, len(input_files), args.processes)]
-        output_chunks = [output_files[i:i + args.processes]
-                         for i in range(0, len(output_files), args.processes)]
+        input_chunks = list(split_into(input_files, args.processes))
+        output_chunks = list(split_into(output_files, args.processes))
 
-        consumer_f = partial(consumer, queue=queue)
-        docs_read = sum(inpool.map(consumer_f, input_chunks))
+        consumer_f = partial(consumer, queue=queue, num_readers=num_readers, lock=lock)
+        inresult = inpool.map_async(consumer_f, input_chunks)
         producer_f = partial(producer, queue=queue, header=header,
-                             documents=args.documents)
-        docs_written = sum(outpool.map(producer_f, output_chunks))
+                             documents=args.documents, num_readers=num_readers, lock=lock)
+        outresult = outpool.map_async(producer_f, output_chunks)
+
+        docs_read, docs_written = sum(inresult.get()), sum(outresult.get())
 
         logging.debug('Joining processes...')
         inpool.close()
