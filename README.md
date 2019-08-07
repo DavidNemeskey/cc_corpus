@@ -322,6 +322,82 @@ With frequent paragraph removed, the lengths of some documents might have fallen
 below the threshold (1500 characters in our case). It is therefore recommended
 to run the [filtering step](#filtering) anew.
 
+#### Re-sorting the files
+
+pass
+
+#### Renumber files
+
+pass
+
+### Text processing
+
+The repository contains scripts to run the
+[emtsv](https://github.com/dlt-rilmta/emtsv) text-processing pipeline on the
+corpus.
+
+#### Installing the pipeline
+
+The master branch of emtsv (and its dependencies) has a few problems that
+needs to be fixed before it can be used efficiently. Until the fixes are merged,
+the [`quntoken_v1` branch](https://github.com/DavidNemeskey/emtsv/tree/quntoken_v1)
+in my fork should be used.
+
+It fixes two issues:
+
+- the 2.x branch of [quntoken](https://github.com/dlt-rilmta/quntoken/) is very
+  slow; [my `v1` branch](https://github.com/DavidNemeskey/quntoken/tree/v1)
+  fixes that by doing away with the per-function executables and providing a
+  Python API based on a shared library;
+- [xtsv](https://github.com/dlt-rilmta/xtsv) does not handle CoNLL-U comments
+  safely; the emtsv version above uses
+  [my own fork](https://github.com/DavidNemeskey/xtsv/tree/hash_mark_fix),
+  which does.
+
+The "installation" is very simple: clone the repo somewhere and execute the
+steps listed in the readme.
+
+#### Running the pipeline
+
+The `emtsv.py` script runs the pipeline. Some parts (tokenization, morphologic
+analysis) are fast; the rest (morphologic disambiguation, syntactic parsing,
+etc.) are slow and require lots of memory. Perhaps more importantly than any
+previous step, this task should be run distributedly:
+```
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "emtsv.py",
+      "log_file": "2019_emtsv.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-i $input -o $output -e /home/ndavid/emtsv",
+      "per_host_args": {"input": "2019/cc_corpus_hu_1500c_final/",
+                        "output": "2019/cc_corpus_hu_1500c_emtsv/"}}'
+```
+
+The default tasks run are tokenization, morphological analysis and disambiguation.
+
+#### Shuffling the tsv files
+
+With the last step complete, we have a corpus that is tokenized, morphologically
+analyzed and disambiguated. The files contain the documents in the order of
+their URLs, helping users find their way easily in the corpus. This is also
+facilitated by CoNLL comment headers before each unit, such as document and
+paragraph IDs (URL for the former), and the raw sentence texts.
+
+However, the documents being sorted means that similar documents (those from
+the same site, blog, etc.) cluster together, which can be problematic when
+using the corpus as an input to a machine learning task, such as language
+processing: since long batches of minibatches will have similar input, the
+learning process will be biased. To circumvent this, we provide a script to
+shuffle the documents in the tsv files:
+```
+shuffle_tsv.py 2019/cc_corpus_hu_1500c_emtsv/ -o 2019/cc_corpus_hu_1500c_shuffled/
+               -d 2500 -P 8
+```
+
+Note that for best effect, this script should be run on a single machine 
+(although the partial shuffling that results from distributed execution should
+work fine as well).
+
 ### Type checking
 
 Some of the code I have annotated with
