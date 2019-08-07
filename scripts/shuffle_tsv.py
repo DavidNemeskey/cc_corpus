@@ -6,21 +6,25 @@ Shuffles the documents in a set of tsv file. Useful if the corpus is used for
 training machine learning models, so that the input is sufficiently varied.
 
 The same number of output files will be created as input files.
+
+The script starts a number of producer processes that read the input files and
+a number of consumer processes that write to the new (shuffled) files.
 """
 
 from argparse import ArgumentParser
 from functools import partial
 import logging
-from multiprocessing import Manager, Pool
+from multiprocessing import Lock, Manager, Pool, Queue, Value
 import os
 from queue import Empty
 import random
 import sys
+from typing import List
 
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.tsv import parse_file
-from cc_corpus.utils import collect_inputs, notempty, openall
+from cc_corpus.utils import collect_inputs, notempty, openall, split_into
 
 
 def parse_arguments():
@@ -33,8 +37,10 @@ def parse_arguments():
                         help='the number of documents an input file '
                              'contains. This is the same as the number of '
                              'documents an output file will contain.')
-    parser.add_argument('--zeroes', '-Z', type=int, default=4,
-                        help='the number of zeroes in the output files\' names.')
+    parser.add_argument('--queue-size', '-q', type=int, default=1000,
+                        help='the maximum number of elements that the queue '
+                             'between the producers and consumers can hold. '
+                             'The default is 1000.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of consumer and producer processes to '
                              'use (max is the num of cores, default: 1)')
@@ -50,8 +56,20 @@ def parse_arguments():
     return args
 
 
-def consumer(input_files, queue, num_readers, lock):
-    logging.info(f'Consumer started with {len(input_files)} files.')
+def producer(input_files: List[str], queue: Queue,
+             num_readers: Value, lock: Lock) -> int:
+    """
+    Reads the input files and puts them into a queue.
+
+    :param input_files: list of input file names.
+    :param queue: the queue shared with all processes.
+    :param num_readers: a shared variable holding the number of readers that
+                        are still active. When this function fininshes, it
+                        decreases this value by one.
+    :param lock: a lock that regulates access to *num_readers*.
+    :returns: the number of documents read.
+    """
+    logging.info(f'Producer started with {len(input_files)} files.')
     input_names = [os.path.basename(f) for f in input_files]
     infs = [parse_file(f) for f in input_files]
     docs_read = 0
@@ -67,7 +85,7 @@ def consumer(input_files, queue, num_readers, lock):
                 doc = next(infs[i])
                 docs_read += 1
                 if docs_read % 1000 == 0:
-                    logging.debug(f'Consumer has read {docs_read} documents.')
+                    logging.debug(f'Producer has read {docs_read} documents.')
                 queue.put(doc)
             except StopIteration:
                 logging.info(f'Finished reading {input_names[i]}.')
@@ -81,13 +99,28 @@ def consumer(input_files, queue, num_readers, lock):
         num_readers.value -= 1
         val = num_readers.value
 
-    logging.info(f'Consumer finished; read {docs_read} documents; '
+    logging.info(f'Producer finished; read {docs_read} documents; '
                  f'num_readers is at {val}.')
     return docs_read
 
 
-def producer(output_files, queue, header, documents, num_readers, lock):
-    logging.info(f'Producer started with {len(output_files)} files.')
+def consumer(output_files: List[str], queue: Queue, header: str,
+             documents: int, num_readers: Value, lock: Lock) -> int:
+    """
+    Reads :class:`Document`s from the shared queue and writes them to one of
+    the output files at random.
+
+    :param output_files: list of output file names.
+    :param queue: the queue shared with all processes.
+    :param header: the header of the tsv files. Written to all output files.
+    :param documents: the number of documents to write to an output file.
+    :param num_readers: a shared variable holding the number of readers that
+                        are still active. This function exits if two conditions
+                        are met: the queue is empty and *num_readers* is 0.
+    :param lock: a lock that regulates access to *num_readers*.
+    :returns: the number of documents written.
+    """
+    logging.info(f'Consumer started with {len(output_files)} files.')
     output_names = [os.path.basename(f) for f in output_files]
     outfs = [notempty(openall(f, 'wt')) for f in output_files]
     written = [0 for _ in outfs]
@@ -104,7 +137,7 @@ def producer(output_files, queue, header, documents, num_readers, lock):
             written[i] += 1
             docs_written += 1
             if docs_written % 1000 == 0:
-                logging.debug(f'Producer has written {docs_written} documents.')
+                logging.debug(f'Consumer has written {docs_written} documents.')
             if written[i] == documents:
                 logging.info(f'Written {documents} documents to '
                              f'{output_names[i]}; closing...')
@@ -127,18 +160,8 @@ def producer(output_files, queue, header, documents, num_readers, lock):
                      f'{output_names[i]}; closing...')
         outfs[i].close()
 
-    logging.info(f'Producer finished; written {docs_written} documents.')
+    logging.info(f'Consumer finished; written {docs_written} documents.')
     return docs_written
-
-
-def split_into(seq, n):
-    """Splits *seq* into *n* roughly equal parts."""
-    chunk_size = len(seq) / n
-    start = 0
-    for _ in range(n):
-        end = start + chunk_size
-        yield seq[int(start):int(end)]
-        start = end
 
 
 def main():
@@ -176,11 +199,13 @@ def main():
         input_chunks = list(split_into(input_files, args.processes))
         output_chunks = list(split_into(output_files, args.processes))
 
-        consumer_f = partial(consumer, queue=queue, num_readers=num_readers, lock=lock)
-        inresult = inpool.map_async(consumer_f, input_chunks)
-        producer_f = partial(producer, queue=queue, header=header,
-                             documents=args.documents, num_readers=num_readers, lock=lock)
-        outresult = outpool.map_async(producer_f, output_chunks)
+        producer_f = partial(producer, queue=queue,
+                             num_readers=num_readers, lock=lock)
+        inresult = inpool.map_async(producer_f, input_chunks)
+        consumer_f = partial(consumer, queue=queue, header=header,
+                             documents=args.documents, num_readers=num_readers,
+                             lock=lock)
+        outresult = outpool.map_async(consumer_f, output_chunks)
 
         docs_read, docs_written = sum(inresult.get()), sum(outresult.get())
 

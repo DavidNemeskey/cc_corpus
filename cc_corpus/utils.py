@@ -13,6 +13,7 @@ from itertools import zip_longest
 import os
 import os.path as op
 import pickle
+from typing import Generator, Sequence
 from urllib.parse import unquote
 
 try:
@@ -302,3 +303,13 @@ def unquote_inf(url: str) -> str:
 def ispunct(s: str) -> bool:
     """Checks if *s* consists purely of nonalnum characters."""
     return not any(str.isalnum(c) for c in s)
+
+
+def split_into(seq: Sequence, n: int) -> Generator[Sequence, None, None]:
+    """Splits *seq* into *n* roughly equal parts."""
+    chunk_size = len(seq) / n
+    start = 0
+    for _ in range(n):
+        end = start + chunk_size
+        yield seq[int(start):int(end)]
+        start = end
