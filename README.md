@@ -157,7 +157,7 @@ ansible-playbook -i hosts python.yml -e
                         "output": "2019/cc_corpus/"}}'
 ```
 
-#### Filtering
+#### <a name="filtering">Filtering</a>
 
 After boilerplate removal, the corpus is in its final format. However, to
 increase its quality, we also filter out certain pages: those not in Hungarian
@@ -315,6 +315,12 @@ have been sorted by domain), we need to merge these sub-corpora into one:
 ```
 renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_final -k -Z 4 -L debug 2019/cc_corpus_hu_1500c_final_*
 ```
+
+#### Filtering -- again
+
+With frequent paragraph removed, the lengths of some documents might have fallen
+below the threshold (1500 characters in our case). It is therefore recommended
+to run the [filtering step](#filtering) anew.
 
 ### Type checking
 
