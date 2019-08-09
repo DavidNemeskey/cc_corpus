@@ -240,7 +240,7 @@ Finally, we filter corpus to contain only the unique documents:
 dedup_filter.py -o 2019/cc_corpus_hu_1500c_dedup/ -m 2019/minhashes/minhashes_full --ignore-missing-files
 ```
 
-#### Delete frequent paragraphs
+#### <a name="frequent">Delete frequent paragraphs</a>
 
 Some sites contain "boilerplate" paragraphs that occur in many of their documents.
 We get rid of such paragraphs so that they do not skew the language model
@@ -306,14 +306,31 @@ ansible-playbook -i hosts2 python.yml -e
                     -z 4 --frequents 2019/frequent_ps
 		    --old-frequents 2018/frequent_ps",
       "per_host_args": {"index": "2019/index.gz",
-                        "output": "2019/cc_corpus_hu_1500c_final/"}}'
+                        "output": "2019/cc_corpus_hu_1500c_nofreq/"}}'
 ```
 
 Finally, since the distributed script above creates as many output directories
 as there are hosts (and we lost the original file structure as the documents
 have been sorted by domain), we need to merge these sub-corpora into one:
 ```
-renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_final -k -Z 4 -L debug 2019/cc_corpus_hu_1500c_final_*
+renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_nofreq -k -Z 4 -L debug 2019/cc_corpus_hu_1500c_nofreq_*
+```
+
+(final)
+
+#### Delete duplicate paragraphs
+
+The last form of content duplication is when a document contains a paragraph
+several times. Sometimes this is valid repetition, but most of the time, it
+is an artifact of (bad?) HTML page design (e.g. including the same content once
+for static and once for dynamic presentation) and BeautifulSoup's inability to
+cope with it.
+
+The following script removes all duplicate paragraphs that occur in the same
+document. Note that the script is fast enough, so there is no need for
+distributed execution.
+```
+remove_same_p.py -P 12 -i 2019/cc_corpus_hu_1500c_nofreq/ -L debug remove -o 2019/cc_corpus_hu_1500c_nodup/
 ```
 
 #### Filtering -- again
@@ -322,13 +339,31 @@ With frequent paragraph removed, the lengths of some documents might have fallen
 below the threshold (1500 characters in our case). It is therefore recommended
 to run the [filtering step](#filtering) anew.
 
-#### Re-sorting the files
+#### Final steps
 
-pass
+Let's assume that the re-filtered corpus is in the directory
+`cc_corpus_hu_1500c_filtered_again`. All processing steps are effectively done;
+however, in order to get the corpus ready for release, we need to run two
+clean-up steps.
 
-#### Renumber files
+The first is re-sorting the files. With all the distributed processing, the
+order of the files in the directory no longer reflects the sorting we imposed
+on it [earlier](#frequent). The following script re-sorts the files:
+```
+sort_files.py -i cc_corpus_hu_1500c_filtered_again/ -t corpus
+```
 
-pass
+The second step is to make sure each file (save the last one) has the same
+number of documents. Even though we started with a corpus like that, the various
+filtering steps have made the document distribution uneven. The next command
+"renumbers" the files, creating the final form of the corpus, with 2,500
+documents per file:
+```
+renumber_corpus_files.py -Z 4 -d 2500 -o 2019/cc_corpus_hu_1500c_filtered_again
+                         2019/cc_corpus_hu_1500c_final
+```
+
+**And we are done. Whew!**
 
 ### Text processing
 
