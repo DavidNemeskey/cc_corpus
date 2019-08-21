@@ -203,6 +203,7 @@ def analyze_file(input_file: str, output_file: str,
     qt = QunToken('xml', 'token', False)
 
     header_written = False
+    lemma_col = None
     try:
         with openall(output_file, 'wt') as outf:
             for doc in parse_file(input_file):
@@ -233,6 +234,14 @@ def analyze_file(input_file: str, output_file: str,
                                 if not header_written:
                                     header_written = True
                                     outf.write(rline)
+                                    # The lemma column might be empty; see
+                                    # https://github.com/dlt-rilmta/emtsv/issues/7
+                                    # This, along with code below, is a workaround
+                                    # until that issue is fixed
+                                    try:
+                                        lemma_col = rline.rstrip('\n').split('\t').index('lemma')
+                                    except ValueError:
+                                        pass
                                 if not doc_written:
                                     doc_written = True
                                     print('# newdoc id = {}'.format(doc.attrs['url']),
@@ -244,7 +253,17 @@ def analyze_file(input_file: str, output_file: str,
                                 break
                             print('# text = {}'.format(sent_text), file=outf)
                             for rline in last_prog:
-                                outf.write(rline)
+                                # The other part of the no-lemma handling code
+                                if lemma_col:
+                                    fields = rline.rstrip('\n').split('\t')
+                                    if len(fields) > 1 and not fields[lemma_col]:
+                                        fields[lemma_col] = fields[0]  # form
+                                        print('\t'.join(fields), file=outf)
+                                    else:
+                                        # Marginally faster without the join
+                                        outf.write(rline)
+                                else:
+                                    outf.write(rline)
                         except:
                             logging.exception(f'Error in file {input_file}, '
                                               f'document {doc.attrs["url"]}, '
