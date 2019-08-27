@@ -157,7 +157,7 @@ ansible-playbook -i hosts python.yml -e
                         "output": "2019/cc_corpus/"}}'
 ```
 
-#### Filtering
+#### <a name="filtering">Filtering</a>
 
 After boilerplate removal, the corpus is in its final format. However, to
 increase its quality, we also filter out certain pages: those not in Hungarian
@@ -240,7 +240,7 @@ Finally, we filter corpus to contain only the unique documents:
 dedup_filter.py -o 2019/cc_corpus_hu_1500c_dedup/ -m 2019/minhashes/minhashes_full --ignore-missing-files
 ```
 
-#### Delete frequent paragraphs
+#### <a name="frequent">Delete frequent paragraphs</a>
 
 Some sites contain "boilerplate" paragraphs that occur in many of their documents.
 We get rid of such paragraphs so that they do not skew the language model
@@ -306,15 +306,132 @@ ansible-playbook -i hosts2 python.yml -e
                     -z 4 --frequents 2019/frequent_ps
 		    --old-frequents 2018/frequent_ps",
       "per_host_args": {"index": "2019/index.gz",
-                        "output": "2019/cc_corpus_hu_1500c_final/"}}'
+                        "output": "2019/cc_corpus_hu_1500c_nofreq/"}}'
 ```
 
 Finally, since the distributed script above creates as many output directories
 as there are hosts (and we lost the original file structure as the documents
 have been sorted by domain), we need to merge these sub-corpora into one:
 ```
-renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_final -k -Z 4 -L debug 2019/cc_corpus_hu_1500c_final_*
+renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_nofreq -k -Z 4 -L debug 2019/cc_corpus_hu_1500c_nofreq_*
 ```
+
+(final)
+
+#### Delete duplicate paragraphs
+
+The last form of content duplication is when a document contains a paragraph
+several times. Sometimes this is valid repetition, but most of the time, it
+is an artifact of (bad?) HTML page design (e.g. including the same content once
+for static and once for dynamic presentation) and BeautifulSoup's inability to
+cope with it.
+
+The following script removes all duplicate paragraphs that occur in the same
+document. Note that the script is fast enough, so there is no need for
+distributed execution.
+```
+remove_same_p.py -P 12 -i 2019/cc_corpus_hu_1500c_nofreq/ -L debug remove -o 2019/cc_corpus_hu_1500c_nodup/
+```
+
+#### Filtering -- again
+
+With frequent paragraph removed, the lengths of some documents might have fallen
+below the threshold (1500 characters in our case). It is therefore recommended
+to run the [filtering step](#filtering) anew.
+
+#### Final steps
+
+Let's assume that the re-filtered corpus is in the directory
+`cc_corpus_hu_1500c_filtered_again`. All processing steps are effectively done;
+however, in order to get the corpus ready for release, we need to run two
+clean-up steps.
+
+The first is re-sorting the files. With all the distributed processing, the
+order of the files in the directory no longer reflects the sorting we imposed
+on it [earlier](#frequent). The following script re-sorts the files:
+```
+sort_files.py -i cc_corpus_hu_1500c_filtered_again/ -t corpus
+```
+
+The second step is to make sure each file (save the last one) has the same
+number of documents. Even though we started with a corpus like that, the various
+filtering steps have made the document distribution uneven. The next command
+"renumbers" the files, creating the final form of the corpus, with 2,500
+documents per file:
+```
+renumber_corpus_files.py -Z 4 -d 2500 -o 2019/cc_corpus_hu_1500c_filtered_again
+                         2019/cc_corpus_hu_1500c_final
+```
+
+**And we are done. Whew!**
+
+### Text processing
+
+The repository contains scripts to run the
+[emtsv](https://github.com/dlt-rilmta/emtsv) text-processing pipeline on the
+corpus.
+
+#### Installing the pipeline
+
+The master branch of emtsv (and its dependencies) has a few problems that
+needs to be fixed before it can be used efficiently. Until the fixes are merged,
+the [`quntoken_v1` branch](https://github.com/DavidNemeskey/emtsv/tree/quntoken_v1)
+in my fork should be used.
+
+It fixes two issues:
+
+- the 2.x branch of [quntoken](https://github.com/dlt-rilmta/quntoken/) is very
+  slow; [my `v1` branch](https://github.com/DavidNemeskey/quntoken/tree/v1)
+  fixes that by doing away with the per-function executables and providing a
+  Python API based on a shared library;
+- [xtsv](https://github.com/dlt-rilmta/xtsv) does not handle CoNLL-U comments
+  safely; the emtsv version above uses
+  [my own fork](https://github.com/DavidNemeskey/xtsv/tree/hash_mark_fix),
+  which does.
+
+The "installation" is very simple: clone the repo somewhere and execute the
+steps listed in the readme.
+
+#### Running the pipeline
+
+The `emtsv.py` script runs the pipeline. Some parts (tokenization, morphologic
+analysis) are fast; the rest (morphologic disambiguation, syntactic parsing,
+etc.) are slow and require lots of memory. Perhaps more importantly than any
+previous step, this task should be run distributedly:
+```
+ansible-playbook -i hosts python.yml -e
+    '{"python_script": "emtsv.py",
+      "log_file": "2019_emtsv.log",
+      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
+      "arguments": "-i $input -o $output -e /home/ndavid/emtsv",
+      "per_host_args": {"input": "2019/cc_corpus_hu_1500c_final/",
+                        "output": "2019/cc_corpus_hu_1500c_emtsv/"}}'
+```
+
+The default tasks run are tokenization, morphological analysis and disambiguation.
+
+#### Shuffling the tsv files
+
+With the last step complete, we have a corpus that is tokenized, morphologically
+analyzed and disambiguated. The files contain the documents in the order of
+their URLs, helping users find their way easily in the corpus. This is also
+facilitated by CoNLL comment headers before each unit, such as document and
+paragraph IDs (URL for the former), and the raw sentence texts.
+
+However, the documents being sorted means that similar documents (those from
+the same site, blog, etc.) cluster together, which can be problematic when
+using the corpus as an input to a machine learning task, such as language
+processing: since long batches of minibatches will have similar input, the
+learning process will be biased. To circumvent this, we provide a script to
+shuffle the documents in the tsv files:
+```
+shuffle_tsv.py 2019/cc_corpus_hu_1500c_emtsv/ -o 2019/cc_corpus_hu_1500c_shuffled/
+               -d 2500 -P 8
+```
+
+Note that for best effect, this script should be run on a single machine 
+(although the partial shuffling that results from distributed execution should
+work fine as well).
 
 ### Type checking
 
@@ -368,6 +485,23 @@ If these requirements are met, the Ansible playbook `configuration.yml` can be
 used to {un}install the code -- this is a prerequisite of the next steps:
 ```
 ansible-playbook -i hosts configuration.yml --tags {install,cleanup}
+```
+
+In order to use `emtsv.py`, [emtsv](https://github.com/dlt-rilmta/emtsv) must
+be installed on the cluster. This can be done with the following commands:
+```
+ansible-galaxy install -r requirements.yml
+ansible-playbook -i hosts configuration.yml --tags install_emtsv
+```
+
+#### Python version
+
+It is possible to set up the virtualenv to use a specific Python version
+(i.e. one from Anaconda). In order to do that, specify the `path` variable on
+the command line when calling the install tasks:
+```
+ansible-playbook -i hosts configuration.yml --tags install
+-e '{"path": "/home/user/anaconda3/bin"}'
 ```
 
 #### Data distribution

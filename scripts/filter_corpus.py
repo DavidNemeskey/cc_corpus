@@ -19,7 +19,7 @@ import re
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import openall
+from cc_corpus.utils import openall, notempty
 
 
 def parse_arguments():
@@ -234,7 +234,7 @@ def process_file(filename, input_dir, output_dir, languages,
                              else urls_to_keep  # noqa
         it = retain_urls(it, url_list, stats)
     try:
-        with openall(output_file, 'wt') as outf:
+        with notempty(openall(output_file, 'wt')) as outf:
             for doc in it:
                 print(doc, file=outf)
     except:
