@@ -8,6 +8,7 @@ Extracts all section titles from a Wikipedia extract created by
 
 from argparse import ArgumentParser
 from collections import Counter
+from functools import partial
 from io import StringIO
 import json
 import logging
@@ -25,6 +26,8 @@ def parse_arguments():
     parser.add_argument('--input', '-i', dest='inputs', required=True,
                         action='append', default=[],
                         help='the files/directories of Wikipedia extracts.')
+    parser.add_argument('--filter', '-f', action='store_true',
+                        help='filter bullets and keep only non-empty sections.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -40,20 +43,32 @@ def parse_arguments():
     return args
 
 
-def process_file(filename):
-    logging.info('Processing file {}...'.format(filename))
+def process_file(filename, filter=False):
+    logging.info('Processing file {}, {}...'.format(filename, filter))
     counter = Counter()
-    p = re.compile('Section::::(.+)')
+    section_p = re.compile('Section::::(.+)')
+    bullet_p = re.compile('BULLET::::')
     with openall(filename, 'rt') as inf:
         for page in inf:
             j = json.loads(page)
-            for line in StringIO(j['text']):
-                m = p.search(line)
-                if m:
-                    counter[m.group(1)] += 1
-                    if m.start() != 0:
+            section_title = None
+            section_text = []
+            for line in map(str.strip, StringIO(j['text'])):
+                sm = section_p.search(line)
+                if sm:
+                    if section_title and (section_text or not filter):
+                        counter[section_title] += 1
+                    section_title = sm.group(1)
+                    section_text = []
+                    if sm.start() != 0:
                         logging.warning(f'Section not on first character: '
                                         f'{line.strip()} in {filename}')
+                else:
+                    bm = bullet_p.search(line)
+                    if line and not bm:
+                        section_text.append(line)
+            if section_title and section_text:
+                counter[section_title] += 1
     logging.info('Finished processing file {}...'.format(filename))
     return counter
 
@@ -71,11 +86,12 @@ def main():
     logging.info('Scheduled {} files for filtering.'.format(len(input_files)))
 
     with Pool(args.processes) as pool:
+        f = partial(process_file2, filter=args.filter)
         counter = Counter()
-        for c in pool.imap_unordered(process_file, input_files):
+        for c in pool.imap_unordered(f, input_files):
             counter.update(c)
 
-    for section, freq in counter.most_common():
+    for section, freq in sorted(counter.items(), key=lambda sf: (-sf[1], sf[0])):
         print(f'{section}\t{freq}')
 
 
