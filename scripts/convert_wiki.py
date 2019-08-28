@@ -13,9 +13,12 @@ from functools import partial
 from io import StringIO
 import json
 import logging
-from multiprocessing import Pool
+from multiprocessing import Manager, Pool
 import os
+import os.path as op
+from queue import Empty
 import re
+import traceback
 
 from multiprocessing_logging import install_mp_handler
 
@@ -58,15 +61,15 @@ def first_section(inf):
     yield from it
 
 
-def process_file(filename):
-    logging.debug('Processing file {}...'.format(filename))
+def process_file(filename, queue):
+    logging.info('Processing file {}...'.format(filename))
     section_p = re.compile('^Section::::(.+)[.]$')
     bullet_p = re.compile('^BULLET::::(.+)$')
     with openall(filename, 'rt') as inf:
         for page in inf:
             j = json.loads(page)
             text = j.pop('text')
-            doc = Document(attrs=j)
+            doc = Document(attrs=j, paragraphs=[])
             paragraphs = []
             in_text, in_list = False, False
             # The first line is the title, which should be a section...
@@ -74,7 +77,7 @@ def process_file(filename):
                 sm = section_p.search(line)
                 if sm:
                     if paragraphs:
-                        doc.paragraphs += [''.join(p) for p in paragraphs]
+                        doc.paragraphs += ['\n'.join(p) for p in paragraphs]
                         paragraphs = []
                     paragraphs.append([sm.group(1)])
                 else:
@@ -96,9 +99,9 @@ def process_file(filename):
                                 in_text, in_list = True, False
                             paragraphs[-1].append(line)
             # Add the remaining paragraphs
-            doc.paragraphs += [''.join(p) for p in paragraphs]
-            yield doc
-    logging.debug('Finished processing file {}...'.format(filename))
+            doc.paragraphs += ['\n'.join(p) for p in paragraphs]
+            queue.put(doc)
+    logging.info('Finished processing file {}...'.format(filename))
 
 
 def main():
@@ -110,16 +113,29 @@ def main():
     )
     install_mp_handler()
 
+    os.nice(20)
+    if not op.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
     input_files = sorted(collect_inputs(args.inputs))
     logging.info('Scheduled {} files for conversion.'.format(len(input_files)))
 
     writer = BatchWriter(args.documents, args.output_dir, args.zeroes)
     with Pool(args.processes) as pool, closing(writer) as bw:
-        # f = partial(process_file)
-        f = process_file
-        # TODO doesn't work, queue!
-        for document in pool.imap_unordered(f, input_files):
-            bw.write(document)
+        m = Manager()
+        queue = m.Queue(args.processes * 10)
+        f = partial(process_file, queue=queue)
+        res = pool.map_async(f, input_files)
+        while True:
+            try:
+                document = queue.get(True, 5)
+                bw.write(document)
+            except Empty:
+                # get() here will, on error, raise the same exception as
+                # encountered in the workers
+                if res.ready():
+                    res.get()
+                    break
 
     logging.info(f'Written {bw.total_written} documents into {bw.batch} files.')
 
