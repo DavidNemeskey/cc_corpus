@@ -18,7 +18,6 @@ import os
 import os.path as op
 from queue import Empty
 import re
-import traceback
 
 from multiprocessing_logging import install_mp_handler
 
@@ -50,6 +49,36 @@ def parse_arguments():
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
     return args
+
+
+class Unit:
+    def __init__(self, children=None):
+        self.children = children or []
+
+    def add(self, unit: 'Unit'):
+        """Adds a unit under this one."""
+        self.children.append(unit)
+
+    def __iter__(self):
+        """
+        Iterates through the content :class:`Unit`s in this :class:`Unit`.
+        """
+        yield from self.children
+
+    def __bool__(self):
+        return any(bool(c) for c in self.children)
+
+
+class Section(Unit):
+    """:class:`Unit` representing a section."""
+
+
+class List:
+    """:class:`Unit` representing an ordered or unordered list."""
+
+
+class Text:
+    """:class:`Unit` representing a paragraph of text."""
 
 
 def first_section(inf):
