@@ -55,9 +55,14 @@ class Unit:
     def __init__(self, children=None):
         self.children = children or []
 
-    def add(self, unit: 'Unit'):
-        """Adds a unit under this one."""
+    def add(self, unit: 'Unit') -> 'Unit':
+        """
+        Adds a unit under this one.
+
+        :returns: the new unit.
+        """
         self.children.append(unit)
+        return unit
 
     def __iter__(self):
         """
@@ -67,6 +72,13 @@ class Unit:
 
     def __bool__(self):
         return any(bool(c) for c in self.children)
+
+
+class WikiPage(Unit):
+    """:class:`Unit` representing a whole Wikipedia page (extract)."""
+    def __init__(self, attrs, children=None):
+        self.attrs = attrs
+        super().__init__(children)
 
 
 class Section(Unit):
@@ -81,6 +93,19 @@ class Text:
     """:class:`Unit` representing a paragraph of text."""
 
 
+class Title:
+    """:class:`Unit` representing the title of a section."""
+
+
+class DocumentConverter:
+    """Converts a :class:`WikiPage` to a :class:`Document`."""
+    def __init__(self):
+        pass
+
+    def __call__(self, wikipage):
+        doc = Document(attr=
+
+
 def first_section(inf):
     """The first line is the title, which should be a section..."""
     it = map(str.rstrip, inf)
@@ -90,7 +115,7 @@ def first_section(inf):
     yield from it
 
 
-def process_file(filename, queue):
+def process_file(filename, converter, queue):
     logging.info('Processing file {}...'.format(filename))
     section_p = re.compile('^Section::::(.+)[.]$')
     bullet_p = re.compile('^BULLET::::(.+)$')
@@ -98,17 +123,14 @@ def process_file(filename, queue):
         for page in inf:
             j = json.loads(page)
             text = j.pop('text')
-            doc = Document(attrs=j, paragraphs=[])
-            paragraphs = []
-            in_text, in_list = False, False
+            # doc = Document(attrs=j, paragraphs=[])
+            wp = WikiPage(j)
+            section, text, lst = None, None, None
             # The first line is the title, which should be a section...
             for line in first_section(StringIO(text)):
                 sm = section_p.search(line)
                 if sm:
-                    if paragraphs:
-                        doc.paragraphs += ['\n'.join(p) for p in paragraphs]
-                        paragraphs = []
-                    paragraphs.append([sm.group(1)])
+                    section = wp.add(Section([Title(sm.group(1))]))
                 else:
                     # Empty line: "close" the last paragraph
                     if not line:
@@ -117,18 +139,14 @@ def process_file(filename, queue):
                         bm = bullet_p.search(line)
                         if bm:
                             # First bullet: let's start a new (list) paragraph
-                            if not in_list:
-                                paragraphs.append([])
-                                in_text, in_list = False, True
-                            paragraphs[-1].append(bm.group(1))
-                            # Text: open a new text paragraph
+                            if not lst:
+                                lst = section.add(List())
+                            lst.add(bm.group(1))
                         else:
-                            if not in_text:
-                                paragraphs.append([])
-                                in_text, in_list = True, False
-                            paragraphs[-1].append(line)
-            # Add the remaining paragraphs
-            doc.paragraphs += ['\n'.join(p) for p in paragraphs]
+                            # Text: open a new text paragraph
+                            if not text:
+                                text = section.add(Text())
+                            text.add(line)
             queue.put(doc)
     logging.info('Finished processing file {}...'.format(filename))
 
