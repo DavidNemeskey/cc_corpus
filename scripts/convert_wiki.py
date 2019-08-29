@@ -22,7 +22,7 @@ import re
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import BatchWriter, Document
-from cc_corpus.utils import collect_inputs, openall
+from cc_corpus.utils import collect_inputs, headtail, openall
 
 
 def parse_arguments():
@@ -64,6 +64,10 @@ class Unit:
         self.children.append(unit)
         return unit
 
+    def __getitem__(self, index: int) -> 'Unit':
+        """Short for `self.children[index]`."""
+        return self.children[index]
+
     def __iter__(self):
         """
         Iterates through the content :class:`Unit`s in this :class:`Unit`.
@@ -85,15 +89,15 @@ class Section(Unit):
     """:class:`Unit` representing a section."""
 
 
-class List:
+class List(Unit):
     """:class:`Unit` representing an ordered or unordered list."""
 
 
-class Text:
+class Text(Unit):
     """:class:`Unit` representing a paragraph of text."""
 
 
-class Title:
+class Title(Unit):
     """:class:`Unit` representing the title of a section."""
 
 
@@ -103,7 +107,13 @@ class DocumentConverter:
         pass
 
     def __call__(self, wikipage):
-        doc = Document(attr=
+        doc = Document(attrs=wikipage.attrs, paragraphs=[])
+        for section in wikipage:
+            title, ps = headtail(section)
+            doc.paragraphs.append(title[0])
+            for p in ps:
+                doc.paragraphs.append('\n'.join(child for child in p))
+        return doc
 
 
 def first_section(inf):
@@ -122,19 +132,19 @@ def process_file(filename, converter, queue):
     with openall(filename, 'rt') as inf:
         for page in inf:
             j = json.loads(page)
-            text = j.pop('text')
+            extract = j.pop('text')
             # doc = Document(attrs=j, paragraphs=[])
             wp = WikiPage(j)
             section, text, lst = None, None, None
             # The first line is the title, which should be a section...
-            for line in first_section(StringIO(text)):
+            for line in first_section(StringIO(extract)):
                 sm = section_p.search(line)
                 if sm:
-                    section = wp.add(Section([Title(sm.group(1))]))
+                    section = wp.add(Section([Title([sm.group(1)])]))
                 else:
                     # Empty line: "close" the last paragraph
                     if not line:
-                        in_text = in_list = False
+                        text = lst = None
                     else:
                         bm = bullet_p.search(line)
                         if bm:
@@ -147,7 +157,7 @@ def process_file(filename, converter, queue):
                             if not text:
                                 text = section.add(Text())
                             text.add(line)
-            queue.put(doc)
+            queue.put(converter(wp))
     logging.info('Finished processing file {}...'.format(filename))
 
 
@@ -171,7 +181,8 @@ def main():
     with Pool(args.processes) as pool, closing(writer) as bw:
         m = Manager()
         queue = m.Queue(args.processes * 10)
-        f = partial(process_file, queue=queue)
+        converter = DocumentConverter()
+        f = partial(process_file, queue=queue, converter=converter)
         res = pool.map_async(f, input_files)
         while True:
             try:
