@@ -94,10 +94,10 @@ def parse(input: TextIO, use_headers: bool = True) -> Generator[
         yield document
 
 
-def parse_file(corpus_file: str, use_headers: bool = True) -> Generator[
+def parse_file(tsv_file: str, use_headers: bool = True) -> Generator[
         Union[List, Document], None, None]:
     """
     Same as :func:`parse`, but expects the name of a file as the first argument.
     """
-    with openall(corpus_file) as inf:
+    with openall(tsv_file) as inf:
         yield from parse(inf, use_headers)
