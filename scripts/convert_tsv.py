@@ -27,6 +27,12 @@ def parse_arguments():
                         help='the files/directories of tsv files.')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory.')
+    parser.add_argument('--from-text', '-t', action='store_true',
+                        help='by default, the script extracts the sentence '
+                             'tokens from the first column of the tsv. If '
+                             'this option is specified, the original, '
+                             'untokenized sentences will be copied over from '
+                             'the tsv comments.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -42,18 +48,32 @@ def parse_arguments():
     return args
 
 
-def process_file(input_file, output_dir):
-    # TODO: file name
-    # TODO: from text (i.e. without space between tokens)
-    output_file = op.join(output_dir, op.basename(input_file))
+def process_file(input_file: str, output_dir: str, from_text: bool = False):
+    """
+    Converts _input_file_ from tsv to the BERT input format.
+
+    :param input_file: the input file.
+    :param output_dir: the output directory; the output file will be created
+                       here, with the same name as _input_file_ (except any
+                       `tsv` in its name is replaced with `txt`).
+    :param from_text: If `True`, the output will contain the original
+                      (untokenized) sentences in the `# text` comment lines.
+                      If `False` (the default), the output is extracted from
+                      the tsv.
+    """
+    output_file = op.join(output_dir, op.basename(input_file).replace('tsv', 'txt'))
     logging.debug(f'Converting {input_file} to {output_file}...')
     with openall(output_file, 'wt') as outf:
         for document in islice(parse_file(input_file), 1, None):
             for paragraph in document:
                 for sentence in paragraph:
-                    print(' '.join(token.split('\t', 1)[0]
-                                   for token in sentence.content),
-                          file=outf)
+                    if from_text:
+                        if sentence.comment.startswith('# text = '):
+                            print(sentence.comment[9:], file=outf)
+                    else:
+                        print(' '.join(token.split('\t', 1)[0]
+                                       for token in sentence.content),
+                              file=outf)
             print(file=outf)
     logging.debug(f'Converted {input_file} to {output_file}.')
 
@@ -75,7 +95,8 @@ def main():
     logging.info('Scheduled {} files for conversion.'.format(len(input_files)))
 
     with Pool(args.processes) as pool:
-        f = partial(process_file, output_dir=args.output_dir)
+        f = partial(process_file,
+                    output_dir=args.output_dir, from_text=args.from_text)
         res = pool.map_async(f, input_files)
         res.get()
         pool.close()
