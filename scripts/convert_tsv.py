@@ -51,6 +51,7 @@ def process_file(input_file, output_dir):
                 for sentence in paragraph:
                     print(' '.join(field[0] for field in sentence.content),
                           file=outf)
+            print(file=outf)
     logging.debug(f'Converted {input_file} to {output_file}.')
 
 
