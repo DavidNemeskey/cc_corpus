@@ -43,13 +43,16 @@ def parse_arguments():
 
 
 def process_file(input_file, output_dir):
+    # TODO: file name
+    # TODO: from text (i.e. without space between tokens)
     output_file = op.join(output_dir, op.basename(input_file))
     logging.debug(f'Converting {input_file} to {output_file}...')
     with openall(output_file, 'wt') as outf:
         for document in islice(parse_file(input_file), 1, None):
             for paragraph in document:
                 for sentence in paragraph:
-                    print(' '.join(field[0] for field in sentence.content),
+                    print(' '.join(token.split('\t', 1)[0]
+                                   for token in sentence.content),
                           file=outf)
             print(file=outf)
     logging.debug(f'Converted {input_file} to {output_file}.')
@@ -73,7 +76,8 @@ def main():
 
     with Pool(args.processes) as pool:
         f = partial(process_file, output_dir=args.output_dir)
-        pool.imap_unordered(f, input_files)
+        res = pool.map_async(f, input_files)
+        res.get()
         pool.close()
         pool.join()
 
