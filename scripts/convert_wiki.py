@@ -51,56 +51,6 @@ def parse_arguments():
     return args
 
 
-class Unit:
-    def __init__(self, children=None):
-        self.children = children or []
-
-    def add(self, unit: 'Unit') -> 'Unit':
-        """
-        Adds a unit under this one.
-
-        :returns: the new unit.
-        """
-        self.children.append(unit)
-        return unit
-
-    def __getitem__(self, index: int) -> 'Unit':
-        """Short for `self.children[index]`."""
-        return self.children[index]
-
-    def __iter__(self):
-        """
-        Iterates through the content :class:`Unit`s in this :class:`Unit`.
-        """
-        yield from self.children
-
-    def __bool__(self):
-        return any(bool(c) for c in self.children)
-
-
-class WikiPage(Unit):
-    """:class:`Unit` representing a whole Wikipedia page (extract)."""
-    def __init__(self, attrs, children=None):
-        self.attrs = attrs
-        super().__init__(children)
-
-
-class Section(Unit):
-    """:class:`Unit` representing a section."""
-
-
-class List(Unit):
-    """:class:`Unit` representing an ordered or unordered list."""
-
-
-class Text(Unit):
-    """:class:`Unit` representing a paragraph of text."""
-
-
-class Title(Unit):
-    """:class:`Unit` representing the title of a section."""
-
-
 class DocumentConverter:
     """Converts a :class:`WikiPage` to a :class:`Document`."""
     def __init__(self):
@@ -109,9 +59,8 @@ class DocumentConverter:
     def __call__(self, wikipage):
         doc = Document(attrs=wikipage.attrs, paragraphs=[])
         for section in wikipage:
-            title, ps = headtail(section)
-            doc.paragraphs.append(title[0])
-            for p in ps:
+            doc.paragraphs.append(section.title)
+            for p in section:
                 doc.paragraphs.append('\n'.join(child for child in p))
         return doc
 
