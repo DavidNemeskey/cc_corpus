@@ -210,6 +210,9 @@ def parse_zim_html(html_text):
     bs = BeautifulSoup(html_text)
     title = bs.find(id='titleHeading')
     body = bs.find('div', id='mw-content-text')
+    # Let's get rid of the references now
+    for sup in body.find_all('sup', {'class': 'mw-ref'}):
+        sup.decompose()
     page = WikiPage({'title': title.get_text()})
     for child in body.children:
         if child.name == 'section':
