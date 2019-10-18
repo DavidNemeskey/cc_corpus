@@ -33,6 +33,8 @@ def parse_arguments():
                              'this option is specified, the original, '
                              'untokenized sentences will be copied over from '
                              'the tsv comments.')
+    parser.add_argument('--uncased', '-c', action='store_true',
+                        help='lowercase the text.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -48,7 +50,16 @@ def parse_arguments():
     return args
 
 
-def process_file(input_file: str, output_dir: str, from_text: bool = False):
+def uncase(text, uncased: bool = False):
+    """
+    "Uncases" (lowercases) _text_ if _uncased_ is ``True``; otherwise, keeps
+    it unchanged.
+    """
+    return text.lower() if uncased else text
+
+
+def process_file(input_file: str, output_dir: str, from_text: bool = False,
+                 uncased: bool = False):
     """
     Converts _input_file_ from tsv to the BERT input format.
 
@@ -56,11 +67,13 @@ def process_file(input_file: str, output_dir: str, from_text: bool = False):
     :param output_dir: the output directory; the output file will be created
                        here, with the same name as _input_file_ (except any
                        `tsv` in its name is replaced with `txt`).
-    :param from_text: If `True`, the output will contain the original
+    :param from_text: if `True`, the output will contain the original
                       (untokenized) sentences in the `# text` comment lines.
                       If `False` (the default), the output is extracted from
                       the tsv.
+    :param uncased: lowercase the text.
     """
+    transform = partial(uncase, uncased=uncased)
     output_file = op.join(output_dir, op.basename(input_file).replace('tsv', 'txt'))
     logging.debug(f'Converting {input_file} to {output_file}...')
     with openall(output_file, 'wt') as outf:
@@ -69,7 +82,7 @@ def process_file(input_file: str, output_dir: str, from_text: bool = False):
                 for sentence in paragraph:
                     if from_text:
                         if sentence.comment.startswith('# text = '):
-                            print(sentence.comment[9:], file=outf)
+                            print(transform(sentence.comment[9:]), file=outf)
                     else:
                         print(' '.join(token.split('\t', 1)[0]
                                        for token in sentence.content),
@@ -96,7 +109,8 @@ def main():
 
     with Pool(args.processes) as pool:
         f = partial(process_file,
-                    output_dir=args.output_dir, from_text=args.from_text)
+                    output_dir=args.output_dir, from_text=args.from_text,
+                    uncased=args.uncased)
         res = pool.map_async(f, input_files)
         res.get()
         pool.close()
