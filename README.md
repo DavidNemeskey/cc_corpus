@@ -479,7 +479,7 @@ Controller:
 Slaves:
 - git
 - tmux
-- virtualenv
+- _virtualenv_ (optional)
 
 If these requirements are met, the Ansible playbook `configuration.yml` can be
 used to {un}install the code -- this is a prerequisite of the next steps:
@@ -503,6 +503,18 @@ the command line when calling the install tasks:
 ansible-playbook -i hosts configuration.yml --tags install
 -e '{"path": "/home/user/anaconda3/bin"}'
 ```
+
+Note that this is **the recommended way** of configuring the virtual environments.
+If `path` is specified, the script makes use of the
+[venv](https://docs.python.org/3/library/venv.html) module, which _links_ the
+virtual environment's Python version to the one in `path`, making (minor)
+version upgrades to the Python version seamless.
+[virtualenv](https://virtualenv.pypa.io/en/latest/), on the other hand, _copies_
+the Python executable, which thus never gets updated when the main Python
+version does, and this setup results in an inconsistent environment.
+Unfortunately, when `path` is not specified, we need to revert to `virtualenv`
+because of
+[a bug in ansible's `pip` module](https://github.com/ansible/ansible/issues/52275).
 
 #### Data distribution
 
