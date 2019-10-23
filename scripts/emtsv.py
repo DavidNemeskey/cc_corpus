@@ -54,6 +54,9 @@ def parse_arguments():
     parser.add_argument('--max-sentence-length', '-s', type=int, default=500,
                         help='limit the length of sentences (in tokens) to '
                              'pass to emtsv. The default is 500.')
+    parser.add_argument('--file-format', '-f', choices=['text', 'tsv'],
+                        default='text',
+                        help='the file format. The default is text.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -180,6 +183,50 @@ class XtsvFilter(logging.Filter):
         self.sent = sent
 
 
+def analyze_tsv_file(input_file: str, output_file: str,
+                     max_sentence_length: int = sys.maxsize):
+    logging.info('Analyzing tsv {}...'.format(input_file))
+    from __init__ import build_pipeline
+
+    # Install xtsv warning & error logging filter, so that we know where the
+    # problem happens
+    xtsv_filter = XtsvFilter()
+    logging.getLogger().handlers[0].addFilter(xtsv_filter)
+    # So that we know that everything is filtered
+    assert len(logging.getLogger().handlers) == 1
+
+    lemma_col = None
+    try:
+        with openall(input_file) as inf, openall(output_file, 'wt') as outf:
+            xtsv_filter.set(input_file, '<?>', '<?>')
+            last_prog = build_pipeline(
+                inf, used_tools, inited_tools, {}, True)
+            for rline in last_prog:
+                outf.write(rline)
+                # Try to identify the lemma column
+                if lemma_col is None:
+                    try:
+                        lemma_col = rline.rstrip('\n').split('\t').index('lemma')
+                    except ValueError:
+                        pass
+                break
+            for rline in last_prog:
+                # The other part of the no-lemma handling code
+                if lemma_col:
+                    fields = rline.rstrip('\n').split('\t')
+                    if len(fields) > 1 and not fields[lemma_col]:
+                        fields[lemma_col] = fields[0]  # form
+                        print('\t'.join(fields), file=outf)
+                    else:
+                        # Marginally faster without the join
+                        outf.write(rline)
+                else:
+                    outf.write(rline)
+        logging.info('Finished {}.'.format(input_file))
+    except:
+        logging.exception('Error in file {}!'.format(input_file))
+
+
 def analyze_file(input_file: str, output_file: str,
                  max_sentence_length: int = sys.maxsize):
     """
@@ -303,7 +350,11 @@ def main():
 
     with Pool(args.processes, initializer=start_emtsv,
               initargs=[args.emtsv_dir, args.tasks]) as pool:
-        f = partial(analyze_file, max_sentence_length=args.max_sentence_length)
+
+        f = partial(
+            analyze_file if args.file_format == 'text' else analyze_tsv_file,
+            max_sentence_length=args.max_sentence_length
+        )
         pool.starmap(f, zip(input_files, output_files))
         logging.debug('Joining processes...')
         pool.close()
