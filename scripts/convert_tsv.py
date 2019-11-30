@@ -33,7 +33,7 @@ def parse_arguments():
                              'this option is specified, the original, '
                              'untokenized sentences will be copied over from '
                              'the tsv comments.')
-    parser.add_argument('--uncased', '-c', action='store_true',
+    parser.add_argument('--lower', '-l', action='store_true',
                         help='lowercase the text.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
@@ -50,16 +50,16 @@ def parse_arguments():
     return args
 
 
-def uncase(text, uncased: bool = False):
+def lower(text, lower_case: bool = False):
     """
-    "Uncases" (lowercases) _text_ if _uncased_ is ``True``; otherwise, keeps
+    Lowercases _text_ if _lower_case_ is ``True``; otherwise, keeps
     it unchanged.
     """
-    return text.lower() if uncased else text
+    return text.lower() if lower_case else text
 
 
 def process_file(input_file: str, output_dir: str, from_text: bool = False,
-                 uncased: bool = False):
+                 lower_case: bool = False):
     """
     Converts _input_file_ from tsv to the BERT input format.
 
@@ -71,9 +71,9 @@ def process_file(input_file: str, output_dir: str, from_text: bool = False,
                       (untokenized) sentences in the `# text` comment lines.
                       If `False` (the default), the output is extracted from
                       the tsv.
-    :param uncased: lowercase the text.
+    :param lower_case: lowercase the text?
     """
-    transform = partial(uncase, uncased=uncased)
+    transform = partial(lower, lower_case=lower_case)
     output_file = op.join(output_dir, op.basename(input_file).replace('tsv', 'txt'))
     logging.debug(f'Converting {input_file} to {output_file}...')
     with openall(output_file, 'wt') as outf:
@@ -110,7 +110,7 @@ def main():
     with Pool(args.processes) as pool:
         f = partial(process_file,
                     output_dir=args.output_dir, from_text=args.from_text,
-                    uncased=args.uncased)
+                    lower_case=args.lower)
         res = pool.map_async(f, input_files)
         res.get()
         pool.close()
