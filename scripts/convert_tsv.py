@@ -150,8 +150,7 @@ def process_file(input_file: str, output_dir: str, token_type: str,
 
     with openall(output_file, 'wt') as outf:
         input_it = parse_file(input_file)
-        fields = {field: i for i, field in
-                  enumerate(next(input_it).strip().split('\t'))}
+        fields = {field: i for i, field in enumerate(next(input_it))}
         lm_format = (output_format == 'lm')
 
         if token_type == 'text':
