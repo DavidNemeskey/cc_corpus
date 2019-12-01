@@ -85,7 +85,7 @@ class TokenExtractor:
 
 class FieldExtractor(TokenExtractor):
     """Extracts a field with the specified name."""
-    def __init__(self, field: str, int,
+    def __init__(self, field: str, 
                  fields: Dict[str, int], lower: bool = False):
         super().__init__(lower)
         try:
@@ -158,7 +158,7 @@ def process_file(input_file: str, output_dir: str, token_type: str,
         elif token_type == 'glf':
             token_extractor = GLFExtractor(fields, lower_case)
         else:
-            token_extractor = FieldExtractor(fields, lower_case)
+            token_extractor = FieldExtractor(token_type, fields, lower_case)
 
         for document in input_it:
             if lm_format:
@@ -171,7 +171,8 @@ def process_file(input_file: str, output_dir: str, token_type: str,
                     print(' '.join(tokens), file=outf)
                 if lm_format:
                     print(file=outf)
-            print(file=outf)
+            if not lm_format:
+                print(file=outf)
     logging.debug(f'Converted {input_file} to {output_file}.')
 
 
@@ -196,7 +197,8 @@ def main():
                     output_dir=args.output_dir,
                     token_type=args.token.lower(),
                     output_format=args.output_format.lower(),
-                    lower_case=args.lower)
+                    lower_case=args.lower,
+                    vocab=args.wordpiece_vocab)
         res = pool.map_async(f, input_files)
         res.get()
         pool.close()
