@@ -6,13 +6,29 @@ Code from the BERT repo (https://github.com/google-reserach/bert).
 Copied here so that the user doesn't need to install the whole package for
 wordpiece tokenization.
 """
+
+import collections
+
 class WordpieceTokenizer(object):
     """Runs WordPiece tokenization."""
 
-    def __init__(self, vocab, unk_token, max_input_chars_per_word=100):
-        self.vocab = vocab
+    def __init__(self, vocab=None, vocab_file=None,
+                 unk_token='<unk>', max_input_chars_per_word=100):
+        if vocab and vocab_file:
+            raise ValueError('Only one of vocab and vocab_file can be specified')
+        if not (vocab or vocab_file):
+            raise ValueError('One of vocab or vocab_file must be specified.')
+        self.vocab = vocab if vocab else self.load_vocab(vocab_file)
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
+
+    def load_vocab(self, vocab_file):
+        """Loads a vocabulary file into a dictionary."""
+        vocab = collections.OrderedDict()
+        with open(vocab_file, 'rt', encoding='utf-8') as reader:
+            for index, token in enumerate(map(str.strip, reader)):
+                vocab[token] = index
+        return vocab
 
     def tokenize(self, text):
         """Tokenizes a piece of text into its word pieces.

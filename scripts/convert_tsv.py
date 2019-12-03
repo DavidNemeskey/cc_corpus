@@ -127,7 +127,7 @@ class TextExtractor(TokenExtractor):
 
 def process_file(input_file: str, output_dir: str, token_type: str,
                  output_format: str, lower_case: bool = False,
-                 vocab: str = False):
+                 vocab_file: str = False):
     """
     Converts _input_file_ from tsv to the BERT input format.
 
@@ -142,9 +142,11 @@ def process_file(input_file: str, output_dir: str, token_type: str,
     """
     output_file = op.join(output_dir, op.basename(input_file).replace('tsv', 'txt'))
     logging.debug(f'Converting {input_file} to {output_file}...')
-    if vocab:
+    if vocab_file:
         wordpiece = WordpieceTokenizer(
-            vocab, '[UNK]' if output_format == 'bert' else '<unk>')
+            vocab_file=vocab_file,
+            unk_token=('[UNK]' if output_format == 'bert' else '<unk>')
+        )
     else:
         wordpiece = None
 
@@ -198,7 +200,7 @@ def main():
                     token_type=args.token.lower(),
                     output_format=args.output_format.lower(),
                     lower_case=args.lower,
-                    vocab=args.wordpiece_vocab)
+                    vocab_file=args.wordpiece_vocab)
         res = pool.map_async(f, input_files)
         res.get()
         pool.close()
