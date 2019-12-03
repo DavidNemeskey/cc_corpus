@@ -50,11 +50,10 @@ def parse_arguments():
                              'library.')
     parser.add_argument('--output-format', '-f', choices=['bert', 'lm'],
                         default='bert',
-                        help='possible output formats. Both print sentences on '
-                             'separate lines, but "bert" only puts an empty '
-                             'line after documents; "lm" after each paragraph '
-                             'as well. "lm" also starts each document with '
-                             'a <newdoc> token.')
+                        help='possible output formats. "bert" prints sentences '
+                             'on separate lines; "lm" paragraphs. Both put an '
+                             'empty line between documents, but "lm" also '
+                             'starts each document with a <newdoc> token.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -179,10 +178,12 @@ def process_file(input_file: str, output_dir: str, token_type: str,
             if lm_format:
                 print('\n<newdoc>\n', file=outf)
             for paragraph in document:
-                for sentence in paragraph:
+                for sid, sentence in enumerate(paragraph):
                     tokens = token_extractor.tokenize(sentence)
                     if wordpiece:
                         tokens = wordpiece.tokenize(' '.join(tokens))
+                    if lm_format and sid:
+                        print(' ', end='', file=outf)
                     print(' '.join(tokens), file=outf)
                 if lm_format:
                     print(file=outf)
