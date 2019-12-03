@@ -12,6 +12,7 @@ import logging
 from multiprocessing import Pool
 import os
 import os.path as op
+import re
 from typing import Dict
 
 from multiprocessing_logging import install_mp_handler
@@ -85,7 +86,7 @@ class TokenExtractor:
 
 class FieldExtractor(TokenExtractor):
     """Extracts a field with the specified name."""
-    def __init__(self, field: str, 
+    def __init__(self, field: str,
                  fields: Dict[str, int], lower: bool = False):
         super().__init__(lower)
         try:
@@ -95,7 +96,7 @@ class FieldExtractor(TokenExtractor):
 
     def tokenize(self, sentence: Sentence):
         return [self.lower(token.split('\t', self.idx + 1)[self.idx])
-                for token in sentence.content]
+                for token in sentence]
 
 
 class GLFExtractor(TokenExtractor):
@@ -106,6 +107,7 @@ class GLFExtractor(TokenExtractor):
     def __init__(self, fields: Dict[str, int], lower: bool = False):
         """:param fields: the field name -> id mapping."""
         super().__init__(lower)
+        self.tagp = re.compile(r'\[[^]]+\]')
         try:
             self.lemma_idx = fields['lemma']
             self.xpostag_idx = fields['xpostag']
@@ -113,9 +115,20 @@ class GLFExtractor(TokenExtractor):
             raise ValueError('Both the lemma and xpostag columns are required.')
 
     def tokenize(self, sentence: Sentence):
-        lemma, xpostag = token[self.lemma_idx], token[self.xpostag_idx]
-        # TODO do it, but it is not very simple
-        # TODO also: lower
+        ret = []
+        for token in sentence:
+            lemma, xpostag = token[self.lemma_idx], token[self.xpostag_idx]
+            tags = [tag.group() for tag in self.tagp.finditer(xpostag)
+                    if tag.group() == '[Nom]']
+            for i, tag in enumerate(tags):
+                if tag[1] != '/':
+                    break
+            if i == 0:
+                raise ValueError(f'No / tag for word {lemma}/{xpostag} in '
+                                 f'{" ".join(token[0] for token in sentence)}')
+                tags[i - 1] = self.lower(lemma)
+            ret.extend(tags)
+        return ret
 
 
 class TextExtractor(TokenExtractor):
