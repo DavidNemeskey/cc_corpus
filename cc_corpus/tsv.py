@@ -88,7 +88,8 @@ def parse(input: TextIO, use_headers: bool = True) -> Generator[
             if not sentence:
                 raise IllegalStateError(f'Error on line {line_no}: sentence '
                                         'starts without "text" comment.')
-            sentence.add(line)
+            if line:
+                sentence.add(line)
 
     if document:
         yield document
@@ -105,6 +106,7 @@ def parse_file(tsv_file: str, use_headers: bool = True) -> Generator[
 clean_sgp = re.compile('\[([1-3])\](?:\[Sg\]|\[S\]\[g\])')
 clean_plp = re.compile('\[([1-3])\](?:\[Pl\]|\[P\]\[l\])')
 clean_slashp = re.compile('^\[([NV])\]')
+doublep = re.compile('\[\[+')
 
 def clean_xpostag(xpostag):
     """Cleans the xpostag from errors in emMorph."""
@@ -112,4 +114,5 @@ def clean_xpostag(xpostag):
     xpostag = clean_sgp.sub('[\\1Sg]', xpostag)
     xpostag = clean_plp.sub('[\\1Pl]', xpostag)
     xpostag = clean_slashp.sub('[/\\1]', xpostag)
+    xpostag = doublep.sub('[', xpostag)
     return xpostag

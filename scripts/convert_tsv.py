@@ -17,7 +17,7 @@ from typing import Dict
 
 from multiprocessing_logging import install_mp_handler
 
-from cc_corpus.tsv import parse_file, Sentence
+from cc_corpus.tsv import clean_xpostag, parse_file, Sentence
 from cc_corpus.utils import collect_inputs, openall
 from cc_corpus.wordpiece import WordpieceTokenizer
 
@@ -108,6 +108,7 @@ class GLFExtractor(TokenExtractor):
         """:param fields: the field name -> id mapping."""
         super().__init__(lower)
         self.tagp = re.compile(r'\[[^]]+\]')
+        self.punct_tags = {'[Hyph:Dash]', '[Punct]', '[Hyph:Slash]'}
         try:
             self.lemma_idx = fields['lemma']
             self.xpostag_idx = fields['xpostag']
@@ -117,16 +118,24 @@ class GLFExtractor(TokenExtractor):
     def tokenize(self, sentence: Sentence):
         ret = []
         for token in sentence:
-            lemma, xpostag = token[self.lemma_idx], token[self.xpostag_idx]
+            fields = token.split('\t')
+            lemma = fields[self.lemma_idx]
+            xpostag = clean_xpostag(fields[self.xpostag_idx])
             tags = [tag.group() for tag in self.tagp.finditer(xpostag)
-                    if tag.group() == '[Nom]']
+                    if tag.group() != '[Nom]']
+            last_slash = -1
             for i, tag in enumerate(tags):
-                if tag[1] != '/':
+                if tag[1] != '/' and tag not in self.punct_tags:
                     break
-            if i == 0:
+                last_slash = i
+            # There should be at least one POS category-related tag
+            if last_slash == -1:
                 raise ValueError(f'No / tag for word {lemma}/{xpostag} in '
-                                 f'{" ".join(token[0] for token in sentence)}')
-                tags[i - 1] = self.lower(lemma)
+                                 f'{sentence}')
+            # Remove the . from 1. or XIII.
+            if '[_Ord/Adj]' in tags[last_slash:] and lemma.endswith('.'):
+                lemma = lemma[:-1]
+            tags[last_slash] = self.lower(lemma)
             ret.extend(tags)
         return ret
 
@@ -180,7 +189,10 @@ def process_file(input_file: str, output_dir: str, token_type: str,
                 print('\n<newdoc>\n', file=outf)
             for paragraph in document:
                 for sentence in paragraph:
-                    tokens = token_extractor.tokenize(sentence)
+                    try:
+                        tokens = token_extractor.tokenize(sentence)
+                    except:
+                        logging.exception(f'Error in sentence {sentence}')
                     if wordpiece:
                         tokens = wordpiece.tokenize(' '.join(tokens))
                     print(' '.join(tokens), file=outf)
