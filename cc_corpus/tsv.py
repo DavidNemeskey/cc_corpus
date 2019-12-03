@@ -101,3 +101,10 @@ def parse_file(tsv_file: str, use_headers: bool = True) -> Generator[
     """
     with openall(tsv_file) as inf:
         yield from parse(inf, use_headers)
+
+
+def clean_xpostag(xpostag):
+    """Cleans the xpostag from errors in emMorph."""
+    xpostag = xpostag.replace('[]', '')
+    xpostag = xpostag.replace('[3][S][g]', '[3Sg]')
+    return xpostag
