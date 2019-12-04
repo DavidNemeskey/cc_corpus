@@ -14,6 +14,7 @@ import os
 import os.path as op
 import re
 from typing import Dict
+import unicodedata
 
 from multiprocessing_logging import install_mp_handler
 
@@ -31,6 +32,10 @@ def parse_arguments():
                         help='the output directory.')
     parser.add_argument('--lower', '-l', action='store_true',
                         help='lowercase the text.')
+    parser.add_argument('--normalize', '-n',
+                        choices=['nfc', 'nfd', 'nfkc', 'nfkd'],
+                        help='normalize the text to a unicode normalization '
+                             'form.')
     parser.add_argument('--token', '-t', default='form',
                         help='value of the output tokens. Possible values '
                              'include a field name (e.g. "form", which uses '
@@ -71,11 +76,22 @@ def parse_arguments():
 
 class TokenExtractor:
     """Extracts tokens from a sentence."""
-    def __init__(self, lower: bool = False):
+    def __init__(self, lower: bool = False, norm_form: str = None):
         """
         :param lower: whether the text should be lower cased.
+        :param norm_form: the unicode normalization form.
         """
-        self.lower = (lambda t: t.lower()) if lower else (lambda t: t)
+        self.lower = lower
+        self.norm_form = partial(
+            unicodedata.normalize, norm_form) if norm_form else None
+
+    def normalize(self, text):
+        """Normalizes / lowercases _text_."""
+        if self.lower:
+            text = text.lower()
+        if self.norm_form:
+            text = self.norm_form(text)
+        return text
 
     def tokenize(self, sentence: Sentence):
         """Extracts output tokens from a sentence."""
@@ -85,16 +101,16 @@ class TokenExtractor:
 
 class FieldExtractor(TokenExtractor):
     """Extracts a field with the specified name."""
-    def __init__(self, field: str,
-                 fields: Dict[str, int], lower: bool = False):
-        super().__init__(lower)
+    def __init__(self, field: str, fields: Dict[str, int],
+                 *args, **kwargs):
+        super().__init__(*args, **kwargs)
         try:
             self.idx = fields[field]
         except KeyError:
             raise ValueError(f'Field {field} does not exist in this file.')
 
     def tokenize(self, sentence: Sentence):
-        return [self.lower(token.split('\t', self.idx + 1)[self.idx])
+        return [self.normalize(token.split('\t', self.idx + 1)[self.idx])
                 for token in sentence]
 
 
@@ -103,9 +119,9 @@ class GLFExtractor(TokenExtractor):
     Extracts the gluten-free (GLF) tokens: the lemma, some derivational
     suffixes and inflectional suffixes.
     """
-    def __init__(self, fields: Dict[str, int], lower: bool = False):
+    def __init__(self, fields: Dict[str, int], *args, **kwargs):
         """:param fields: the field name -> id mapping."""
-        super().__init__(lower)
+        super().__init__(*args, **kwargs)
         self.tagp = re.compile(r'\[[^]]+\]')
         self.punct_tags = {'[Hyph:Dash]', '[Punct]', '[Hyph:Slash]'}
         try:
@@ -134,7 +150,7 @@ class GLFExtractor(TokenExtractor):
             # Remove the . from 1. or XIII.
             if '[_Ord/Adj]' in tags[last_slash:] and lemma.endswith('.'):
                 lemma = lemma[:-1]
-            tags[last_slash] = self.lower(lemma)
+            tags[last_slash] = self.normalize(lemma)
             ret.extend(tags)
         return ret
 
@@ -143,12 +159,12 @@ class TextExtractor(TokenExtractor):
     """Extracts tokens from the # text comment."""
     def tokenize(self, sentence: Sentence):
         if sentence.comment.startswith('# text = '):
-            return self.lower(sentence.comment[9:]).split()
+            return self.normalize(sentence.comment[9:]).split()
 
 
 def process_file(input_file: str, output_dir: str, token_type: str,
                  output_format: str, lower_case: bool = False,
-                 vocab_file: str = False):
+                 norm_form: str = None, vocab_file: str = False):
     """
     Converts _input_file_ from tsv to the BERT input format.
 
@@ -159,6 +175,8 @@ def process_file(input_file: str, output_dir: str, token_type: str,
     :param token_type: the token type; see the argument description, above.
     :param output_format: see the argument description, above.
     :param lower_case: lowercase the text?
+    :param norm_form: the unicode normalization form. If ``None``, no
+                      normalization is performed.
     :param vocab: a wordpiece vocabulary file.
     """
     output_file = op.join(output_dir, op.basename(input_file).replace('tsv', 'txt'))
@@ -178,11 +196,12 @@ def process_file(input_file: str, output_dir: str, token_type: str,
         eol = '' if lm_format else '\n'
 
         if token_type == 'text':
-            token_extractor = TextExtractor(lower_case)
+            token_extractor = TextExtractor(lower_case, norm_form)
         elif token_type == 'glf':
-            token_extractor = GLFExtractor(fields, lower_case)
+            token_extractor = GLFExtractor(fields, lower_case, norm_form)
         else:
-            token_extractor = FieldExtractor(token_type, fields, lower_case)
+            token_extractor = FieldExtractor(token_type, fields,
+                                             lower_case, norm_form)
 
         for document in input_it:
             if lm_format:
@@ -227,6 +246,7 @@ def main():
                     token_type=args.token.lower(),
                     output_format=args.output_format.lower(),
                     lower_case=args.lower,
+                    norm_form=args.normalization,
                     vocab_file=args.wordpiece_vocab)
         res = pool.map_async(f, input_files)
         res.get()
