@@ -83,7 +83,7 @@ class TokenExtractor:
         """
         self.lower = lower
         self.norm_form = partial(
-            unicodedata.normalize, norm_form) if norm_form else None
+            unicodedata.normalize, norm_form.upper()) if norm_form else None
 
     def normalize(self, text):
         """Normalizes / lowercases _text_."""
@@ -246,7 +246,7 @@ def main():
                     token_type=args.token.lower(),
                     output_format=args.output_format.lower(),
                     lower_case=args.lower,
-                    norm_form=args.normalization,
+                    norm_form=args.normalize,
                     vocab_file=args.wordpiece_vocab)
         res = pool.map_async(f, input_files)
         res.get()
