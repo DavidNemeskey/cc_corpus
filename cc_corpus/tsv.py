@@ -93,7 +93,8 @@ def parse(input: TextIO, use_headers: bool = True) -> Generator[
             if not sentence:
                 raise IllegalStateError(f'Error on line {line_no}: sentence '
                                         'starts without "text" comment.')
-            sentence.add(line)
+            if line:
+                sentence.add(line)
 
     if document:
         yield document
