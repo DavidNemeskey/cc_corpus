@@ -35,9 +35,14 @@ class Unit:
     def __bool__(self):
         return bool(self.comment or self.content)
 
+    def __len__(self):
+        return sum(len(c) for c in self.content)
+
 
 class Sentence(Unit):
     """:class:`Unit` representing a sentence."""
+    def __len__(self):
+        return len(self.content)
 
 
 class Paragraph(Unit):
