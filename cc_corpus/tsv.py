@@ -44,6 +44,10 @@ class Sentence(Unit):
     def __len__(self):
         return len(self.content)
 
+    def __str__(self):
+        return (self.comment + '\n' +
+                '\n'.join(str(unit) for unit in self.content) + '\n')
+
 
 class Paragraph(Unit):
     """:class:`Unit` representing a paragraph."""
