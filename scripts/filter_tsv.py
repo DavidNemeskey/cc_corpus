@@ -96,7 +96,7 @@ def process_file(filename, input_dir, output_dir, min_len_str):
             for doc in it:
                 print(doc, file=outf)
     except:
-        logging.exception('Got an error.')
+        logging.exception(f'Got an error in file {input_file}.')
     logging.info('Finished processing file {}...'.format(filename))
     return stats
 
