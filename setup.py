@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.6.1',
+      version='1.6.2',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -79,6 +79,7 @@ setup(name='commoncrawl-downloader',
           'scripts/emtsv.py',
           'scripts/parse_log.py',
           'scripts/shuffle_tsv.py',
+          'scripts/filter_tsv.py',
       ],
       install_requires=[
           'beautifulsoup4',
