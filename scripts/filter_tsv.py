@@ -88,12 +88,16 @@ def process_file(filename, input_dir, output_dir, min_len_str):
 
     stats = Counter()
     it = parse_file(input_file, True)
+    headers = next(it)
     it = each_doc(it, stats)
     if min_len_str:
         it = filter_length(it, min_len_str, stats)
     try:
         with notempty(openall(output_file, 'wt')) as outf:
             for doc in it:
+                if headers:
+                    print('\t'.join(headers), file=outf)
+                    headers = None
                 print(doc, file=outf)
     except:
         logging.exception('Got an error.')
