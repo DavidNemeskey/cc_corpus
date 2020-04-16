@@ -9,11 +9,11 @@ import copy
 import gzip
 import inspect
 import io
-from itertools import zip_longest
+from itertools import islice, zip_longest
 import os
 import os.path as op
 import pickle
-from typing import Generator, Sequence
+from typing import Any, Generator, Iterable, Sequence, Tuple
 from urllib.parse import unquote
 
 try:
@@ -313,3 +313,16 @@ def split_into(seq: Sequence, n: int) -> Generator[Sequence, None, None]:
         end = start + chunk_size
         yield seq[int(start):int(end)]
         start = end
+
+
+def headtail(iterable: Iterable) -> Tuple[Any, Iterable]:
+    """
+    Returns the head and tail of _iterable_.
+
+    :returns: a tuple of the first element in _iterable_ and an iterator
+              to the rest.
+    :raises: `StopIteration` if _iterable_ is already depleted.
+    """
+    it = iter(iterable)
+    head = next(islice(it, 1))
+    return head, it
