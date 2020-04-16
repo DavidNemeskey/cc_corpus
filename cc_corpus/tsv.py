@@ -104,17 +104,24 @@ def parse(input: TextIO, use_headers: bool = True) -> Generator[
         yield document
 
 
-def parse_file(corpus_file: str, use_headers: bool = True) -> Generator[
+def parse_file(tsv_file: str, use_headers: bool = True) -> Generator[
         Union[List, Document], None, None]:
     """
     Same as :func:`parse`, but expects the name of a file as the first argument.
     """
-    with openall(corpus_file) as inf:
+    with openall(tsv_file) as inf:
         yield from parse(inf, use_headers)
 
+clean_sgp = re.compile('\[([1-3])\](?:\[Sg\]|\[S\]\[g\])')
+clean_plp = re.compile('\[([1-3])\](?:\[Pl\]|\[P\]\[l\])')
+clean_slashp = re.compile('^\[([NV])\]')
+doublep = re.compile('\[\[+')
 
 def clean_xpostag(xpostag):
     """Cleans the xpostag from errors in emMorph."""
     xpostag = xpostag.replace('[]', '')
-    xpostag = xpostag.replace('[3][S][g]', '[3Sg]')
+    xpostag = clean_sgp.sub('[\\1Sg]', xpostag)
+    xpostag = clean_plp.sub('[\\1Pl]', xpostag)
+    xpostag = clean_slashp.sub('[/\\1]', xpostag)
+    xpostag = doublep.sub('[', xpostag)
     return xpostag

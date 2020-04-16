@@ -10,24 +10,32 @@
           dest: "{{ github_repo_dir }}"
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
-          version: emtsv
+          version: master
       - name: initialize virtualenv with custom Python + upgrade setuptools and pip
         pip: 
             name:
               - setuptools>=40.0.0
-              - pip>=19.0.0
+              - pip>=19.2.0
             virtualenv: "{{ virtualenv_dir }}"
-            virtualenv_python: python3
+            # Note: need the full path: https://github.com/ansible/ansible/issues/52275
+            virtualenv_command: "{{ path }}/python3 -m venv"
         environment:
-          PATH: "/home/ndavid/anaconda3/bin:{{ old_path }}"
+            PATH: "{{ path }}:{{ old_path }}"
         when: path is defined
-      - name: initialize virtualenv + upgrade setuptools and pip
-        pip: 
-            name:
-              - setuptools>=40.0.0
-              - pip>=19.0.0
-            virtualenv: "{{ virtualenv_dir }}"
-            virtualenv_python: python3
+      - name: handle the case when path is undefined
+        block:
+          - name: initialize virtualenv + upgrade setuptools and pip
+            pip: 
+                name:
+                  - setuptools>=40.0.0
+                  - pip>=19.0.0
+                virtualenv: "{{ virtualenv_dir }}"
+                # No full path: we can only use virtualenv, which is unsafe
+                virtualenv_python: python3
+          - name: warn the user that using virtualenv is not safe
+            fail:
+              msg: 'Using virtualenv is not safe w.r.t. updates to the Python version. Specify the path to use the safer venv module.'
+            ignore_errors: yes
         when: path is undefined
       - name: install tmuxp
         pip: 
