@@ -30,9 +30,9 @@ class Unit:
         """
         yield from self.content
 
-    def accumulate(self):
-        """Accumulates the content from all units into an iterable of sentences."""
-        return chain.from_iterable(c.accumulate() for c in self.content)
+    def sentences(self):
+        """Accumulates the sentences from all units into an iterable."""
+        return chain.from_iterable(c.sentences() for c in self.content)
 
     def __str__(self):
         return self.comment + '\n' + '\n'.join(str(unit) for unit in self.content)
@@ -49,7 +49,7 @@ class Sentence(Unit):
     def __len__(self):
         return len(self.content)
 
-    def accumulate(self):
+    def sentences(self):
         """Returns :attr:`content`."""
         return [self.content]
 
@@ -121,10 +121,11 @@ def parse_file(tsv_file: str, use_headers: bool = True) -> Generator[
     with openall(tsv_file) as inf:
         yield from parse(inf, use_headers)
 
-clean_sgp = re.compile('\[([1-3])\](?:\[Sg\]|\[S\]\[g\])')
-clean_plp = re.compile('\[([1-3])\](?:\[Pl\]|\[P\]\[l\])')
-clean_slashp = re.compile('^\[([NV])\]')
-doublep = re.compile('\[\[+')
+
+clean_sgp = re.compile(r'\[([1-3])\](?:\[Sg\]|\[S\]\[g\])')
+clean_plp = re.compile(r'\[([1-3])\](?:\[Pl\]|\[P\]\[l\])')
+clean_slashp = re.compile(r'^\[([NV])\]')
+doublep = re.compile(r'\[\[+')
 
 def clean_xpostag(xpostag):
     """Cleans the xpostag from errors in emMorph."""
