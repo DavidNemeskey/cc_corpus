@@ -56,9 +56,16 @@ def process_file(file_name: str, column: Union[int, str], n: int, lower: bool):
     fn = str.lower if lower else lambda s: s
     if isinstance(column, str):
         column = header.index(column)
-    for doc in it:
-        for token in doc.tokens():
-            c[fn(token[column])] += 1
+    for doci, doc in enumerate(it, 1):
+        for ti, token in enumerate(doc.tokens(), 1):
+            try:
+                c[fn(token[column])] += 1
+            except Exception as e:
+                logging.exception(f'Error in token {ti} in document {doci} '
+                                  f'({doc.comment}) in file {file_name}.')
+                # We tolerate IndexErrors, which step from crappy tokenization
+                if not isinstance(e, IndexError):
+                    raise
     logging.debug(f'Processed {file_name}; found {len(c)} types.')
     return c
 
@@ -77,14 +84,16 @@ def main():
     files = collect_inputs(args.inputs)
     logging.info(f'Scheduled {len(files)} files for finding top {args.n} '
                  f'{"lower cased " if args.lower else ""} values in column '
-                 '{args.column}...')
+                 f'{args.column}...')
 
     with Pool(args.processes) as p:
         c_all = Counter()
-        f = partial(process_file, column=args.column, n=args.n)
+        f = partial(process_file, column=args.column,
+                    n=args.n, lower=args.lower)
         for c in p.imap_unordered(f, files):
             c_all.update(c)
-        for key, freq in c_all.most_common(args.n):
+        for key, freq in sorted(c_all.most_common(args.n),
+                                key=lambda kv: (-kv[1], kv[0])):
             print(f'{key}\t{freq}')
 
 
