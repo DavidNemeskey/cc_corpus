@@ -34,6 +34,14 @@ class Unit:
         """Accumulates the sentences from all units into an iterable."""
         return chain.from_iterable(c.sentences() for c in self.content)
 
+    def tokens(self):
+        """
+        Accumulates the tokens from all units into an iterable. A token is a
+        row in the tsv, split along tabs.
+        """
+        for row in chain.from_iterable(self.sentences()):
+            yield row.split('\t')
+
     def __str__(self):
         return self.comment + '\n' + '\n'.join(str(unit) for unit in self.content)
 
