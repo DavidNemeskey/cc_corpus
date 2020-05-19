@@ -1,8 +1,8 @@
 ---
 
 # Global variables used across roles
-github_repo_dir: "~/commoncrawl_downloader2"
+github_repo_dir: "~/cc_corpus"
 github_key_file: "~/.ssh/id_rsa"
-virtualenv_dir: "~/venvs/cc_downloader_env"
+virtualenv_dir: "~/venvs/cc_corpus_env"
 
 processes: 6

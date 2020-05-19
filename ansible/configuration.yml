@@ -6,7 +6,7 @@
     - old_path: "{{ ansible_env.PATH }}"
   tasks:
       - git:
-          repo: git@github.com:DavidNemeskey/commoncrawl-downloader2.git
+          repo: git@github.com:DavidNemeskey/cc_corpus.git
           dest: "{{ github_repo_dir }}"
           key_file: "{{ github_key_file }}"
           accept_hostkey: yes
