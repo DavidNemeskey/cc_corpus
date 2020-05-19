@@ -3,6 +3,7 @@
 
 """Contains code that works with the tsv format output by emtsv."""
 
+from itertools import chain
 import re
 from typing import Generator, List, TextIO, Union
 
@@ -29,6 +30,10 @@ class Unit:
         """
         yield from self.content
 
+    def accumulate(self):
+        """Accumulates the content from all units into an iterable of sentences."""
+        return chain.from_iterable(c.accumulate() for c in self.content)
+
     def __str__(self):
         return self.comment + '\n' + '\n'.join(str(unit) for unit in self.content)
 
@@ -43,6 +48,10 @@ class Sentence(Unit):
     """:class:`Unit` representing a sentence."""
     def __len__(self):
         return len(self.content)
+
+    def accumulate(self):
+        """Returns :attr:`content`."""
+        return [self.content]
 
     def __str__(self):
         return (self.comment + '\n' +
