@@ -81,6 +81,7 @@ setup(name='commoncrawl-downloader',
           'scripts/shuffle_tsv.py',
           'scripts/convert_tsv.py',
           'scripts/sentencepiece_to_bert.py',
+          'scripts/top_n_conll.py',
       ],
       install_requires=[
           'beautifulsoup4',
