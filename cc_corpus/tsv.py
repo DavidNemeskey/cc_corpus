@@ -126,8 +126,12 @@ def parse_file(tsv_file: str, use_headers: bool = True) -> Generator[
     """
     Same as :func:`parse`, but expects the name of a file as the first argument.
     """
-    with openall(tsv_file) as inf:
-        yield from parse(inf, use_headers)
+    try:
+        with openall(tsv_file) as inf:
+            yield from parse(inf, use_headers)
+    except IllegalStateError as ise:
+        ise.args = f'{ise.args[0][:6]}in file {tsv_file} {ise.args[0][6:]}',
+        raise ise
 
 
 clean_sgp = re.compile(r'\[([1-3])\](?:\[Sg\]|\[S\]\[g\])')

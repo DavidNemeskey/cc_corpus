@@ -96,6 +96,8 @@ def main():
                                 key=lambda kv: (-kv[1], kv[0])):
             print(f'{key}\t{freq}')
 
+    logging.info('Done.')
+
 
 if __name__ == '__main__':
     main()
