@@ -3,6 +3,7 @@
 
 """Contains code that works with the tsv format output by emtsv."""
 
+from itertools import chain
 import re
 from typing import Generator, List, TextIO, Union
 
@@ -29,6 +30,18 @@ class Unit:
         """
         yield from self.content
 
+    def sentences(self):
+        """Accumulates the sentences from all units into an iterable."""
+        return chain.from_iterable(c.sentences() for c in self.content)
+
+    def tokens(self):
+        """
+        Accumulates the tokens from all units into an iterable. A token is a
+        row in the tsv, split along tabs.
+        """
+        for row in chain.from_iterable(self.sentences()):
+            yield row.split('\t')
+
     def __str__(self):
         return self.comment + '\n' + '\n'.join(str(unit) for unit in self.content)
 
@@ -43,6 +56,10 @@ class Sentence(Unit):
     """:class:`Unit` representing a sentence."""
     def __len__(self):
         return len(self.content)
+
+    def sentences(self):
+        """Returns :attr:`content`."""
+        return [self.content]
 
     def __str__(self):
         return (self.comment + '\n' +
@@ -109,13 +126,18 @@ def parse_file(tsv_file: str, use_headers: bool = True) -> Generator[
     """
     Same as :func:`parse`, but expects the name of a file as the first argument.
     """
-    with openall(tsv_file) as inf:
-        yield from parse(inf, use_headers)
+    try:
+        with openall(tsv_file) as inf:
+            yield from parse(inf, use_headers)
+    except IllegalStateError as ise:
+        ise.args = f'{ise.args[0][:6]}in file {tsv_file} {ise.args[0][6:]}',
+        raise ise
 
-clean_sgp = re.compile('\[([1-3])\](?:\[Sg\]|\[S\]\[g\])')
-clean_plp = re.compile('\[([1-3])\](?:\[Pl\]|\[P\]\[l\])')
-clean_slashp = re.compile('^\[([NV])\]')
-doublep = re.compile('\[\[+')
+
+clean_sgp = re.compile(r'\[([1-3])\](?:\[Sg\]|\[S\]\[g\])')
+clean_plp = re.compile(r'\[([1-3])\](?:\[Pl\]|\[P\]\[l\])')
+clean_slashp = re.compile(r'^\[([NV])\]')
+doublep = re.compile(r'\[\[+')
 
 def clean_xpostag(xpostag):
     """Cleans the xpostag from errors in emMorph."""
