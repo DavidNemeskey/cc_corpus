@@ -106,7 +106,7 @@ class IndexWarcReader:
 
         print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" ' \
               'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n' \
-              '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n'
+              '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n' \
               '</response>\n</meta>\n{10}\n</doc>\n\n\n'.format(
                   index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
@@ -161,7 +161,7 @@ def parse_arguments():
                         help='the directory with the WARC segments')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory')
-    parser.add_argument('-b', '--boilerplate-language', default='Hungarian',
+    parser.add_argument('--boilerplate-language', '-b', default='Hungarian',
                         help='boilerplate removal language (default: Hungarian)')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
@@ -201,6 +201,7 @@ def main():
         logging.info('Acquiring stopword list for {}...'.format(
             args.boilerplate_language))
         stoplist = justext.get_stoplist(args.boilerplate_language)
+        logging.info('Number of stopwords: {}'.format(len(stoplist)))
     except ValueError as e:
         logging.error(
             'Invalid stopword language {}.'.format(args.boilerplate_language))
@@ -217,6 +218,8 @@ def main():
 
     with Pool(args.processes) as pool:
         pool.map(fn, index_files)
+
+    logging.info('Done.')
 
 
 if __name__ == '__main__':
