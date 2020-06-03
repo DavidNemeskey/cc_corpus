@@ -105,7 +105,7 @@ def main():
             aggr_stats += stats
 
     if not os.path.isdir(args.output_dir):
-        os.mkdir(args.output_dir)
+        os.makedirs(args.output_dir)
     write_statistics(aggr_stats, args.output_dir)
 
 
