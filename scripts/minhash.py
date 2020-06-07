@@ -131,7 +131,7 @@ def main():
         with Pool(args.processes) as pool:
             minhash_fun = minhash_ps if args.unit == 'p' else minhash_docs
             f = partial(minhash_fun, permutations=args.permutations, n=args.n)
-            for input_file, results in pool.imap(f, files):
+            for input_file, results in pool.imap_unordered(f, files):
                 logging.debug('Got results for {}: {}'.format(
                     input_file, len(results['minhash'])))
                 writer.write_results(input_file, results)
