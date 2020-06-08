@@ -21,7 +21,7 @@ from multiprocessing_logging import install_mp_handler
 from tqdm import tqdm
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import collect_inputs, consume
+from cc_corpus.utils import collect_inputs, consume, openall
 
 
 # tqdm to print the progress bar to stdout. This helps keeping the log clean.
@@ -64,7 +64,7 @@ def parse_arguments():
 def reparse(input_file: str, output_dir: str,
             attrs: bool, meta: bool, content: bool, **meta_fields: bool):
     logging.debug(f'Reparsing file {input_file}...')
-    with open(op.join(output_dir, op.basename(input_file)), 'wt') as outf:
+    with openall(op.join(output_dir, op.basename(input_file)), 'wt') as outf:
         for doc in parse_file(input_file, attrs, meta, content, **meta_fields):
             print(doc, file=outf)
     logging.debug(f'Reparsed file {input_file}.')
