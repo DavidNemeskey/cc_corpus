@@ -63,9 +63,11 @@ def parse_arguments():
 
 def reparse(input_file: str, output_dir: str,
             attrs: bool, meta: bool, content: bool, **meta_fields: bool):
+    logging.debug(f'Reparsing file {input_file}...')
     with open(op.join(output_dir, op.basename(input_file)), 'wt') as outf:
         for doc in parse_file(input_file, attrs, meta, content, **meta_fields):
             print(doc, file=outf)
+    logging.debug(f'Reparsed file {input_file}.')
 
 
 def main():
@@ -89,7 +91,7 @@ def main():
                     attrs=args.attrs, meta=args.meta, content=args.content,
                     meta_fields={field: True for field in args.meta_fields})
         consume(otqdm(pool.imap_unordered(f, files),
-                desc=f'Reparsing corpus files...'))
+                desc=f'Reparsing corpus files...', total=len(files)))
 
         pool.close()
         pool.join()
