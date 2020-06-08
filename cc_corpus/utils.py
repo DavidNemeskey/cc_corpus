@@ -5,7 +5,7 @@
 
 from argparse import ArgumentTypeError
 import bz2
-from collections import deque
+import collections
 import copy
 import gzip
 import inspect
@@ -14,7 +14,7 @@ from itertools import islice, zip_longest
 import os
 import os.path as op
 import pickle
-from typing import Any, Generator, Iterable, Sequence, Tuple
+from typing import Any, Generator, Iterable, Iterator, Sequence, Tuple
 from urllib.parse import unquote
 
 try:
@@ -329,6 +329,6 @@ def headtail(iterable: Iterable) -> Tuple[Any, Iterable]:
     return head, it
 
 
-def consume(iterable: Iterable):
+def consume(iterator: Iterator):
     """Consumes _iterable_."""
     collections.deque(iterator, maxlen=0)
