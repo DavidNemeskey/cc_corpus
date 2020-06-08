@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.6.8',
+      version='1.7.0',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -82,6 +82,7 @@ setup(name='commoncrawl-downloader',
           'scripts/convert_tsv.py',
           'scripts/sentencepiece_to_bert.py',
           'scripts/top_n_conll.py',
+          'scripts/reparse_documents.py',
       ],
       install_requires=[
           'beautifulsoup4',
@@ -110,6 +111,8 @@ setup(name='commoncrawl-downloader',
           'warc @ git+git://github.com/erroneousboat/warc3.git#egg=warc',
           # Type hints for Python < 3.5
           'typing',
+          # A progress bar
+          'tqdm',
       ],
       # zip_safe=False,
       use_2to3=False)
