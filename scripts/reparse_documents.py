@@ -42,6 +42,7 @@ def parse_arguments():
     parser.add_argument('--content', '-c', action='store_true',
                         help='include the textual content in the output.')
     parser.add_argument('--meta-field', '-f', action='append', default=[],
+                        dest='meta_fields',
                         help='include the specified meta field in the output. '
                              'Takes precedence over --meta/-m.')
     parser.add_argument('--processes', '-P', type=int, default=1,
