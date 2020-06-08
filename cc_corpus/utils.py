@@ -5,6 +5,7 @@
 
 from argparse import ArgumentTypeError
 import bz2
+from collections import deque
 import copy
 import gzip
 import inspect
@@ -326,3 +327,8 @@ def headtail(iterable: Iterable) -> Tuple[Any, Iterable]:
     it = iter(iterable)
     head = next(islice(it, 1))
     return head, it
+
+
+def consume(iterable: Iterable):
+    """Consumes _iterable_."""
+    collections.deque(iterator, maxlen=0)
