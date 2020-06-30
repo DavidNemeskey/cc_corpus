@@ -30,7 +30,7 @@ def parse_arguments():
                         help='the number of [unusedXX] tokens. '
                              'The default is 1000 for bert.')
     args = parser.parse_args()
-    if not args.unused_tokens:
+    if args.unused_tokens is None:
         args.unused_tokens = 1000 if args.tag_set == 'bert' else 0
     return args
 
