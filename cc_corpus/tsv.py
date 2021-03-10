@@ -30,6 +30,9 @@ class Unit:
         """
         yield from self.content
 
+    def __setitem__(self, index, content):
+        self.content[index] = content
+
     def sentences(self):
         """Accumulates the sentences from all units into an iterable."""
         return chain.from_iterable(c.sentences() for c in self.content)

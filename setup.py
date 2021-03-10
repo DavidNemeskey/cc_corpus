@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.7.1',
+      version='1.7.2',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -83,6 +83,7 @@ setup(name='commoncrawl-downloader',
           'scripts/sentencepiece_to_bert.py',
           'scripts/top_n_conll.py',
           'scripts/reparse_documents.py',
+          'scripts/fix_corpus.py',
       ],
       install_requires=[
           'beautifulsoup4',
@@ -104,8 +105,8 @@ setup(name='commoncrawl-downloader',
           'simplejson',
           # Easier TLD extraction
           'tldextract',
-          # Language identification
-          'cld2-cffi', 'langid',
+          # Language identification -- cld2 master doesn't compile ATM
+          'cld2-cffi @ git+https://github.com/GregBowyer/cld2-cffi.git@d048c5fa98066bdb130f1c7e52641a0645aef5ac', 'langid',
           # WARC 3 library
           # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
           'warc @ git+git://github.com/erroneousboat/warc3.git#egg=warc',
