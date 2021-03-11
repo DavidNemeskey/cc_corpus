@@ -15,17 +15,11 @@ import logging
 from multiprocessing import Pool
 import os
 import os.path as op
-import sys
 
 from multiprocessing_logging import install_mp_handler
-from tqdm import tqdm
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import collect_inputs, consume, openall
-
-
-# tqdm to print the progress bar to stdout. This helps keeping the log clean.
-otqdm = partial(tqdm, file=sys.stdout)
+from cc_corpus.utils import collect_inputs, consume, openall, otqdm
 
 
 def parse_arguments():
@@ -91,7 +85,7 @@ def main():
                     attrs=args.attrs, meta=args.meta, content=args.content,
                     meta_fields={field: True for field in args.meta_fields})
         consume(otqdm(pool.imap_unordered(f, files),
-                desc=f'Reparsing corpus files...', total=len(files)))
+                desc='Reparsing corpus files...', total=len(files)))
 
         pool.close()
         pool.join()

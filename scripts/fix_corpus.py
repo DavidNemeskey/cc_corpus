@@ -21,7 +21,7 @@ import re
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.tsv import parse_file
-from cc_corpus.utils import headtail, openall, notempty
+from cc_corpus.utils import headtail, openall, notempty, otqdm
 
 
 def parse_arguments():
@@ -136,7 +136,7 @@ def main():
         fn = partial(process_file, input_dir=args.input_dir,
                      output_dir=args.output_dir)
         stats = Counter()
-        for sub_stats in pool.imap_unordered(fn, files):
+        for sub_stats in otqdm(pool.imap_unordered(fn, files), total=len(files)):
             stats.update(sub_stats)
         logging.info('Statistics: {}'.format(stats))
         pool.close()

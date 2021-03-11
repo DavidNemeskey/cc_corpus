@@ -7,6 +7,7 @@ from argparse import ArgumentTypeError
 import bz2
 import collections
 import copy
+from functools import partial
 import gzip
 import inspect
 import io
@@ -14,8 +15,11 @@ from itertools import islice, zip_longest
 import os
 import os.path as op
 import pickle
+import sys
 from typing import Any, Generator, Iterable, Iterator, Sequence, Tuple
 from urllib.parse import unquote
+
+from tqdm import tqdm
 
 try:
     import idzip
@@ -332,3 +336,7 @@ def headtail(iterable: Iterable) -> Tuple[Any, Iterable]:
 def consume(iterator: Iterator):
     """Consumes _iterable_."""
     collections.deque(iterator, maxlen=0)
+
+
+# tqdm to print the progress bar to stdout. This helps keeping the log clean.
+otqdm = partial(tqdm, file=sys.stdout)
