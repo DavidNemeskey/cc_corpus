@@ -19,7 +19,7 @@ import unicodedata
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.tsv import clean_xpostag, parse_file, Sentence
-from cc_corpus.utils import collect_inputs, openall
+from cc_corpus.utils import collect_inputs, headtail, openall
 from cc_corpus.wordpiece import WordpieceTokenizer
 
 
@@ -53,12 +53,18 @@ def parse_arguments():
                              'word-based LMs might benefit from this step. '
                              'Note that this option requires the transformers '
                              'library.')
-    parser.add_argument('--output-format', '-f', choices=['bert', 'lm'],
+    parser.add_argument('--output-format', '-f',
+                        choices=['bert', 'lm', 'fasttext'],
                         default='bert',
-                        help='possible output formats. "bert" prints sentences '
-                             'on separate lines; "lm" paragraphs. Both put an '
-                             'empty line between documents, but "lm" also '
-                             'starts each document with a <newdoc> token.')
+                        help='possible output formats. "bert" prints '
+                             'sentences on separate lines, "lm" paragraphs '
+                             'and "fasttext" documents. "bert" and "lm" '
+                             'put an empty line between documents, but "lm" '
+                             'also starts each document with a <newdoc> '
+                             'token.')
+    parser.add_argument('--exclude-headers', '-x', action='store_true',
+                        help='exclude header paragraphs (whose name/id ends '
+                             'in -h[1-4].')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -164,7 +170,8 @@ class TextExtractor(TokenExtractor):
 
 def process_file(input_file: str, output_dir: str, token_type: str,
                  output_format: str, lower_case: bool = False,
-                 norm_form: str = None, vocab_file: str = False):
+                 norm_form: str = None, vocab_file: str = False,
+                 exclude_headers: bool = False):
     """
     Converts _input_file_ from tsv to the BERT input format.
 
@@ -178,6 +185,8 @@ def process_file(input_file: str, output_dir: str, token_type: str,
     :param norm_form: the unicode normalization form. If ``None``, no
                       normalization is performed.
     :param vocab: a wordpiece vocabulary file.
+    :param exclude headers: drop all paragraphs whose name/id ends with
+                            ``-h[1..4]``.
     """
     output_file = op.join(output_dir, op.basename(input_file).replace('tsv', 'txt'))
     logging.debug(f'Converting {input_file} to {output_file}...')
@@ -190,10 +199,18 @@ def process_file(input_file: str, output_dir: str, token_type: str,
         wordpiece = None
 
     with openall(output_file, 'wt') as outf:
-        input_it = parse_file(input_file)
-        fields = {field: i for i, field in enumerate(next(input_it))}
+        logging.info(f'Opening output file {output_file}...')
+        header, input_it = headtail(parse_file(input_file))
+        fields = {field: i for i, field in enumerate(header)}
+        # TODO later refactor this crap into proper conversion classes
         lm_format = (output_format == 'lm')
-        eol = '' if lm_format else '\n'
+        eos = '\n' if output_format == 'bert' else ''
+        eop = '\n' if lm_format else ''
+        if exclude_headers:
+            headerp = re.compile(r'-h\d+$')
+            p_filter = lambda p: not headerp.search(p.comment)
+        else:
+            p_filter = lambda p: True
 
         if token_type == 'text':
             token_extractor = TextExtractor(lower_case, norm_form)
@@ -206,7 +223,9 @@ def process_file(input_file: str, output_dir: str, token_type: str,
         for document in input_it:
             if lm_format:
                 print('\n<newdoc>\n', file=outf)
-            for paragraph in document:
+            for pid, paragraph in enumerate(filter(p_filter, document)):
+                if eos == '' and eop == '' and pid:
+                    print(' ', end='', file=outf)
                 for sid, sentence in enumerate(paragraph):
                     try:
                         tokens = token_extractor.tokenize(sentence)
@@ -214,11 +233,11 @@ def process_file(input_file: str, output_dir: str, token_type: str,
                         logging.exception(f'Error in sentence {sentence}')
                     if wordpiece:
                         tokens = wordpiece.tokenize(' '.join(tokens))
-                    if lm_format and sid:
+                    if eos == '' and sid:
                         print(' ', end='', file=outf)
-                    print(' '.join(tokens), end=eol, file=outf)
-                if lm_format:
-                    print(file=outf)
+                    print(' '.join(tokens), end=eos, file=outf)
+                print(eop, end='', file=outf)
+            # Here the newline is already produced by <newdoc>
             if not lm_format:
                 print(file=outf)
     logging.debug(f'Converted {input_file} to {output_file}.')
@@ -247,7 +266,8 @@ def main():
                     output_format=args.output_format.lower(),
                     lower_case=args.lower,
                     norm_form=args.normalize,
-                    vocab_file=args.wordpiece_vocab)
+                    vocab_file=args.wordpiece_vocab,
+                    exclude_headers=args.exclude_headers)
         res = pool.map_async(f, input_files)
         res.get()
         pool.close()
