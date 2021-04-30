@@ -10,6 +10,12 @@ from typing import Generator, List, TextIO, Union
 from cc_corpus.utils import IllegalStateError, openall
 
 
+newdocp = re.compile('^# newdoc id = ')
+newparp = re.compile('^# newpar id = ')
+textp = re.compile('^# text = ')
+commentp = re.compile('^# ')
+
+
 class Unit:
     """
     A unit of text structure: a sentence, paragraph or document. It consists
@@ -92,11 +98,6 @@ def parse(input: TextIO, use_headers: bool = True) -> Generator[
     - which contains :class:`Paragraph`s,
     - which, in turn, contains :class:`Sentence`s.
     """
-    newdocp = re.compile('^# newdoc id = ')
-    newparp = re.compile('^# newpar id = ')
-    textp = re.compile('^# text = ')
-    commentp = re.compile('^# ')
-
     if use_headers:
         yield input.readline().rstrip('\n').split('\t')
 
