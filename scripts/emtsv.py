@@ -2,12 +2,9 @@
 # -*- coding: utf-8, vim: expandtab:ts=4 -*-
 
 """
-Analyzes the corpus with `emtsv <https://github.com/dlt-rilmta/emtsv>`. For now,
-uses the default REST client built into
-`xtsv <https://github.com/dlt-rilmta/xtsv>`, starting as many servers as there
-are processes to achieve concurrency. Note that this might require a huge
-amount of memory; however, the basic stuff (tokenization, morphological analysis
-and disambiguation) should not cause any problems.
+Analyzes the corpus with `emtsv <https://github.com/nytud/emtsv>`. It uses
+the emtsv REST endpoint provided by an emtsv server running either
+locally or remotely. The easiest way to set up one is to use the Docker image.
 """
 
 from argparse import ArgumentParser, ArgumentTypeError
@@ -19,9 +16,10 @@ import os
 import os.path as op
 import re
 import sys
-from typing import Any, Dict, Generator, List, Tuple
+from typing import Generator, Tuple
 
 from multiprocessing_logging import install_mp_handler
+import requests
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.utils import collect_inputs, ispunct, openall
@@ -40,9 +38,8 @@ def parse_arguments():
                         help='the files/directories of files to analyze.')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory.')
-    parser.add_argument('--emtsv-dir', '-e', required=True,
-                        help='the emtsv installation directory. Why it isn\'t '
-                             'a proper Python package is beyond me.')
+    parser.add_argument('--emtsv-url', '-e', required=True,
+                        help='the URL to the emtsv REST endpoint.')
     parser.add_argument('--tasks', '-t', default='morph,pos',
                         help='the analyzer tasks to execute. The default is '
                              'morph,pos. Note that the initial tok task is '
@@ -72,47 +69,10 @@ def parse_arguments():
     return args
 
 
-# The initiated emtsv tools (modules). An :module:`xtsv` detail.
-# Initialized in :func:`start_emtsv`.
-inited_tools = None  # type: Dict[str, Any]
-# A list of the module used (same as --tasks, split)
-used_tools = None  # type: List[str]
 # Regex to extract a sentence from quntoken's output
 senp = re.compile(r'<s>(.+?)</s>', re.S)
 # Regex to enumerate the XML tags from the sentence in quntoken's output
 tagp = re.compile(r'<(ws?|c)>(.+?)</\1>', re.S)
-
-
-def start_emtsv(emtsv_dir: str, tasks: str):
-    """
-    Starts the emtsv pipeline with the specified parameters and sets up the
-    environment.
-
-    :param emtsv_dir: the directory of emtsv repo. Yes, I know: this is
-                      ridiculous. If you want to provide an API, do it in a
-                      Python package!
-    :param tasks: the tasks to run. Module names separated by commas.
-    """
-    global inited_tools, used_tools
-    # For the emtsv import. Pathetic...
-    sys.path.insert(1, emtsv_dir)
-    # from __init__ import init_everything, jnius_config, tools, presets
-    from __init__ import init_everything, tools, presets
-
-    # jnius_config.classpath_show_warning = False  # Suppress warning.
-    if len(tasks) > 0:
-        used_tools = tasks.split(',')
-        if len(used_tools) == 1 and used_tools[0] in presets:
-            # Resolve presets to module names to init only the needed modules...
-            used_tools = presets[used_tools[0]]
-
-        inited_tools = init_everything({k: v for k, v in tools.items() if k in set(used_tools)})
-    else:
-        inited_tools = init_everything(tools)
-
-    logging.getLogger('xtsv').setLevel(logging.WARNING)
-
-
 def analyze_file_stats(input_file: str, output_file: str):
     import cProfile
     cProfile.runctx('analyze_file(input_file, output_file)',
@@ -184,44 +144,36 @@ class XtsvFilter(logging.Filter):
 
 
 def analyze_tsv_file(input_file: str, output_file: str,
-                     max_sentence_length: int = sys.maxsize):
+                     emtsv_url: str, max_sentence_length: int = sys.maxsize):
     logging.info('Analyzing tsv {}...'.format(input_file))
-    from __init__ import build_pipeline
-
-    # Install xtsv warning & error logging filter, so that we know where the
-    # problem happens
-    xtsv_filter = XtsvFilter()
-    logging.getLogger().handlers[0].addFilter(xtsv_filter)
-    # So that we know that everything is filtered
-    assert len(logging.getLogger().handlers) == 1
 
     lemma_col = None
     try:
         with openall(input_file) as inf, openall(output_file, 'wt') as outf:
-            xtsv_filter.set(input_file, '<?>', '<?>')
-            last_prog = build_pipeline(
-                inf, used_tools, inited_tools, {}, True)
-            for rline in last_prog:
-                outf.write(rline)
-                # Try to identify the lemma column
-                if lemma_col is None:
-                    try:
-                        lemma_col = rline.rstrip('\n').split('\t').index('lemma')
-                    except ValueError:
-                        pass
-                break
-            for rline in last_prog:
+            r = requests.post(emtsv_url, files={'file': inf})
+            header, _, data = r.text.partition('\n')
+            if header:
+                print(header, file=outf)
+                # Sometimes the lemma column is empty. In such cases, we
+                # double the form as the lemma. In order to do that, we need
+                # to find which column is the lemma...
+                try:
+                    lemma_col = header.rstrip().split('\t').index('lemma')
+                except ValueError:
+                    pass
+
+            for line in data.split('\n'):
                 # The other part of the no-lemma handling code
                 if lemma_col:
-                    fields = rline.rstrip('\n').split('\t')
+                    fields = line.rstrip('\r').split('\t')
                     if len(fields) > 1 and not fields[lemma_col]:
                         fields[lemma_col] = fields[0]  # form
                         print('\t'.join(fields), file=outf)
                     else:
                         # Marginally faster without the join
-                        outf.write(rline)
+                        print(line, file=outf)
                 else:
-                    outf.write(rline)
+                    print(line, file=outf)
         logging.info('Finished {}.'.format(input_file))
     except:
         logging.exception('Error in file {}!'.format(input_file))
@@ -348,8 +300,7 @@ def main():
     output_files = [op.join(args.output_dir, output_file_name(f, args.extension))
                     for f in input_files]
 
-    with Pool(args.processes, initializer=start_emtsv,
-              initargs=[args.emtsv_dir, args.tasks]) as pool:
+    with Pool(args.processes) as pool:
 
         f = partial(
             analyze_file if args.file_format == 'text' else analyze_tsv_file,
