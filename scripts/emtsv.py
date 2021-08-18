@@ -5,6 +5,14 @@
 Analyzes the corpus with `emtsv <https://github.com/nytud/emtsv>`. It uses
 the emtsv REST endpoint provided by an emtsv server running either
 locally or remotely. The easiest way to set up one is to use the Docker image.
+
+The script can handle both files in the "corpus format" and tsv files; the
+latter are expected to have headers and at the first column be called "form".
+
+.. note::
+
+    A file is sent to emtsv in a single request, which means that the returned
+    parse might take up a lot of memory.
 """
 
 from argparse import ArgumentParser, ArgumentTypeError
@@ -43,7 +51,8 @@ def parse_arguments():
     parser.add_argument('--tasks', '-t', default='morph,pos',
                         help='the analyzer tasks to execute. The default is '
                              'morph,pos. Note that the initial tok task is '
-                             'always included implicitly.')
+                             'always included implicitly for text files, but '
+                             'not for tsv (see -f).')
     parser.add_argument('--extension', '-x', type=parse_extension, default=None,
                         help='the extension of the tsv files. The default is '
                              'to keep the original filename. The format should '
@@ -79,70 +88,6 @@ def analyze_file_stats(input_file: str, output_file: str):
                     globals(), locals(), output_file + '.stats')
 
 
-def get_sentences(xml_tokens: str) -> Generator[Tuple[int, str, str], None, None]:
-    """
-    Parses the XML output of quntoken and yields the sentences one-by-one.
-    More specifically, the following tuple is yielded:
-
-    1. the length of the sentence;
-    2. the sentence in tsv format, to be forwarded to emtsv;
-    3. the sentence in text format, to be included in the output file as-is.
-
-    .. note::
-
-        Since quntoken returns all punctuation marks as separate tokens,
-        constructs such as ``!!!!!!!!`` would cause problems in PurePos and
-        beyond. Therefore, this function allows at most 3 punctuation tokens
-        next to each other; the surplus is dropped.
-
-    :param xml_tokens: the XML output of quntoken.
-    """
-    for sen in senp.finditer(xml_tokens):
-        tsv_tokens, text_tokens = ['form'], []
-        num_puncts = 0
-        for m in tagp.finditer(sen.group(1)):
-            if m.group(1) == 'ws':
-                # To get rid of newlines, etc. in the text version
-                text_tokens.append(' ')
-            else:
-                text_tokens.append(m.group(2))
-                if ispunct(m.group(2)):
-                    if num_puncts == 3:
-                        continue
-                    num_puncts += 1
-                else:
-                    num_puncts = 0
-                tsv_tokens.append(m.group(2))
-        yield len(tsv_tokens), '\n'.join(tsv_tokens) + '\n\n', ''.join(text_tokens)
-
-
-class XtsvFilter(logging.Filter):
-    """
-    Consumes all log messages issued by xtsv and reissues them with information
-    that allows the localization of the problem.
-    """
-    def __init__(self):
-        super().__init__(name='xtsv')
-        self.file = self.url = self.sent = None
-
-    def filter(self, record: logging.LogRecord):
-        """Consumes xtsv messages and lets all others pass through."""
-        if super().filter(record):
-            logging.log(record.levelno,
-                        f'xtsv {record.levelname.lower()} in file {self.file}, '
-                        f'document {self.url}, with sentence: "{self.sent}": '
-                        f'{record.msg}.')
-            return False
-        else:
-            return True
-
-    def set(self, file: str, url: str, sent: str):
-        """Sets the parameters necessary to localize the error."""
-        self.file = file
-        self.url = url
-        self.sent = sent
-
-
 def analyze_tsv_file(input_file: str, output_file: str,
                      emtsv_url: str, max_sentence_length: int = sys.maxsize):
     logging.info('Analyzing tsv {}...'.format(input_file))
@@ -162,25 +107,35 @@ def analyze_tsv_file(input_file: str, output_file: str,
                 except ValueError:
                     pass
 
+            last_empty = False
+            # We only allow a single empty line between sentences, or at the end
             for line in data.split('\n'):
+                # Handle comments here, so that they don't cause problems
+                if line.startswith('# '):
+                    print(line.split('\t')[0], file=outf)
                 # The other part of the no-lemma handling code
-                if lemma_col:
+                elif lemma_col:
                     fields = line.rstrip('\r').split('\t')
                     if len(fields) > 1 and not fields[lemma_col]:
                         fields[lemma_col] = fields[0]  # form
                         print('\t'.join(fields), file=outf)
-                    else:
+                        logging.info(f'printed line >>{line}<<, {last_empty}')
+                    elif line or not last_empty:
                         # Marginally faster without the join
                         print(line, file=outf)
+                # When we don't know, which one is the lemma (we should though)
                 else:
-                    print(line, file=outf)
+                    if line or not last_empty:
+                        print(line, file=outf)
+                last_empty = (len(line) == 0)
+
         logging.info('Finished {}.'.format(input_file))
     except:
         logging.exception('Error in file {}!'.format(input_file))
 
 
 def analyze_file(input_file: str, output_file: str,
-                 max_sentence_length: int = sys.maxsize):
+                 emtsv_url: str, max_sentence_length: int = sys.maxsize):
     """
     Analyzes *input_file* with quntoken + emtsv and writes the results to
     *output_file*.
@@ -304,7 +259,7 @@ def main():
 
         f = partial(
             analyze_file if args.file_format == 'text' else analyze_tsv_file,
-            max_sentence_length=args.max_sentence_length
+            emtsv_url=args.emtsv_url, max_sentence_length=args.max_sentence_length
         )
         pool.starmap(f, zip(input_files, output_files))
         logging.debug('Joining processes...')
