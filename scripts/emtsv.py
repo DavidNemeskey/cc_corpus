@@ -24,13 +24,13 @@ import os
 import os.path as op
 import re
 import sys
-from typing import Generator, Tuple
+from urllib.parse import urlparse, urlunparse
 
 from multiprocessing_logging import install_mp_handler
 import requests
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import collect_inputs, ispunct, openall
+from cc_corpus.utils import collect_inputs, openall
 
 
 def parse_arguments():
@@ -255,11 +255,15 @@ def main():
     output_files = [op.join(args.output_dir, output_file_name(f, args.extension))
                     for f in input_files]
 
-    with Pool(args.processes) as pool:
+    # Constructs the full emtsv url
+    scheme, netloc, *_ = urlparse(args.emtsv_url)
+    tasks = '/'.join(task for task in args.tasks.split(',') if task != 'tok')
+    emtsv_url = urlunparse((scheme, netloc, tasks, '', '', ''))
 
+    with Pool(args.processes) as pool:
         f = partial(
             analyze_file if args.file_format == 'text' else analyze_tsv_file,
-            emtsv_url=args.emtsv_url, max_sentence_length=args.max_sentence_length
+            emtsv_url=emtsv_url, max_sentence_length=args.max_sentence_length
         )
         pool.starmap(f, zip(input_files, output_files))
         logging.debug('Joining processes...')
