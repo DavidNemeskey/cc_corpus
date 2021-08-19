@@ -2,17 +2,16 @@
 # -*- coding: utf-8, vim: expandtab:ts=4 -*-
 
 """
-Analyzes the corpus with `emtsv <https://github.com/nytud/emtsv>`. It uses
-the emtsv REST endpoint provided by an emtsv server running either
-locally or remotely. The easiest way to set up one is to use the Docker image.
+Analyzes the corpus with `emtsv <https://github.com/nytud/emtsv>`. It is
+expected that an `emtsv` Docker image or REST client is running at a specified
+URL. For high concurrency, the Docker image is preferred, with as many workers
+as there are processes (-P).
 
 The script can handle both files in the "corpus format" and tsv files; the
 latter are expected to have headers and at the first column be called "form".
 
-.. note::
-
-    A file is sent to emtsv in a single request, which means that the returned
-    parse might take up a lot of memory.
+Documents are sent to emtsv one-by-one to minimize memory usage as much as
+possible.
 """
 
 from argparse import ArgumentParser, ArgumentTypeError
@@ -26,10 +25,11 @@ import re
 import sys
 from urllib.parse import urlparse, urlunparse
 
-from multiprocessing_logging import install_mp_handler
+# from multiprocessing_logging import install_mp_handler
 import requests
 
-from cc_corpus.corpus import parse_file
+from cc_corpus.corpus import parse_file as parse_corpus_file
+from cc_corpus.tsv import parse_file as parse_tsv_file
 from cc_corpus.utils import collect_inputs, openall
 
 
@@ -93,41 +93,50 @@ def analyze_tsv_file(input_file: str, output_file: str,
     logging.info('Analyzing tsv {}...'.format(input_file))
 
     lemma_col = None
+    header_written = False
     try:
-        with openall(input_file) as inf, openall(output_file, 'wt') as outf:
-            r = requests.post(emtsv_url, files={'file': inf})
-            header, _, data = r.text.partition('\n')
-            if header:
-                print(header, file=outf)
-                # Sometimes the lemma column is empty. In such cases, we
-                # double the form as the lemma. In order to do that, we need
-                # to find which column is the lemma...
-                try:
-                    lemma_col = header.rstrip().split('\t').index('lemma')
-                except ValueError:
-                    pass
+        with openall(output_file, 'wt') as outf:
+            it = parse_tsv_file(input_file, True)
+            input_header = '\t'.join(next(it))
+            for doc in it:
+                sio = StringIO(f'{input_header}\n{doc}')
+                r = requests.post(emtsv_url,
+                                  files={'file': sio},
+                                  data={'conll_comments': True})
+                header, _, data = r.text.partition('\n')
+                if header:
+                    if not header_written:
+                        print(header, file=outf)
+                        header_written = True
+                    # Sometimes the lemma column is empty. In such cases, we
+                    # double the form as the lemma. In order to do that, we need
+                    # to find which column is the lemma...
+                    try:
+                        lemma_col = header.rstrip().split('\t').index('lemma')
+                    except ValueError:
+                        pass
 
-            last_empty = False
-            # We only allow a single empty line between sentences, or at the end
-            for line in data.split('\n'):
-                # Handle comments here, so that they don't cause problems
-                if line.startswith('# '):
-                    print(line.split('\t')[0], file=outf)
-                # The other part of the no-lemma handling code
-                elif lemma_col:
-                    fields = line.rstrip('\r').split('\t')
-                    if len(fields) > 1 and not fields[lemma_col]:
-                        fields[lemma_col] = fields[0]  # form
-                        print('\t'.join(fields), file=outf)
-                        logging.info(f'printed line >>{line}<<, {last_empty}')
-                    elif line or not last_empty:
-                        # Marginally faster without the join
+                last_empty = False
+                # We only allow a single empty line between sentences, or at the end
+                for line in data.split('\n'):
+                    # Handle comments here, so that they don't cause problems
+                    if line.startswith('# '):
                         print(line, file=outf)
-                # When we don't know, which one is the lemma (we should though)
-                else:
-                    if line or not last_empty:
-                        print(line, file=outf)
-                last_empty = (len(line) == 0)
+                    # The other part of the no-lemma handling code
+                    elif lemma_col:
+                        fields = line.rstrip('\r').split('\t')
+                        if len(fields) > 1 and not fields[lemma_col]:
+                            fields[lemma_col] = fields[0]  # form
+                            print('\t'.join(fields), file=outf)
+                            logging.info(f'printed line >>{line}<<, {last_empty}')
+                        elif line or not last_empty:
+                            # Marginally faster without the join
+                            print(line, file=outf)
+                    # When we don't know, which one is the lemma (we should though)
+                    else:
+                        if line or not last_empty:
+                            print(line, file=outf)
+                    last_empty = (len(line) == 0)
 
         logging.info('Finished {}.'.format(input_file))
     except:
@@ -243,7 +252,7 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    install_mp_handler()
+    # install_mp_handler()
 
     os.nice(20)
     if not op.isdir(args.output_dir):
