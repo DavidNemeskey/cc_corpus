@@ -51,6 +51,11 @@ class Unit:
         for row in chain.from_iterable(self.sentences()):
             yield row.split('\t')
 
+    def clean(self):
+        """Deletes all empty sub-units."""
+        self.content = [c for c in self.content if len(c.clean()) > 0]
+        return self
+
     def __str__(self):
         return self.comment + '\n' + '\n'.join(str(unit) for unit in self.content)
 
@@ -69,6 +74,10 @@ class Sentence(Unit):
     def sentences(self):
         """Returns :attr:`content`."""
         return [self.content]
+
+    def clean(self):
+        """clean() is a no-op in :class:`Sentence`."""
+        return self
 
     def __str__(self):
         return (self.comment + '\n' +
@@ -105,7 +114,7 @@ def parse(input: TextIO, use_headers: bool = True) -> Generator[
     for line_no, line in enumerate(map(str.strip, input), start=1):
         if commentp.match(line):
             if newdocp.match(line):
-                if document:
+                if document and len(document.clean()) > 0:
                     yield document
                 document, paragraph, sentence = Document(line), None, None
             elif newparp.match(line):
@@ -121,7 +130,7 @@ def parse(input: TextIO, use_headers: bool = True) -> Generator[
             if line:
                 sentence.add(line)
 
-    if document:
+    if document and len(document.clean()) > 0:
         yield document
 
 
