@@ -16,14 +16,16 @@ from the downloaded index. In particular,
 
 from argparse import ArgumentParser
 from functools import partial
+import json
 import mimetypes
 from multiprocessing import Pool
 import os
 import re
+import sys
 from typing import Generator, Iterator, Pattern, Set, Tuple
 from urllib.parse import urlsplit
 
-from cc_corpus.utils import openall
+from cc_corpus.utils import consume, openall, otqdm
 
 
 # typedefs
@@ -61,17 +63,26 @@ def parse_arguments():
 
 def read_fields(ins: Iterator[str]) -> FieldGen:
     """Explodes the lines in the index to a tuple of six fields."""
-    for url, warc, offset, length, status, mime_type, *mime_cont in (
-        line.strip().split(' ') for line in ins
-    ):
-        yield url, warc, offset, length, status, mime_type
+    for line in map(str.strip, ins):
+        try:
+            fields = json.loads(line.split(' ', 2)[-1])
+            yield (fields['url'], fields['filename'], fields['offset'],
+                   fields['length'], fields['status'],
+                   fields.get('mime', 'unknown/unknown'))
+        except KeyError:
+            print(f'ERR {line}', file=sys.stderr)
+            raise
 
 
 def basic_filter(ins: FieldIt) -> FieldGen:
     """Filters robots.txt files and pages with statuses other than 200."""
     for url, warc, offset, length, status, mime_type in ins:
-        if not robotsp.search(url) and int(status) == 200:
-            yield url, warc, offset, length, status, mime_type
+        try:
+            if not robotsp.search(url) and int(status) == 200:
+                yield url, warc, offset, length, status, mime_type
+        except ValueError:
+            print(f'ERR {url=} {warc=} {offset=} {length=} {status=} {mime_type=}')
+            raise
 
 
 def mime_filter(ins: FieldIt, allowed_mimes: Set[str]) -> FieldGen:
@@ -153,12 +164,14 @@ def main():
     mimetypes.init()
     allowed_mimes = read_allowed_mimes(args.allowed_mimes)
     bad_indexp = read_bad_index(args.bad_index)
+    input_files = os.listdir(args.input_dir)
 
     with Pool(args.processes) as pool:
         f = partial(filter_file, input_dir=args.input_dir,
                     output_dir=args.output_dir, allowed_mimes=allowed_mimes,
                     bad_indexp=bad_indexp)
-        pool.map(f, os.listdir(args.input_dir))
+        consume(otqdm(pool.imap_unordered(f, input_files),
+                      'Filtering index...', total=len(input_files)))
 
 
 if __name__ == '__main__':
