@@ -86,6 +86,10 @@ we should do something like this first:
 ```
 zcat 2018/cc_index_dedup/*.gz | cut -d' ' -f2 | sort | gzip > 2018_index_urls.gz
 ```
+or, parallelly,
+```
+ls *.gz | parallel -j12 -k "zcat {} | cut -d' ' -f2 " | sort | gzip > ../2018_index_urls.gz
+```
 
 Alternatively, the URLs can be extracted from an already existing corpus:
 ```
