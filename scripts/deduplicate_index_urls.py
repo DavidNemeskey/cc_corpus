@@ -13,7 +13,7 @@ import os.path as op
 import re
 from typing import Any, Callable, Dict, List, Set, Union
 
-from cc_corpus.utils import notempty, openall, Stats
+from cc_corpus.utils import notempty, openall, otqdm, Stats
 
 
 def parse_arguments():
@@ -287,15 +287,18 @@ def main():
     # Collect the representative records for all URLs
     global_uniqs = {}
 
-    for input_file in input_files:
+    for input_file in otqdm(input_files, 'Collecting URLs from index...'):
         file_to_dict(input_file, args.keep, skip_urls, url_fn, global_uniqs)
     logging.info('Total number of unique URLs found: {}'.format(
         len(global_uniqs)))
 
     # And filter from the files all non-representative URLs
     if not os.path.isdir(args.output_dir):
-        os.mkdir(args.output_dir)
-    tasks = zip(input_files, [op.join(args.output_dir, f) for f in basenames])
+        os.makedirs(args.output_dir)
+    tasks = otqdm(
+        zip(input_files, [op.join(args.output_dir, f) for f in basenames]),
+        'Removing duplicates...', total=len(input_files)
+    )
 
     f = partial(filter_file, uniqs=global_uniqs, url_fn=url_fn)
     sum_stats = reduce(operator.add, starmap(f, tasks), FilterStats())
