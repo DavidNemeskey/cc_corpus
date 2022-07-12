@@ -14,17 +14,10 @@ import queue
 import sys
 import threading
 import time
-from typing import Any, Generator, TextIO, Tuple
+from typing import Generator, TextIO, Tuple
 import zlib
 
-# Boto3
-import boto3
-from botocore.client import Config
-from botocore import UNSIGNED
-
-# Boto3 Error handling
-from botocore.exceptions import ClientError, EndpointConnectionError
-from botocore.vendored.requests.packages.urllib3.exceptions import ReadTimeoutError
+import requests
 
 from cc_corpus.utils import openall
 
@@ -160,12 +153,11 @@ class FilePerDocument:
         pass
 
 
-def download_file(s3: Any, warc_file_name: str, offset: int, length: int,
-                  entry_str: str, retry_left: int) -> bytes:
+def download_range(warc_file_name: str, offset: int, length: int,
+                   entry_str: str, retry_left: int) -> bytes:
     """
     Downloads a document and returns it decompressed.
 
-    :param s3: the connection handle to _s3_.
     :param warc_file_name: the name of the WARC file to download from.
     :param offset: the offset of the document in the WARC file.
     :param length: the (compressed) size of the document.
@@ -175,44 +167,56 @@ def download_file(s3: Any, warc_file_name: str, offset: int, length: int,
     """
     offset_end = offset + length - 1
     byte_range = 'bytes={offset}-{end}'.format(offset=offset, end=offset_end)
-    decompressed_text = b''
-    while len(decompressed_text) == 0 and retry_left > 0:
+    content = b''
+    while len(content) == 0 and retry_left > 0:
         retry_left -= 1
-        # This is a gzip bytearray (str)
         try:
-            gzip_text = s3.get_object(
-                Bucket='commoncrawl', Key=warc_file_name, Range=byte_range
-            )['Body'].read()
-        except (ClientError, ReadTimeoutError, EndpointConnectionError) as ex:
-            if hasattr(ex, 'response') and ex.response['Error']['Code'] == 'NoSuchKey':
-                logging.exception('NoSuchKey: {}'.format(entry_str))
-                retry_left = 0  # Skip later probes
-            # ReadTimeoutError has no property response
-            elif hasattr(ex, 'response') and ex.response['Error']['Code'] == 'InternalError' or \
-                    ex.__class__.__name__ in {'ReadTimeoutError', 'EndpointConnectionError'}:
-                logging.exception('InternalError({}): {}'.format(ex, entry_str))
-            else:  # This shouldn't happen...
-                logging.exception('Other Error({}): {}'.format(ex, entry_str))
-                retry_left = 0  # Skip later probes
-            continue  # Skip decompression test
-        except:
-            logging.exception('Some other error while downloading')
+            r = requests.get(
+                f'https://ds5q9oxwqwsfj.cloudfront.net/{warc_file_name}',
+                headers={'Range': byte_range}, stream=True, timeout=60
+            )
+        except Exception as e:
+            logging.exception(f'Exception {e} with file {warc_file_name}.')
+            continue
 
-        try:  # Test decompression to avoid decompression errors later
-            # https://stackoverflow.com/a/2695575
-            decompressed_text = zlib.decompress(gzip_text, zlib.MAX_WBITS | 32)
+        if r.status_code == 206:
+            try:
+                for chunk in r.iter_content(length):
+                    content = content + chunk
+                    if len(content) >= length:
+                        break
+                content = content[:length]
+                break
+            except Exception as e:
+                logging.exception(f'Exception while reading: {e}')
+                content = b''
+                continue
+        elif r.status_code == 200:
+            logging.error(f'Had to download {warc_file_name} as {byte_range} '
+                          'was not available.')
+            continue
+        elif r.status_code == 404:
+            logging.error(f'{warc_file_name} not found (404).')
+            break
+        else:
+            continue
+
+    # Decompression
+    if content:
+        try:
+            return zlib.decompress(content, zlib.MAX_WBITS | 32)
         except zlib.error:
             logging.exception(
-                'Decompression error occured ({0}):\t\t{1}\t\t'.format(
-                    retry_left, entry_str))
-            decompressed_text = b''
-        except:
+                f'Decompression error occured ({retry_left}):'
+                f'\t\t{entry_str}\t\t'
+            )
+        except: # noqa
             logging.exception('Some other error while decompressing')
 
-    return decompressed_text
+    return ''
 
 
-def download_stream(s3: Any, stream: TextIO, retries: int) -> Generator[
+def download_stream(stream: TextIO, retries: int) -> Generator[
     Tuple[str, str, bytes, str], None, None
 ]:
     """
@@ -222,7 +226,6 @@ def download_stream(s3: Any, stream: TextIO, retries: int) -> Generator[
     latter might or might not be used by the caller (depending on the value of
     the file-per-doc option).
 
-    :param s3: the connection handle to _s3_.
     :param stream: the index stream.
     :param retries: the number of times download is attempted for a document.
     """
@@ -238,8 +241,8 @@ def download_stream(s3: Any, stream: TextIO, retries: int) -> Generator[
         line = ' '.join((batch_name, domain, url, warc_file, offset_str,
                          length_str, response, mime_type))
 
-        document = download_file(s3, warc_file, int(offset_str),
-                                 int(length_str), line, retries)
+        document = download_range(warc_file, int(offset_str),
+                                  int(length_str), line, retries)
         # None or gzip_text
         if len(document) > 0:
             out_file = warc_file.replace('/', '_').replace(
@@ -253,12 +256,11 @@ def download_stream(s3: Any, stream: TextIO, retries: int) -> Generator[
             line_no, time.time() - start_time))
 
 
-def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
+def process_stream(stream: TextIO, output_dir: str, retries: int,
                    rotate_info: Tuple):
     """
     Processes a stream of index lines: downloads the URLs corresponding to each.
 
-    :param s3: the connection handle to _s3_.
     :param stream: the index stream. Each line must contain the following seven
                    fields, separated by spaces: index file name, domain, url,
                    the WARC file that contains the document, its offset and
@@ -271,7 +273,7 @@ def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
     # ENTRIES EXPECTED TO BE sorted by filename (and optionally by domain) to
     # be grouped by filename
     for batch_name, group in itertools.groupby(
-        download_stream(s3, stream, retries), key=itemgetter(0)
+        download_stream(stream, retries), key=itemgetter(0)
     ):
         if len(rotate_info) > 0:
             writer = RotatedGzip(output_dir, batch_name, *rotate_info)
@@ -282,7 +284,7 @@ def process_stream(s3: Any, stream: TextIO, output_dir: str, retries: int,
                 w.write(document, out_file_name)
 
 
-def process_index_file(s3: Any, filename: str, output_dir: str, retries: int,
+def process_index_file(filename: str, output_dir: str, retries: int,
                        rotate_info: Tuple):
     """
     Processes an index file: downloads all URLs in it. This functions is
@@ -292,7 +294,7 @@ def process_index_file(s3: Any, filename: str, output_dir: str, retries: int,
     """
     logging.info('Starting file {}...'.format(filename))
     with openall(filename) as inpfh:
-        process_stream(s3, ('{} {}'.format(filename, line) for line in inpfh),
+        process_stream(('{} {}'.format(filename, line) for line in inpfh),
                        output_dir, retries, rotate_info)
     logging.info('Finished file {}.'.format(filename))
 
@@ -315,30 +317,22 @@ if __name__ == '__main__':
         rotate_details = ()
 
     if single_threaded:
-        # Boto3 Amazon anonymous login
-        session = boto3.session.Session()
-        c = session.client('s3', config=Config(signature_version=UNSIGNED))
-
-        process_stream(c, sys.stdin, output_dir, retry, rotate_details)
+        process_stream(sys.stdin, output_dir, retry, rotate_details)
     else:
         num_of_threads = int(multiprocessing.cpu_count() * 5)  # Heuristic number...
         q = queue.Queue(maxsize=2 * num_of_threads)
 
         # In a persistent connection process a whole gz file and ask for another
-        def worker(s3):
+        def worker():
             while True:
                 file_name = q.get()
-                process_index_file(s3, file_name, output_dir,
-                                   retry, rotate_details)
+                process_index_file(file_name, output_dir, retry, rotate_details)
                 q.task_done()
 
-        # Initate boto3 sessions...
-        session = boto3.session.Session()
         # Start num_of_threads many boto sessions to process a gzip file with worker
         for i in range(num_of_threads):
             logging.warning('Creating thread no. {0}'.format(i))
-            c = session.client('s3', config=Config(signature_version=UNSIGNED))
-            t = threading.Thread(target=worker, args=(c,))
+            t = threading.Thread(target=worker, args=())
             t.daemon = True
             t.start()
 
