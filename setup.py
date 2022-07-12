@@ -106,7 +106,7 @@ setup(name='commoncrawl-downloader',
           # Easier TLD extraction
           'tldextract',
           # Language identification -- cld2 master doesn't compile ATM
-          'cld2-cffi @ git+https://github.com/GregBowyer/cld2-cffi.git@d048c5fa98066bdb130f1c7e52641a0645aef5ac', 'langid',
+          'cld2-cffi==0.1.4', 'langid',
           # WARC 3 library
           # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
           'warc3-wet',

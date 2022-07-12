@@ -12,35 +12,26 @@ Using this tool one can create raw text corpora from web (CommonCrawl) easily.
 
 This repository also contains a massively fixed and overhauled version of [cdx-index-client](https://github.com/ikreymer/cdx-index-client/tree/1ae1301ae4fb8416f10bed97d4c7c96ba5ab4dc7).
 
-## Install
-    
-    # Python 3.x required
-    pip3 install -r requirements.txt
-    # Optional dependencies (for faster processing)
-    [mawk](http://invisible-island.net/mawk/mawk.html) or any AWK implementation
-    GNU parallel
+## Installation
 
-## Examples
-    # Dowload index for specfic condition
-    ./get_indexfiles.sh CONDITION OUTPUT_DIR LOG_FILE MAX_FULL_RETRY
-    # e.g. ./get_indexfiles.sh '*.hu' cc_index get_index.log 10
-    # Filter index
-    ./filter_index.sh cc_index cc_index_filtered
-    # Download pages for index to pages dir
-    ./download_pages.py -b 'Hungarian' -o out -i 'cc_index_filtered/*.gz' --preprocessed
-    # or (with optionally GNU parallel)
-    zgrep "." cc_index_filtered/*.gz | sed 's/:/ /' | ./download_pages.py -b 'Hungarian' -o out -s  --preprocessed
-    # or grouped by files
-    zcat "$1" | awk -v prefix="$1" '{print prefix,$0}' | ./download_pages.py -b 'Hungarian' -o out -s  --preprocessed
+The package can be installed (as usual) with
 
-## The new part
+```
+export CFLAGS="-Wno-narrowing"
+pip install -e .
+```
 
-### From start to end
+The reason for the export is that one of the language detection packages,
+`cld2-cffi`, has not been updated for a long time, and the C language related
+problems (narrowing conversions) that were once only warnings are now considered
+errors by modern compilers. The export tells them to disregard these errors.
+
+## From start to end
 
 This section describes how to download and process the Common Crawl data to
 arrive at a corpus.
 
-#### Download the index
+### Download the index
 
 The script `get_indexfiles.py` can be used to download the index for a
 specific collection. The example below downloads the index for January 2019:
@@ -51,7 +42,7 @@ get_indexfiles.py -q *.hu -o 2019/cc_index -l 2019_01.log -m 5 -c CC-MAIN-2019-0
 Note that `get_indexfiles.py` is a replacement for the original
 `get_indexfiles.sh`.
 
-#### Filter the index
+### Filter the index
 
 Next, filter the index with the script `filter_index.py`:
 ```
@@ -62,7 +53,7 @@ This script is a replacement for and an improvement on the original
 `filter_index.sh`. Being Python, it might be a little slower than the original
 though, hence the `-P` option for multiprocessing.
 
-#### Index statistics
+### Index statistics
 
 At any point while working with indices, you can query the index statistics like
 ```
@@ -76,7 +67,7 @@ This script writes 5 files:
   / mime types in the index, along with their count and percentage
 - `stats.tsv` contains general statistics, such as the total number of documents
 
-#### Index deduplication
+### Index deduplication
 
 Once the index is filtered, it should be deduplicated, because the same URLs
 are re-downloaded time and again (as many times as 240 in 4 month). The first
@@ -110,7 +101,7 @@ Note: unfortunately, loading the old URLs takes a very long time... also, the
 script runs in a single process as Python's shared memory performance is
 abysmal.
 
-#### Download pages
+### Download pages
 
 Pages in the (filtered, deduplicated) index can be downloaded by the command
 ```
@@ -145,7 +136,7 @@ ansible-playbook -i hosts python.yml -e
                         "output_dir": "2019/cc_downloaded/"}, "processes": 0}'
 ```
 
-#### Remove boilerplate
+### Remove boilerplate
 
 Boilerplate code is removed with `justext`, which also splits the data into
 paragraphs. The script to run is `remove_boilerplate.py`. Since we have already
@@ -161,7 +152,7 @@ ansible-playbook -i hosts python.yml -e
                         "output": "2019/cc_corpus/"}}'
 ```
 
-#### <a name="filtering">Filtering</a>
+### <a name="filtering">Filtering</a>
 
 After boilerplate removal, the corpus is in its final format. However, to
 increase its quality, we also filter out certain pages: those not in Hungarian
@@ -184,7 +175,7 @@ ansible-playbook -i hosts python.yml -e
                         "output": "2019/cc_corpus_hu_1500c/"}}'
 ```
 
-#### Document deduplication
+### Document deduplication
 
 Although we have filtered the index for duplicate _URLs_, the corpus might still
 contain duplicate _documents_. The reason is twofold: first, we cannot filter
@@ -244,7 +235,7 @@ Finally, we filter corpus to contain only the unique documents:
 dedup_filter.py -o 2019/cc_corpus_hu_1500c_dedup/ -m 2019/minhashes/minhashes_full --ignore-missing-files
 ```
 
-#### <a name="frequent">Delete frequent paragraphs</a>
+### <a name="frequent">Delete frequent paragraphs</a>
 
 Some sites contain "boilerplate" paragraphs that occur in many of their documents.
 We get rid of such paragraphs so that they do not skew the language model
@@ -322,7 +313,7 @@ renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_nofreq -k -Z 4 -L debug 2019
 
 (final)
 
-#### Delete duplicate paragraphs
+### Delete duplicate paragraphs
 
 The last form of content duplication is when a document contains a paragraph
 several times. Sometimes this is valid repetition, but most of the time, it
@@ -337,13 +328,13 @@ distributed execution.
 remove_same_p.py -P 12 -i 2019/cc_corpus_hu_1500c_nofreq/ -L debug remove -o 2019/cc_corpus_hu_1500c_nodup/
 ```
 
-#### Filtering -- again
+### Filtering -- again
 
 With frequent paragraph removed, the lengths of some documents might have fallen
 below the threshold (1500 characters in our case). It is therefore recommended
 to run the [filtering step](#filtering) anew.
 
-#### Final steps
+### Final steps
 
 Let's assume that the re-filtered corpus is in the directory
 `cc_corpus_hu_1500c_filtered_again`. All processing steps are effectively done;
@@ -369,13 +360,13 @@ renumber_corpus_files.py -Z 4 -d 2500 -o 2019/cc_corpus_hu_1500c_filtered_again
 
 **And we are done. Whew!**
 
-### Text processing
+## Text processing
 
 The repository contains scripts to run the
 [emtsv](https://github.com/dlt-rilmta/emtsv) text-processing pipeline on the
 corpus.
 
-#### Installing the pipeline
+### Installing the pipeline
 
 The master branch of emtsv (and its dependencies) has a few problems that
 needs to be fixed before it can be used efficiently. Until the fixes are merged,
@@ -396,7 +387,7 @@ It fixes two issues:
 The "installation" is very simple: clone the repo somewhere and execute the
 steps listed in the readme.
 
-#### Running the pipeline
+### Running the pipeline
 
 The `emtsv.py` script runs the pipeline. Some parts (tokenization, morphologic
 analysis) are fast; the rest (morphologic disambiguation, syntactic parsing,
@@ -414,7 +405,7 @@ ansible-playbook -i hosts python.yml -e
 
 The default tasks run are tokenization, morphological analysis and disambiguation.
 
-#### Shuffling the tsv files
+### Shuffling the tsv files
 
 With the last step complete, we have a corpus that is tokenized, morphologically
 analyzed and disambiguated. The files contain the documents in the order of
@@ -437,7 +428,7 @@ Note that for best effect, this script should be run on a single machine
 (although the partial shuffling that results from distributed execution should
 work fine as well).
 
-### Type checking
+## Type checking
 
 Some of the code I have annotated with
 [type annotations](https://docs.python.org/3/library/typing.html). To validate
@@ -448,7 +439,7 @@ switches:
 mypy --python-version 3.5 --no-strict-optional --ignore-missing-imports scripts/frequent_paragraphs.py
 ```
 
-### <a name="tech"></a>Technicalities
+## <a name="tech"></a>Technicalities
 
 Most of the tasks can be executed on a single server, albeit a little patience
 is in order. Others (mostly anything related to minhashing, especially
@@ -465,7 +456,7 @@ Below, the word _Controller_ shall refer to the machine Ansible playbooks are
 executed from; _Slave_ shall refer to the machines doing running the actual
 task (Python script).
 
-#### Prerequisites
+### Prerequisites
 
 In order for our code to work, we need the servers in the cluster to be able
 to see the same data disk. More specifically, the Slaves are not required to
@@ -498,7 +489,7 @@ ansible-galaxy install -r requirements.yml
 ansible-playbook -i hosts configuration.yml --tags install_emtsv
 ```
 
-#### Python version
+### Python version
 
 It is possible to set up the virtualenv to use a specific Python version
 (i.e. one from Anaconda). In order to do that, specify the `path` variable on
@@ -520,7 +511,7 @@ Unfortunately, when `path` is not specified, we need to revert to `virtualenv`
 because of
 [a bug in ansible's `pip` module](https://github.com/ansible/ansible/issues/52275).
 
-#### Data distribution
+### Data distribution
 
 Most task take one (or more) input directories, process the files in them
 one-by-one, and write the result to an output directory. The script
@@ -538,7 +529,7 @@ documents is distributed unevenly, a machine might still end up with a
 disproportionately large or small amount of data. Use `renumber_corpus_files.py`
 to distribute documents evenly in the input files.
 
-#### Task execution
+### Task execution
 
 The tasks are run via Ansible. Each Python script can be executed distributedly
 (is there such a word?) by running the playbook `python.yml`. Most of the work
@@ -570,7 +561,7 @@ ansible-playbook -i hosts python.yml -e
                     "o": "2018/cc_corpus_hu_minhashes"}}'
 ```
 
-#### Output collection
+### Output collection
 
 If all Slaves operate on shared storage, the output dictionary can be a
 common parameter, and then all files will be written to it. If not, it must be
