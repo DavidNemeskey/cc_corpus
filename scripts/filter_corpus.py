@@ -19,7 +19,7 @@ import re
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import openall, notempty
+from cc_corpus.utils import openall, notempty, otqdm
 
 
 def parse_arguments():
@@ -276,7 +276,8 @@ def main():
                     keep_urls=keep_urls, drop_urls=drop_urls)
         # Note: + / sum() do not keep keys with 0 values here, hence update()
         stats = Counter()
-        for sub_stats in p.map(f, files):
+        for sub_stats in otqdm(p.imap_unordered(f, files), 'Filtering...',
+                               total=len(files)):
             stats.update(sub_stats)
         logging.info('Statistics: {}'.format(stats))
         p.close()

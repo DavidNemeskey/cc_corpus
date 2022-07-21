@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import collect_inputs, openall, Stats
+from cc_corpus.utils import collect_inputs, openall, otqdm, Stats
 
 
 def parse_arguments():
@@ -136,7 +136,9 @@ def main():
 
     with Pool(args.processes) as pool:
         sum_stats = defaultdict(CollectStats)
-        for stats in pool.imap_unordered(f, input_files):
+        for stats in pool.imap_unordered(f, otqdm(
+            input_files, 'Removing duplicate paragraphs...')
+        ):
             for domain, stat in stats.items():
                 sum_stats[domain] += stat
         pool.close()

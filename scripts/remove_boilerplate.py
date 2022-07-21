@@ -23,7 +23,7 @@ from lxml.etree import ParserError
 from multiprocessing_logging import install_mp_handler
 import warc
 
-from cc_corpus.utils import unquote_inf
+from cc_corpus.utils import consume, otqdm, unquote_inf
 
 
 IndexTuple = namedtuple('IndexTuple', ['index', 'domain', 'url', 'warc',
@@ -217,7 +217,8 @@ def main():
                            stoplist=stoplist)
 
     with Pool(args.processes) as pool:
-        pool.map(fn, index_files)
+        consume(otqdm(pool.imap_unordered(fn, index_files),
+                'Removing boilerplate...', total=len(index_files)))
 
     logging.info('Done.')
 

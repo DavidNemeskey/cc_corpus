@@ -21,7 +21,7 @@ import os.path as op
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.deduplication import find_all_batches, read_batch
-from cc_corpus.utils import notempty, openall
+from cc_corpus.utils import notempty, openall, otqdm
 
 
 def parse_arguments():
@@ -118,7 +118,10 @@ def main():
                     output_dir=args.output_dir, input_dir=args.input_dir,
                     ignore_missing_files=args.ignore_missing_files)
         kept, total = 0, 0
-        for batch_kept, batch_total in pool.imap(f, batch_prefixes):
+        for batch_kept, batch_total in otqdm(
+            pool.imap_unordered(f, batch_prefixes), 'Filtering duplicates...',
+            total=len(batch_prefixes)
+        ):
             kept += batch_kept
             total += batch_total
         pool.close()
