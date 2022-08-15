@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.7.5',
+      version='1.7.6',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -103,6 +103,8 @@ setup(name='commoncrawl-downloader',
           'requests',
           # Will maybe remove this later
           'simplejson',
+          # Boilerplate removal
+          'trafilatura',  # 1.2.2
           # Easier TLD extraction
           'tldextract',
           # Language identification -- cld2 master doesn't compile ATM
