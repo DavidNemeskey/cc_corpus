@@ -18,11 +18,13 @@ import os
 import os.path as op
 import xml.sax.saxutils
 
-import justext
 from lxml.etree import ParserError
 from multiprocessing_logging import install_mp_handler
 import warc
 
+from cc_corpus.boilerplate import (
+    BoilerplateRemover, JustextRemover, TrafilatureRemover
+)
 from cc_corpus.utils import unquote_inf
 
 
@@ -35,11 +37,19 @@ class IndexWarcReader:
     Reads index files and the files with the downloaded WARC segments in
     parallel.
 
-    Note: in the class description, "WARC file" means "a file that contains
+    .. note::
+    In the class description, "WARC file" means "a file that contains
     downloaded WARC segments from Common Crawl". One difference to a CC WARC
     file is that these files only contain the responses.
+
+    .. todo::
+    This class is a not really a "reader", as it basically does everything:
+    it reads the warc and index files, removes boilerplate and writes the
+    output file as well. These functions should be split into separate classes
+    / (Python) functions.
     """
-    def __init__(self, index_dir, warc_dir, output_dir, stopwords):
+    def __init__(self, index_dir: str, warc_dir: str, output_dir: str,
+                 remover: BoilerplateRemover):
         """
         Creates a new IndexWarcReader with the specified index and warc
         directories. These must be compatible, i.e. the WARC directory should
@@ -49,12 +59,12 @@ class IndexWarcReader:
         index_dir: the directory with the index files.
         warc_dir: the directory with the WARC files.
         output_dir: the output directory
-        stopword: the stopword list for justext
+        remover: the boilerplate removal algorithm wrapper.
         """
         self.index_dir = index_dir
         self.warc_dir = warc_dir
         self.output_dir = output_dir
-        self.stopwords = stopwords
+        self.remover = remover
         # This is the output stream
         self.outf = None
 
@@ -77,7 +87,11 @@ class IndexWarcReader:
             else:
                 raise ValueError('URL {} was not found in index'.format(url))
 
-    def process_record(self, index_id, index, warc):
+    def remove_boilerplate(self, text: bytes):
+        """Runs the supplied boilerplate remover."""
+        pass
+
+    def process_record(self, index_id: int, index, warc):
         """Writes the output file."""
         # We need the WARC header...
         bio = io.BytesIO()
@@ -85,10 +99,10 @@ class IndexWarcReader:
         # And the HTML header and text as well. jusText can handle bytes
         header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
         try:
-            paragraphs = justext.justext(text, self.stopwords)
+            paragraphs = self.remover(text)
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
         except (ParserError, UnicodeDecodeError,
-                TypeError, AssertionError, ValueError) as err:
+                TypeError, AssertionError, ValueError):
             # Do not distinguish between the different errors
             logging.exception(
                 'Exception with record {} in line {}.'.format(index, index_id))
@@ -104,9 +118,9 @@ class IndexWarcReader:
                 index.url))
             return
 
-        print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" ' \
-              'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n' \
-              '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n' \
+        print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" '
+              'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n'
+              '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n'
               '</response>\n</meta>\n{10}\n</doc>\n\n\n'.format(
                   index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
@@ -161,7 +175,11 @@ def parse_arguments():
                         help='the directory with the WARC segments')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory')
-    parser.add_argument('--boilerplate-language', '-b', default='Hungarian',
+    parser.add_argument('--boilerplate-tool', '-b', default='trafilatura',
+                        choices=['justext', 'trafilatura'],
+                        help='the boilerplate removal algorithm to use '
+                             '(default: trafilatura).')
+    parser.add_argument('--boilerplate-language', '-l', default='Hungarian',
                         help='boilerplate removal language (default: Hungarian)')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
@@ -177,12 +195,14 @@ def parse_arguments():
     return args
 
 
-def process(index_file, index_dir, warc_dir, output_dir, stoplist):
+def process(index_file: str, index_dir: str, warc_dir: str,
+            output_dir: str, remover: BoilerplateRemover):
+    """Basically just calls :meth:`IndexWarcReader.read`."""
     logging.info('Processing {}...'.format(index_file))
-    reader = IndexWarcReader(index_dir, warc_dir, output_dir, stoplist)
+    reader = IndexWarcReader(index_dir, warc_dir, output_dir, remover)
     try:
         reader.read(index_file)
-    except:
+    except:  # noqa
         logging.exception('Exception in file {}:'.format(index_file))
     else:
         logging.info('Processed {}...'.format(index_file))
@@ -198,11 +218,12 @@ def main():
     install_mp_handler()
 
     try:
-        logging.info('Acquiring stopword list for {}...'.format(
-            args.boilerplate_language))
-        stoplist = justext.get_stoplist(args.boilerplate_language)
-        logging.info('Number of stopwords: {}'.format(len(stoplist)))
-    except ValueError as e:
+        if args.boilerplate_tool == 'justext':
+            cls = JustextRemover
+        else:
+            cls = TrafilatureRemover
+        remover = cls(args.boilerplate_language)
+    except ValueError:
         logging.error(
             'Invalid stopword language {}.'.format(args.boilerplate_language))
         exit(1)
@@ -214,7 +235,7 @@ def main():
     index_files = os.listdir(args.index_dir)
     fn = functools.partial(process, index_dir=args.index_dir,
                            warc_dir=args.warc_dir, output_dir=args.output_dir,
-                           stoplist=stoplist)
+                           remover=remover)
 
     with Pool(args.processes) as pool:
         pool.map(fn, index_files)
