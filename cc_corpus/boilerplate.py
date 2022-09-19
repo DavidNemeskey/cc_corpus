@@ -5,7 +5,7 @@
 
 from abc import ABC, abstractmethod
 import logging
-from xml.sax import parseString
+from xml.sax import parseString, SAXParseException
 from xml.sax.handler import ContentHandler
 from xml.etree.ElementTree import ParseError
 
@@ -38,7 +38,8 @@ class JustextRemover(BoilerplateRemover):
         logging.debug(f'Number of stopwords: {len(self.stopwords)}')
 
     def remove(self, html: bytes):
-        return justext.justext(html, self.stopwords)
+        return [p for p in justext.justext(html, self.stopwords)
+                if not p.is_boilerplate]
 
 
 class TrafilatureRemover(BoilerplateRemover):
@@ -47,8 +48,13 @@ class TrafilatureRemover(BoilerplateRemover):
         xml = trafilatura.extract(html, output_format='xml',
                                   target_language='hu')
         h = TrafilaturaHandler()
-        parseString(xml, h)
-        return h.result()
+        if xml is None:
+            # How is this even possible?
+            logging.info('Trafilatura returned None.')
+            return []
+        else:
+            parseString(xml, h)
+            return h.result()
 
 
 class TrafilaturaHandler(ContentHandler):

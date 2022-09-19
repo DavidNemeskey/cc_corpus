@@ -99,7 +99,7 @@ class IndexWarcReader:
         # And the HTML header and text as well. jusText can handle bytes
         header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
         try:
-            paragraphs = self.remover(text)
+            paragraphs = self.remover.remove(text)
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
         except (ParserError, UnicodeDecodeError,
                 TypeError, AssertionError, ValueError):
@@ -110,8 +110,8 @@ class IndexWarcReader:
 
         # Escape paragraph for parsable XML
         text_removed = '\n\n'.join(
-            '<p>\n{0}\n</p>'.format(xml.sax.saxutils.escape(paragraph.text))
-            for paragraph in paragraphs if not paragraph.is_boilerplate
+            '<p>\n{0}\n</p>'.format(xml.sax.saxutils.escape(paragraph))
+            for paragraph in paragraphs
         )
         if len(text_removed) == 0:
             logging.info('Nothing\'s left of {} after boilerplate removal'.format(
@@ -215,6 +215,7 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
+    logging.getLogger('trafilatura').setLevel(logging.ERROR)
     install_mp_handler()
 
     try:
