@@ -18,7 +18,6 @@ import os
 import os.path as op
 import xml.sax.saxutils
 
-from lxml.etree import ParserError
 from multiprocessing_logging import install_mp_handler
 import warc
 
@@ -77,15 +76,23 @@ class IndexWarcReader:
         index_iter = self.index_lines(index_file)
         warc_iter = self.warc_records(index_file)
         index_id = 0
+        errors = 0
         for warc_record in warc_iter:
             url = warc_record['WARC-Target-URI']
             for index in index_iter:
                 index_id += 1
                 if unquote_inf(index.url) == unquote_inf(url):
-                    self.process_record(index_id, index, warc_record)
+                    try:
+                        self.process_record(index_id, index, warc_record)
+                    except:  # noqa
+                        logging.exception(f'Exception in file {index_file} '
+                                          f'on line {index_id} ({url}).')
+                        errors += 1
+                        if errors == 3:
+                            raise ValueError(f'Too many errors ({errors}).')
                     break
             else:
-                raise ValueError('URL {} was not found in index'.format(url))
+                raise ValueError(f'URL {url} was not found in index')
 
     def remove_boilerplate(self, text: bytes):
         """Runs the supplied boilerplate remover."""
@@ -99,13 +106,12 @@ class IndexWarcReader:
         # And the HTML header and text as well. jusText can handle bytes
         header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
         try:
-            paragraphs = self.remover.remove(text)
+            paragraphs = self.remover.remove(text, index.url)
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
-        except (ParserError, UnicodeDecodeError,
-                TypeError, AssertionError, ValueError):
+        except:  # noqa
             # Do not distinguish between the different errors
-            logging.exception(
-                'Exception with record {} in line {}.'.format(index, index_id))
+            logging.exception('Exception removing boilerplate from record '
+                              f'{index} on line {index_id} ({index.url}).')
             return
 
         # Escape paragraph for parsable XML
@@ -114,8 +120,8 @@ class IndexWarcReader:
             for paragraph in paragraphs
         )
         if len(text_removed) == 0:
-            logging.info('Nothing\'s left of {} after boilerplate removal'.format(
-                index.url))
+            logging.info(f'Nothing\'s left of {index.url} '
+                         'after boilerplate removal')
             return
 
         print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" '
@@ -129,10 +135,8 @@ class IndexWarcReader:
               file=self.outf)
 
         if index_id % 1000 == 0:
-            logging.info('Removed boilerplate from {} ({})'.format(
-                index.url, index_id))
-        logging.debug('Removed boilerplate from {} ({})'.format(
-            index.url, index_id))
+            logging.info(f'Removed boilerplate from {index.url} ({index_id})')
+        logging.debug(f'Removed boilerplate from {index.url} ({index_id})')
 
     def index_lines(self, index_file):
         """Enumerates the lines of the index file into IndexTuples."""
@@ -190,22 +194,21 @@ def parse_arguments():
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
-        parser.error('Number of processes must be between 1 and {}'.format(
-            num_procs))
+        parser.error('Number of processes must be between 1 and {num_procs}')
     return args
 
 
 def process(index_file: str, index_dir: str, warc_dir: str,
             output_dir: str, remover: BoilerplateRemover):
     """Basically just calls :meth:`IndexWarcReader.read`."""
-    logging.info('Processing {}...'.format(index_file))
+    logging.info(f'Processing {index_file}...')
     reader = IndexWarcReader(index_dir, warc_dir, output_dir, remover)
     try:
         reader.read(index_file)
     except:  # noqa
-        logging.exception('Exception in file {}:'.format(index_file))
+        logging.exception(f'Exception in file {index_file}')
     else:
-        logging.info('Processed {}...'.format(index_file))
+        logging.info(f'Processed {index_file}...')
 
 
 def main():
@@ -226,7 +229,7 @@ def main():
         remover = cls(args.boilerplate_language)
     except ValueError:
         logging.error(
-            'Invalid stopword language {}.'.format(args.boilerplate_language))
+            f'Invalid stopword language {args.boilerplate_language}.')
         exit(1)
 
     if not op.isdir(args.output_dir):

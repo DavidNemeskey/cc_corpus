@@ -5,7 +5,7 @@
 
 from abc import ABC, abstractmethod
 import logging
-from xml.sax import parseString, SAXParseException
+from xml.sax import parseString
 from xml.sax.handler import ContentHandler
 from xml.etree.ElementTree import ParseError
 
@@ -19,10 +19,12 @@ class BoilerplateRemover(ABC):
         self.language = language
 
     @abstractmethod
-    def remove(self, html: bytes) -> list[str]:
+    def remove(self, html: bytes, url: str) -> list[str]:
         """
         Removes boilerplate from the bytestring _html_.
 
+        :param html: the page itself.
+        :param url: the URL; for logging purposes.
         :return: the list of content paragraphs found.
         .. todo:: retain information about the type of text (<p>, <li>, etc.)
         """
@@ -37,20 +39,21 @@ class JustextRemover(BoilerplateRemover):
         self.stopwords = justext.get_stoplist(language)
         logging.debug(f'Number of stopwords: {len(self.stopwords)}')
 
-    def remove(self, html: bytes):
+    def remove(self, html: bytes, url: str):
         return [p for p in justext.justext(html, self.stopwords)
                 if not p.is_boilerplate]
 
 
 class TrafilatureRemover(BoilerplateRemover):
     """Wrapper for Trafilature's boilerplate removal function."""
-    def remove(self, html: bytes):
-        xml = trafilatura.extract(html, output_format='xml',
-                                  target_language='hu')
+    def remove(self, html: bytes, url: str):
+        xml = trafilatura.extract(html, url, output_format='xml',
+                                  target_language=self.language,
+                                  include_tables=False)
         h = TrafilaturaHandler()
         if xml is None:
             # How is this even possible?
-            logging.info('Trafilatura returned None.')
+            # logging.info('Trafilatura returned None.')
             return []
         else:
             parseString(xml, h)
