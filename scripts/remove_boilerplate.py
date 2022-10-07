@@ -245,6 +245,8 @@ def main():
         consume(otqdm(pool.imap_unordered(fn, index_files),
                       f'Removing boilerplate with {args.boilerplate_tool}...',
                       total=len(index_files)))
+        pool.close()
+        pool.joins()
 
     logging.info('Done.')
 

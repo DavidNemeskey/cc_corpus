@@ -19,7 +19,7 @@ import re
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import openall, notempty
+from cc_corpus.utils import openall, otqdm, notempty
 
 
 def parse_arguments():
@@ -73,7 +73,7 @@ def parse_arguments():
     if args.languages:
         try:
             import cld2  # noqa
-        except:
+        except ImportError:
             parser.error('cld2 library not available.')
     return args
 
@@ -134,7 +134,7 @@ def filter_languages_p(doc_iter, languages, stats):
                 kept_p += len(doc.paragraphs)
                 kept += 1
                 yield doc
-        except:
+        except:  # noqa
             logging.exception('Error identifying document {}\'s language'.format(
                 repr(doc)))
     if doc_no:
@@ -237,7 +237,7 @@ def process_file(filename, input_dir, output_dir, languages,
         with notempty(openall(output_file, 'wt')) as outf:
             for doc in it:
                 print(doc, file=outf)
-    except:
+    except:  # noqa
         logging.exception('Got an error.')
     logging.info('Finished processing file {}...'.format(filename))
     return stats
@@ -276,7 +276,8 @@ def main():
                     keep_urls=keep_urls, drop_urls=drop_urls)
         # Note: + / sum() do not keep keys with 0 values here, hence update()
         stats = Counter()
-        for sub_stats in p.map(f, files):
+        for sub_stats in otqdm(p.imap_unordered(f, files),
+                               'Filtering corpus...', total=len(files)):
             stats.update(sub_stats)
         logging.info('Statistics: {}'.format(stats))
         p.close()
