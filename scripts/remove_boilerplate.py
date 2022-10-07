@@ -24,7 +24,7 @@ import warc
 from cc_corpus.boilerplate import (
     BoilerplateRemover, JustextRemover, TrafilatureRemover
 )
-from cc_corpus.utils import unquote_inf
+from cc_corpus.utils import consume, otqdm, unquote_inf
 
 
 IndexTuple = namedtuple('IndexTuple', ['index', 'domain', 'url', 'warc',
@@ -242,7 +242,9 @@ def main():
                            remover=remover)
 
     with Pool(args.processes) as pool:
-        pool.map(fn, index_files)
+        consume(otqdm(pool.imap_unordered(fn, index_files),
+                      f'Removing boilerplate with {args.boilerplate_tool}...',
+                      total=len(index_files)))
 
     logging.info('Done.')
 
