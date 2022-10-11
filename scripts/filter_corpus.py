@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 
 """
-Filters documents in a corpus. Currently two filters are supported:
+Filters documents in a corpus. Currently four filters are supported:
     - a language filter that discards documents not in one of the accepted
       languages
     - length filter that discards too short documents
+    - a URL whitelist
+    - a URL blacklist
 """
 
 from argparse import ArgumentParser

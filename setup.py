@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.7.6',
+      version='1.8.0',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -59,6 +59,7 @@ setup(name='commoncrawl-downloader',
           'scripts/deduplicate_index_urls_redis.py',
           'scripts/download_pages.py',
           'scripts/filter_corpus.py',
+          'scripts/filter_warc.py',
           'scripts/filter_known_urls.py',
           'scripts/find_finished_downloads.py',
           'scripts/index_statistics.py',
@@ -86,6 +87,7 @@ setup(name='commoncrawl-downloader',
           'scripts/top_n_conll.py',
           'scripts/reparse_documents.py',
           'scripts/fix_corpus.py',
+          'scripts/extract_htmls.py',
       ],
       install_requires=[
           'beautifulsoup4',
@@ -100,6 +102,8 @@ setup(name='commoncrawl-downloader',
           'justext',
           'lxml',
           'multiprocessing-logging',
+          # MIME detection
+          'python-magic',
           # Just for URL deduplication
           'redis',
           'requests',

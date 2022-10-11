@@ -15,10 +15,13 @@ from itertools import islice, zip_longest
 import os
 import os.path as op
 import pickle
+import re
 import sys
 from typing import Any, Generator, Iterable, Iterator, Sequence, Tuple
+from typing import Optional, Union
 from urllib.parse import unquote
 
+import magic
 from tqdm import tqdm
 
 try:
@@ -175,7 +178,7 @@ def host_weight(value):
     if weight:
         try:
             weight = float(weight)
-        except:
+        except:  # noqa
             raise ArgumentTypeError(
                 'Must be in the form of host:weight, where weight is a number. '
                 'It is optional, though.')
@@ -195,6 +198,29 @@ def host_to_path(path, host):
     if ext:
         hosty_path += ext
     return hosty_path
+
+
+mime_patterns = {
+    'txt': re.compile('^text/plain$'),
+    'html': re.compile('html')
+}
+
+
+def check_mime(data: Union[bytes, str]) -> tuple[Optional[str], str]:
+    """
+    Determines the "mime type" (txt, html, etc.) of a document.
+
+    :return: a 2-tuple, where the second field is the mime type, the first one
+             contains our "simplified mime types" (for now, "txt" or "html").
+             It will be ``None`` if the document does not have a mime type
+             that we can handle.
+    """
+    mime = magic.from_buffer(data, mime=True)
+    for mime_type, p in mime_patterns.items():
+        if p.search(mime):
+            return (mime_type, mime)
+    else:
+        return (None, mime)
 
 
 class Stats:
@@ -236,7 +262,7 @@ class Stats:
     def __getitem__(self, key):
         try:
             return getattr(self, key)
-        except:
+        except:  # noqa
             raise KeyError('No slot called `{}`'.format(key))
 
     def __setitem__(self, key, value):
