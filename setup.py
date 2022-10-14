@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.7.5',
+      version='1.8.0',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -43,8 +43,10 @@ setup(name='commoncrawl-downloader',
 
           # Specify the Python versions you support here. In particular, ensure
           # that you indicate whether you support Python 2, Python 3 or both.
-          'Programming Language :: Python :: 3.6',
-          'Programming Language :: Python :: 3.7'
+          'Programming Language :: Python :: 3.7',
+          'Programming Language :: Python :: 3.8',
+          'Programming Language :: Python :: 3.9',
+          'Programming Language :: Python :: 3.10',
       ],
       keywords='corpus common crawl hungarian',
       packages=find_packages(exclude=['scripts']),
@@ -57,6 +59,7 @@ setup(name='commoncrawl-downloader',
           'scripts/deduplicate_index_urls_redis.py',
           'scripts/download_pages.py',
           'scripts/filter_corpus.py',
+          'scripts/filter_warc.py',
           'scripts/filter_known_urls.py',
           'scripts/find_finished_downloads.py',
           'scripts/index_statistics.py',
@@ -84,6 +87,7 @@ setup(name='commoncrawl-downloader',
           'scripts/top_n_conll.py',
           'scripts/reparse_documents.py',
           'scripts/fix_corpus.py',
+          'scripts/extract_htmls.py',
       ],
       install_requires=[
           'beautifulsoup4',
@@ -98,11 +102,15 @@ setup(name='commoncrawl-downloader',
           'justext',
           'lxml',
           'multiprocessing-logging',
+          # MIME detection
+          'python-magic',
           # Just for URL deduplication
           'redis',
           'requests',
           # Will maybe remove this later
           'simplejson',
+          # Boilerplate removal
+          'trafilatura',  # 1.2.2
           # Easier TLD extraction
           'tldextract',
           # Language identification -- cld2 master doesn't compile ATM

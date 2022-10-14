@@ -26,6 +26,7 @@ try:
 except ImportError:
     idzip = None
 
+
 def openall(
     filename, mode='rt', encoding=None, errors=None, newline=None,
     buffering=-1, closefd=True, opener=None,  # for open()
@@ -175,7 +176,7 @@ def host_weight(value):
     if weight:
         try:
             weight = float(weight)
-        except:
+        except:  # noqa
             raise ArgumentTypeError(
                 'Must be in the form of host:weight, where weight is a number. '
                 'It is optional, though.')
@@ -236,7 +237,7 @@ class Stats:
     def __getitem__(self, key):
         try:
             return getattr(self, key)
-        except:
+        except:  # noqa
             raise KeyError('No slot called `{}`'.format(key))
 
     def __setitem__(self, key, value):
