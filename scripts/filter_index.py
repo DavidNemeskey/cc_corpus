@@ -172,6 +172,8 @@ def main():
                     bad_indexp=bad_indexp)
         consume(otqdm(pool.imap_unordered(f, input_files),
                       'Filtering index...', total=len(input_files)))
+        pool.close()
+        pool.join()
 
 
 if __name__ == '__main__':
