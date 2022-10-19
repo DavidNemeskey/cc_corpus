@@ -14,9 +14,10 @@ import io
 from itertools import islice, zip_longest
 import os
 import os.path as op
+from pathlib import Path
 import pickle
 import sys
-from typing import Any, Generator, Iterable, Iterator, Sequence, Tuple
+from typing import Any, Generator, Iterable, Iterator, Sequence, Union
 from urllib.parse import unquote
 
 from tqdm import tqdm
@@ -28,8 +29,8 @@ except ImportError:
 
 
 def openall(
-    filename, mode='rt', encoding=None, errors=None, newline=None,
-    buffering=-1, closefd=True, opener=None,  # for open()
+    filename: Union[Path, str], mode='rt', encoding=None, errors=None,
+    newline=None, buffering=-1, closefd=True, opener=None,  # for open()
     compresslevel=5,  # faster default compression
 ):
     """
@@ -39,6 +40,7 @@ def openall(
     - the default compresslevel is 5, because e.g. gzip does not benefit a lot
       from higher values, only becomes slower.
     """
+    filename = str(filename)
     if filename.endswith('.dz') and idzip:
         # Unfortunately idzip's API is not very good
         f = idzip.open(filename, mode.replace('t', '').replace('b', '') + 'b')
@@ -321,7 +323,7 @@ def split_into(seq: Sequence, n: int) -> Generator[Sequence, None, None]:
         start = end
 
 
-def headtail(iterable: Iterable) -> Tuple[Any, Iterable]:
+def headtail(iterable: Iterable) -> tuple[Any, Iterable]:
     """
     Returns the head and tail of _iterable_.
 
