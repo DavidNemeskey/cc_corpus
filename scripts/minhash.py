@@ -22,7 +22,7 @@ from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.deduplication import BatchWriter, MinHasher
-from cc_corpus.utils import collect_inputs
+from cc_corpus.utils import collect_inputs, otqdm
 
 
 def parse_arguments():
@@ -123,6 +123,7 @@ def main():
         os.makedirs(args.output_dir)
 
     files = sorted(collect_inputs(args.inputs))
+    print(f'Number of processes: {args.processes}')
     logging.info('Found a total of {} input files.'.format(len(files)))
 
     with closing(
@@ -131,7 +132,9 @@ def main():
         with Pool(args.processes) as pool:
             minhash_fun = minhash_ps if args.unit == 'p' else minhash_docs
             f = partial(minhash_fun, permutations=args.permutations, n=args.n)
-            for input_file, results in pool.imap_unordered(f, files):
+            for input_file, results in otqdm(
+                pool.imap_unordered(f, files), 'Minhashing...', total=len(files)
+            ):
                 logging.debug('Got results for {}: {}'.format(
                     input_file, len(results['minhash'])))
                 writer.write_results(input_file, results)
