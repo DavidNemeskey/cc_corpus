@@ -101,7 +101,7 @@ def unpickle_stream(inf):
 
 class NoEmptyWriteWrapper:
     """
-    A file object wrapper deletes the file on close() if if was opened for
+    A file object wrapper deletes the file on close() if it was opened for
     writing but nothing was written. Useful for file filtering tasks.
 
     Truth be told, instead of this, a lazy file object (that only creates the
