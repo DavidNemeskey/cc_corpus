@@ -63,6 +63,7 @@ def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
     """
     with openall(urls_file) as inf:
         urls = set()
+        no_urls = 0
         for no_urls, url in enumerate(map(str.strip, inf), start=1):
             urls.add(url_fn(url))
             if no_urls % 5000000 == 0:

@@ -144,7 +144,6 @@ class RotatedGzip:
 
 
 def step1(glob_pattern: str, out_dir: Path) -> int:
-    # time ls *.gz | parallel zcat | sort -k 3,3 -k 4,4n > ../ide
     out_dir.mkdir(parents=True, exist_ok=True)
     out_file = out_dir / 'sorted_index.gz'
     if not out_file.exists():
