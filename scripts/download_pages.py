@@ -189,8 +189,11 @@ def download_ranges(warc_file_name: str,
             continue
 
         if r.status_code == 206:
-            multipart_data = decoder.MultipartDecoder.from_response(r)
-            return [p.content for p in multipart_data.parts]
+            if len(offsets_and_lengths) > 1:
+                multipart_data = decoder.MultipartDecoder.from_response(r)
+                return [p.content for p in multipart_data.parts]
+            else:
+                return [r.content]
         elif r.status_code == 200:
             logging.error(f'Had to download {warc_file_name} as {byte_range} '
                           'was not available.')
@@ -230,7 +233,8 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
                                 shell=True, encoding='utf-8').strip()
     )
     lines_per_file = 1000
-    num_files = num_lines / num_threads / lines_per_file
+    # At least one file...
+    num_files = max(num_lines / num_threads / lines_per_file, 1)
     file_padding = f'{{:0{math.floor(math.log10(num_files)) + 1}}}'
 
     # TODO use a condition to signal end of processing
@@ -271,16 +275,16 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
         outf, doc_file = open_files()
         try:
             while not exiting.is_set():
-                warc, lines = q.get(True, 5)
+                warc, index_lines = q.get(True, 5)
                 if warc is not None:
-                    logging.info(f'{tid} got {warc} with {len(lines)} ranges.')
-                    ranges = [(int(line[3]), int(line[4])) for line in lines]
+                    ranges = [(int(index[3]), int(index[4]))
+                              for index in index_lines]
                     st = time.time()
                     downloaded = download_ranges(warc, ranges, retries)
                     logging.info(f'Downloaded in {time.time() - st} seconds.')
-                    for line, doc in zip(lines, downloaded):
+                    for index, doc in zip(index_lines, downloaded):
                         if doc is not None:  # decompression error
-                            print(line, file=outf)
+                            print(' '.join(index), file=outf)
                             doc_file.write(doc)
                             written += 1
                             if written == lines_per_file:
@@ -292,7 +296,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
                 else:
                     # Put the item signalling end of processing back so that
                     # other threads get it as well.
-                    q.put((warc, lines))
+                    q.put((warc, index_lines))
                     break
         except:  # noqa
             logging.exception(f'Exception in {tid}')
