@@ -289,7 +289,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
                               for index in index_lines]
                     st = time.time()
                     downloaded = download_ranges(warc, ranges, retries)
-                    logging.info(f'Downloaded in {time.time() - st} seconds.')
+                    logging.info(f'Downloaded in {time.time() - st:.2f} seconds.')
                     for index, doc in zip(index_lines, downloaded):
                         index_str = ' '.join(index)
                         try:
