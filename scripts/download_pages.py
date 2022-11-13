@@ -20,6 +20,7 @@ time.
 
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
+import gzip
 import hashlib
 from itertools import groupby
 import logging
@@ -27,11 +28,12 @@ import math
 from operator import itemgetter
 import os
 from pathlib import Path
-from queue import Full, Queue
+from queue import Empty, Full, Queue
 import signal
 import subprocess
 import threading
 import time
+import zlib
 
 from requests_toolbelt.multipart import decoder
 import requests
@@ -62,8 +64,8 @@ def parse_arguments():
                         help='Chunk size in bytes (default: 99 MB)')
     parser.add_argument('--ext', '-e', default='txt.gz',
                         help='Out file extension (default: txt.gz)')
-    parser.add_argument('--padding', '-p', default=4,
-                        help='Padding for chunk numbering (default: 4)')
+    parser.add_argument('--padding', '-p', default=2,
+                        help='Padding for chunk numbering (default: 2)')
     parser.add_argument('-t', '--tmp',
                         help='The name of the temporary directory. Defaults '
                              'to the system default.')
@@ -87,14 +89,9 @@ class RotatedGzip:
     Writes all documents into a "single" rotated file. The file name contains a
     chunk counter. When the file reaches a certain size, it is closed and a new
     one is opened with increased chunk counter.
-
-    .. note::
-        Contrary to the name, the content is NOT compressed. Since the data
-        we download is already compressed, we simply write it to file, and
-        due to the magic of the gzip format, it will just work.
     """
     def __init__(self, output_dir: str, chunk_size: int, name: str,
-                 padding: int = 4, extension: str = 'txt.gz'):
+                 padding: int = 2, extension: str = 'txt.gz'):
         """
         :param output_dir: the output directory.
         :param chunk_size: the maximum size of a file chunk (in bytes).
@@ -134,7 +131,7 @@ class RotatedGzip:
                 os.path.basename(self.format_string.format(self.counter))
             )
             try:
-                self._fh = open(self.current_file, 'xb')
+                self._fh = gzip.open(self.current_file, 'xb')
             except FileExistsError:
                 self.counter += 1
 
@@ -171,6 +168,7 @@ def download_ranges(warc_file_name: str,
     :param length: the (compressed) size of the document.
     :param retry_left: the number of retries left.
     """
+    # logging.info(f'DR {warc_file_name=} {offsets_and_lengths=}')
     range_str = ', '.join(f'{offset}-{offset + length}'
                           for offset, length in offsets_and_lengths)
     byte_range = f'bytes={range_str}'
@@ -190,8 +188,13 @@ def download_ranges(warc_file_name: str,
 
         if r.status_code == 206:
             if len(offsets_and_lengths) > 1:
-                multipart_data = decoder.MultipartDecoder.from_response(r)
-                return [p.content for p in multipart_data.parts]
+                try:
+                    multipart_data = decoder.MultipartDecoder.from_response(r)
+                    return [p.content for p in multipart_data.parts]
+                except:  # noqa
+                    logging.exception(f'Error while reading multipart data '
+                                      f'with file {warc_file_name}; '
+                                      f'{retry_str} left.')
             else:
                 return [r.content]
         elif r.status_code == 200:
@@ -244,9 +247,11 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
         with openall(ranges_file, 'rt') as inf:
             it = (line.strip().split() for line in inf)
             for warc, ranges in groupby(it, key=itemgetter(2)):
+                ranges_list = list(ranges)
+                # logging.info(f'Adding {warc=} ({len(l)}) {l=}...')
                 while not exiting.is_set():
                     try:
-                        q.put((warc, list(ranges)), True, 5)
+                        q.put((warc, ranges_list), True, 5)
                         break
                     except Full:
                         pass
@@ -275,7 +280,10 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
         outf, doc_file = open_files()
         try:
             while not exiting.is_set():
-                warc, index_lines = q.get(True, 5)
+                try:
+                    warc, index_lines = q.get(True, 5)
+                except Empty:
+                    continue
                 if warc is not None:
                     ranges = [(int(index[3]), int(index[4]))
                               for index in index_lines]
@@ -283,15 +291,22 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
                     downloaded = download_ranges(warc, ranges, retries)
                     logging.info(f'Downloaded in {time.time() - st} seconds.')
                     for index, doc in zip(index_lines, downloaded):
-                        if doc is not None:  # decompression error
-                            print(' '.join(index), file=outf)
-                            doc_file.write(doc)
+                        index_str = ' '.join(index)
+                        try:
+                            decompressed = zlib.decompress(doc, zlib.MAX_WBITS | 32)
+                            print(index_str, file=outf)
+                            doc_file.write(decompressed)
                             written += 1
                             if written == lines_per_file:
                                 outf.close()
                                 doc_file.close()
                                 chunk, written = chunk + 1, 0
                                 outf, doc_file = open_files()
+                        except zlib.error:
+                            logging.exception(
+                                'Decompression error occured for '
+                                f'`{index_str}.`'
+                            )
                     progress_bar.update(1)
                 else:
                     # Put the item signalling end of processing back so that
@@ -334,7 +349,7 @@ def main():
     ranges_dir = Path(args.tmp) / f'ranges_{input_hash}'
     if ranges_dir.is_dir() and (ranges_dir / "sorted_index.gz").is_file():
         print('Ranges already computed, skipping...')
-        logging.info('Ranges already computed, skipping...')
+        logging.info(f'Ranges already computed in {ranges_dir}, skipping...')
     else:
         print('Sorting index...')
         step1(args.input_pattern, ranges_dir)
