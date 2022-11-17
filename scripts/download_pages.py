@@ -33,6 +33,7 @@ import signal
 import subprocess
 import threading
 import time
+from typing import TextIO
 import zlib
 
 from requests_toolbelt.multipart import decoder
@@ -55,6 +56,9 @@ def parse_arguments():
                              'written. The numbering will be consistent with '
                              'the files in index_output_dir, which is '
                              'required by remove_boilerplate.py.')
+    parser.add_argument('error_file', type=Path,
+                        help='The file to which the index lines that '
+                             'could not be downloaded are written.')
     parser.add_argument('--out-filename', '-of', default='common_crawl',
                         help='Output filename part (default: common_crawl).')
     parser.add_argument('--retry', '-r', type=int, default=10,
@@ -156,6 +160,10 @@ def step1(glob_pattern: str, out_dir: Path) -> int:
     return retval
 
 
+class DownloadError(Exception):
+    pass
+
+
 def download_ranges(warc_file_name: str,
                     offsets_and_lengths: list[tuple[int, int]],
                     retry_left: int) -> list[bytes]:
@@ -168,12 +176,12 @@ def download_ranges(warc_file_name: str,
     :param length: the (compressed) size of the document.
     :param retry_left: the number of retries left.
     """
-    # logging.info(f'DR {warc_file_name=} {offsets_and_lengths=}')
+    logging.info(f'DR {warc_file_name=} {len(offsets_and_lengths)=}')
     range_str = ', '.join(f'{offset}-{offset + length}'
                           for offset, length in offsets_and_lengths)
     byte_range = f'bytes={range_str}'
-    content = b''
-    while len(content) == 0 and retry_left > 0:
+    while retry_left > 0:
+        logging.info(f'W retry {retry_left}')
         retry_left -= 1
         retry_str = f'{retry_left} retr{"y" if retry_left == 1 else "ies"}'
         try:
@@ -191,28 +199,32 @@ def download_ranges(warc_file_name: str,
                 try:
                     multipart_data = decoder.MultipartDecoder.from_response(r)
                     return [p.content for p in multipart_data.parts]
-                except:  # noqa
-                    logging.exception(f'Error while reading multipart data '
-                                      f'with file {warc_file_name}; '
-                                      f'{retry_str} left.')
+                except Exception as e:  # noqa
+                    logging.error(f'Error while reading multipart data with '
+                                  f'file {warc_file_name}: {e}; '
+                                  f'{retry_str} left.')
             else:
                 return [r.content]
         elif r.status_code == 200:
             logging.error(f'Had to download {warc_file_name} as {byte_range} '
                           'was not available.')
+            time.sleep(1)
             continue
         elif r.status_code == 404:
             logging.error(f'{warc_file_name} not found (404).')
-            break
+            return [None for _ in offsets_and_lengths]
         else:
+            logging.error(f'Misc HTTP error for {warc_file_name}: '
+                          f'{r.status_code} - {r.text}')
+            time.sleep(1)
             continue
     else:
-        raise ValueError(f'Could not download ranges from {warc_file_name}.')
+        raise DownloadError(f'Could not download ranges from {warc_file_name}.')
 
 
 def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
-          data_out_dir: Path, retries: int, chunk_size: int, file_prefix: str,
-          doc_padding: int, extension: str):
+          data_out_dir: Path, error_file: Path, retries: int, chunk_size: int,
+          file_prefix: str, doc_padding: int, extension: str):
     """The actual downloading of byte ranges collected in step1."""
     logging.info('Downloading pages...')
     q = Queue(num_threads * 2)
@@ -220,6 +232,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
     # Signal handling so that the script can be interrupted / terminated
     # gracefully. See https://stackoverflow.com/questions/65832061/
     exiting = threading.Event()
+    error_lock = threading.Lock()
     def signal_handler(signum, frame):  # noqa
         print('Stopping after all ongoing downloads have completed. This '
               'may take some time...')
@@ -260,7 +273,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
         if not exiting.is_set():
             q.put((None, (None, None)))
 
-    def consumer(tid: int, progress_bar):
+    def consumer(tid: int, progress_bar, errf: TextIO):
         """
         Downloads the byte ranges read from the queue and writes them to disk.
         """
@@ -287,26 +300,35 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
                 if warc is not None:
                     ranges = [(int(index[3]), int(index[4]))
                               for index in index_lines]
-                    st = time.time()
-                    downloaded = download_ranges(warc, ranges, retries)
-                    logging.info(f'Downloaded in {time.time() - st:.2f} seconds.')
-                    for index, doc in zip(index_lines, downloaded):
-                        index_str = ' '.join(index)
-                        try:
-                            decompressed = zlib.decompress(doc, zlib.MAX_WBITS | 32)
-                            print(index_str, file=outf)
-                            doc_file.write(decompressed)
-                            written += 1
-                            if written == lines_per_file:
-                                outf.close()
-                                doc_file.close()
-                                chunk, written = chunk + 1, 0
-                                outf, doc_file = open_files()
-                        except zlib.error:
-                            logging.exception(
-                                'Decompression error occured for '
-                                f'`{index_str}.`'
-                            )
+                    try:
+                        st = time.time()
+                        downloaded = download_ranges(warc, ranges, retries)
+                        logging.info(f'Downloaded in {time.time() - st:.2f} seconds.')
+                        for index, doc in zip(index_lines, downloaded):
+                            if doc is None:
+                                continue
+                            index_str = ' '.join(index)
+                            try:
+                                decompressed = zlib.decompress(doc, zlib.MAX_WBITS | 32)
+                                print(index_str, file=outf)
+                                doc_file.write(decompressed)
+                                written += 1
+                                if written == lines_per_file:
+                                    outf.close()
+                                    doc_file.close()
+                                    chunk, written = chunk + 1, 0
+                                    outf, doc_file = open_files()
+                            except zlib.error:
+                                logging.exception(
+                                    'Decompression error occured for '
+                                    f'`{index_str}.`'
+                                )
+                    except DownloadError as de:
+                        logging.error(f'Could not download {warc}: {de}.')
+                        error_lock.acquire()
+                        for index in index_lines:
+                            print(' '.join(index), file=errf)
+                        error_lock.release()
                     progress_bar.update(1)
                 else:
                     # Put the item signalling end of processing back so that
@@ -314,7 +336,8 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
                     q.put((warc, index_lines))
                     break
         except:  # noqa
-            logging.exception(f'Exception in {tid}')
+            logging.exception(f'Exception in {tid}: exiting...')
+            exiting.set()
         finally:
             logging.info(f'Consumer {tid} finished, written {chunk} files.')
             outf.close()
@@ -322,17 +345,20 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
 
     index_out_dir.mkdir(parents=True, exist_ok=True)
     data_out_dir.mkdir(parents=True, exist_ok=True)
+    error_file.parent.mkdir(parents=True, exist_ok=True)
 
     thread_padding = f'{{:0{math.floor(math.log10(num_threads)) + 1}}}'
     progress_bar = otqdm(desc='Downloading WARC ranges...')
+    errf = openall(error_file, 'wt')
     try:
         with ThreadPoolExecutor(max_workers=num_threads + 1) as executor:
             executor.submit(producer)
             for tid in range(1, num_threads + 1):
                 executor.submit(consumer,
-                                thread_padding.format(tid), progress_bar)
+                                thread_padding.format(tid), progress_bar, errf)
         logging.info('Download completed.')
     finally:
+        errf.close()
         progress_bar.close()
 
 
@@ -356,8 +382,8 @@ def main():
 
     print('Downloading pages...')
     step2(ranges_dir, args.processes, args.index_output_dir,
-          args.data_output_dir, args.retry, args.chunksize, args.out_filename,
-          args.padding, args.ext)
+          args.data_output_dir, args.error_file, args.retry, args.chunksize,
+          args.out_filename, args.padding, args.ext)
     print('Done.')
 
 
