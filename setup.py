@@ -12,7 +12,7 @@ def readme():
         return f.read()
 
 setup(name='commoncrawl-downloader',
-      version='1.10.0',
+      version='1.10.2',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -106,6 +106,8 @@ setup(name='commoncrawl-downloader',
           # Just for URL deduplication
           'redis',
           'requests',
+          # For handling multipart requests
+          'requests-toolbelt',
           # Will maybe remove this later
           'simplejson',
           # Boilerplate removal
