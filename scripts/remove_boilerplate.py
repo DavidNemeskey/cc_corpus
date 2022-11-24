@@ -237,6 +237,7 @@ def main():
     os.nice(20)  # Play nice
 
     index_files = os.listdir(args.index_dir)
+    logging.debug(f'{index_files=}')
     fn = functools.partial(process, index_dir=args.index_dir,
                            warc_dir=args.warc_dir, output_dir=args.output_dir,
                            remover=remover)
@@ -246,7 +247,7 @@ def main():
                       f'Removing boilerplate with {args.boilerplate_tool}...',
                       total=len(index_files)))
         pool.close()
-        pool.joins()
+        pool.join()
 
     logging.info('Done.')
 
