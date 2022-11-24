@@ -66,8 +66,8 @@ def parse_arguments():
                              'decompression errors (default: 10)')
     parser.add_argument('--chunksize', '-c', type=int, default=99*1000*1000,
                         help='Chunk size in bytes (default: 99 MB)')
-    parser.add_argument('--ext', '-e', default='txt.gz',
-                        help='Out file extension (default: txt.gz)')
+    parser.add_argument('--ext', '-e', default='warc.gz',
+                        help='Out file extension (default: warc.gz)')
     parser.add_argument('--padding', '-p', default=2,
                         help='Padding for chunk numbering (default: 2)')
     parser.add_argument('-t', '--tmp',
@@ -369,6 +369,8 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(threadName)-10s)- %(levelname)s - %(message)s'
     )
+
+    os.nice(20)  # Play nice
 
     input_str = str((Path(os.getcwd()) / args.input_pattern).resolve())
     input_hash = hashlib.sha224(input_str.encode('utf-8')).hexdigest()
