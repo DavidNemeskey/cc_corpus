@@ -40,7 +40,7 @@ class JustextRemover(BoilerplateRemover):
         logging.debug(f'Number of stopwords: {len(self.stopwords)}')
 
     def remove(self, html: bytes, url: str):
-        return [p for p in justext.justext(html, self.stopwords)
+        return [p.text for p in justext.justext(html, self.stopwords)
                 if not p.is_boilerplate]
 
 
