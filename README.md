@@ -574,16 +574,11 @@ GNU LGPL 3.0 or any later version.
 
 If you use this program please cite the following paper:
 
-Indig Balázs. _Közös crawlnak is egy korpusz a vége -- Korpuszépítés a CommonCrawl .hu domainjából_ XIV. Magyar Számítógépes Nyelvészeti Konferencia (MSZNY 2018). 125--134. Szeged. 2018.
+Nemeskey, D.M.: Natural Language Processing Methods for Language Modeling. Ph.D. thesis, Eötvös Loránd University (2020)
 
-    @inproceedings{indig_2018a,
-        title = {K{\"o}z{\"o}s crawlnak is egy korpusz a v{\'e}ge -- Korpusz{\'e}p{\'i}t{\'e}s a CommonCrawl .hu domainj{\'a}b{\'o}l},
-        booktitle = {XIV. Magyar Sz{\'a}m{\'i}t{\'o}g{\'e}pes Nyelv{\'e}szeti Konferencia (MSZNY 2018)},
-        year = {2018},
-        pages = {125{\textendash}134},
-        publisher={Szegedi Tudom{\'a}nyegyetem Informatikai Tansz{\'e}kcsoport},
-        organization = {Szegedi Tudom{\'a}nyegyetem Informatikai Int{\'e}zet},
-        address = {Szeged},
-        author = {Indig, Bal{\'a}zs},
-        editor = {Vincze, Veronika}
+    @PhDThesis{ Nemeskey:2020,                                                 
+      author = {Nemeskey, Dávid Márk},
+      title  = {Natural Language Processing Methods for Language Modeling},
+      year   = {2020},
+      school = {E\"otv\"os Lor\'and University}
     }
