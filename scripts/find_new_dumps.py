@@ -85,37 +85,12 @@ def get_info_dict(input_dir: Optional[Path]) -> dict:  # Optinal[path]
                             if date_str not in ind_in_dir:
                                 out_dict[date_str] = index_name
                     break
-
     return out_dict
 
 
-def help_func(url: str, input_dir: Optional[Path]):
-    if input_dir is not None:
-        ind_in_dir = {path.name for path in input_dir.iterdir()}
-    else:
-        ind_in_dir = set()
-    webpage = requests.get('https://commoncrawl.org/the-data/get-started/')
-    soup = bs4.BeautifulSoup(webpage.text)
-    if url is not None:
-        for ul in soup.find_all('ul'):
-            if 'CC-MAIN' in ul.text:
-                for idx, li in enumerate(ul.findChildren('li')):
-                    info = get_info_from_line(li)
-                    if info is not None:
-                        date_str, index_name = info
-                        print(date_str, index_name)
-                break
+def help_func(info_dict: dict):
+    print(info_dict)
 
-    else:
-        for ul in soup.find_all('ul'):
-            if 'CC-MAIN' in ul.text:
-                for idx, li in enumerate(ul.findChildren('li')):
-                    info = get_info_from_line(li)
-                    if info is not None:
-                        date_str, index_name = info
-                        if date_str not in ind_in_dir:
-                            print(date_str, index_name)
-                break
 
 
 def send_dict_to_url(url: str, info_dict: dict) -> None:
@@ -128,7 +103,7 @@ def main():
     if args.url:
         send_dict_to_url(args.url, info_dict)
     else:
-        help_func(args.url, args.input_dir)
+        help_func(info_dict)
 
 
 if __name__ == '__main__':
