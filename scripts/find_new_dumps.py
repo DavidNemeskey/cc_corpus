@@ -74,7 +74,7 @@ def get_info_dict(input_dir: Optional[Path]) -> dict:  # Optinal[path]
     soup = bs4.BeautifulSoup(webpage.text)
 
     out_dict = {}
-    for div in soup.find_all('div', "entry-content"):
+    for div in soup.find_all('div', 'entry-content'):
         if 'ul' in div.text:
             for ul in soup.find_all('ul'):
                 if 'CC-MAIN' in ul.text:
