@@ -74,7 +74,7 @@ def get_info_dict(input_dir: Optional[Path]) -> dict:  # Optinal[path]
     soup = bs4.BeautifulSoup(webpage.text)
 
     out_dict = {}
-    for div in soup.find_all('div class="entry_content"'):
+    for div in soup.find_all('div', "entry-content"):
         if 'ul' in div.text:
             for ul in soup.find_all('ul'):
                 if 'CC-MAIN' in ul.text:
@@ -84,13 +84,15 @@ def get_info_dict(input_dir: Optional[Path]) -> dict:  # Optinal[path]
                             date_str, index_name = info
                             if date_str not in ind_in_dir:
                                 out_dict[date_str] = index_name
+
                     break
+
     return out_dict
 
 
-def help_func(info_dict: dict):
-    print(info_dict)
-
+def help_func(info_dict):
+    for key, value in info_dict.items():
+        print(key, "     ", value)
 
 
 def send_dict_to_url(url: str, info_dict: dict) -> None:
