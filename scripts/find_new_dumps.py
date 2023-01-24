@@ -8,6 +8,10 @@ import requests
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Optional
+import warnings
+
+
+warnings.filterwarnings("ignore")
 
 
 def parse_arguments():
@@ -67,11 +71,10 @@ def get_info_dict(input_dir: Optional[Path]) -> dict:  # Optinal[path]
     else:
         ind_in_dir = set()
     webpage = requests.get("https://commoncrawl.org/the-data/get-started/")
-    soup = bs4.BeautifulSoup(webpage.text, features="html5lib")
-    print(soup)
+    soup = bs4.BeautifulSoup(webpage.text)
 
     out_dict = {}
-    for div in soup.find_all('div'):
+    for div in soup.find_all('div class="entry_content"'):
         if 'ul' in div.text:
             for ul in soup.find_all('ul'):
                 if 'CC-MAIN' in ul.text:
@@ -86,17 +89,33 @@ def get_info_dict(input_dir: Optional[Path]) -> dict:  # Optinal[path]
     return out_dict
 
 
-def help_func():
+def help_func(url: str, input_dir: Optional[Path]):
+    if input_dir is not None:
+        ind_in_dir = {path.name for path in input_dir.iterdir()}
+    else:
+        ind_in_dir = set()
     webpage = requests.get('https://commoncrawl.org/the-data/get-started/')
-    soup = bs4.BeautifulSoup(webpage.text, features='html5lib')
-    for ul in soup.find_all('ul'):
-        if 'CC-MAIN' in ul.text:
-            for idx, li in enumerate(ul.findChildren('li')):
-                info = get_info_from_line(li)
-                if info is not None:
-                    date_str, index_name = info
-                    print(date_str, index_name)
-            break
+    soup = bs4.BeautifulSoup(webpage.text)
+    if url is not None:
+        for ul in soup.find_all('ul'):
+            if 'CC-MAIN' in ul.text:
+                for idx, li in enumerate(ul.findChildren('li')):
+                    info = get_info_from_line(li)
+                    if info is not None:
+                        date_str, index_name = info
+                        print(date_str, index_name)
+                break
+
+    else:
+        for ul in soup.find_all('ul'):
+            if 'CC-MAIN' in ul.text:
+                for idx, li in enumerate(ul.findChildren('li')):
+                    info = get_info_from_line(li)
+                    if info is not None:
+                        date_str, index_name = info
+                        if date_str not in ind_in_dir:
+                            print(date_str, index_name)
+                break
 
 
 def send_dict_to_url(url: str, info_dict: dict) -> None:
@@ -109,7 +128,7 @@ def main():
     if args.url:
         send_dict_to_url(args.url, info_dict)
     else:
-        help_func()
+        help_func(args.url, args.input_dir)
 
 
 if __name__ == '__main__':
