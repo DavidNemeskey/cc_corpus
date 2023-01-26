@@ -92,7 +92,7 @@ def get_info_dict(input_dir: Optional[Path]) -> dict:  # Optinal[path]
 
 def help_func(info_dict):
     for key, value in info_dict.items():
-        print(key, "     ", value)
+        print(key, '\t', value)
 
 
 def send_dict_to_url(url: str, info_dict: dict) -> None:
