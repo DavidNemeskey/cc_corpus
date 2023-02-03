@@ -292,8 +292,8 @@ def other_main(args):
         len(batch_prefixes), args.input_dir))
 
     batches_to_subtract = find_all_batches(args.cross_dir)
-    logging.info('Found a total of {} batches in {}to deduplicate against.'.format(
-        len(batches_to_subtract), args.cross_dir))
+    logging.info(f'Found a total of {len(batches_to_subtract)} batches in '
+                 f'{args.cross_dir} to deduplicate against.')
 
     with ProcessPoolExecutor(max_workers=args.processes) as executor:
         f = partial(deduplicate_other, batches_to_subtract=batches_to_subtract,
