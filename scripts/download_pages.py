@@ -180,6 +180,7 @@ def download_ranges(warc_file_name: str,
     range_str = ', '.join(f'{offset}-{offset + length}'
                           for offset, length in offsets_and_lengths)
     byte_range = f'bytes={range_str}'
+    orig_retry_left = retry_left
     while retry_left > 0:
         logging.info(f'W retry {retry_left}')
         retry_left -= 1
@@ -208,15 +209,16 @@ def download_ranges(warc_file_name: str,
         elif r.status_code == 200:
             logging.error(f'Had to download {warc_file_name} as {byte_range} '
                           'was not available.')
-            time.sleep(1)
+            time.sleep(orig_retry_left - retry_left)
             continue
         elif r.status_code == 404:
             logging.error(f'{warc_file_name} not found (404).')
             return [None for _ in offsets_and_lengths]
         else:
             logging.error(f'Misc HTTP error for {warc_file_name}: '
-                          f'{r.status_code} - {r.text}')
-            time.sleep(1)
+                          f'{r.status_code} - {r.text}; sleeping '
+                          f'{orig_retry_left - retry_left}...')
+            time.sleep(orig_retry_left - retry_left)
             continue
     else:
         raise DownloadError(f'Could not download ranges from {warc_file_name}.')
