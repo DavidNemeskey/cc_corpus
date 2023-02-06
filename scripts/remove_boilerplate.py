@@ -115,11 +115,11 @@ class IndexWarcReader:
             return
 
         # Escape paragraph for parsable XML
-        text_removed = '\n\n'.join(
-            '<p>\n{0}\n</p>'.format(xml.sax.saxutils.escape(paragraph))
+        extracted_text = '\n\n'.join(
+            f'<p>\n{xml.sax.saxutils.escape(paragraph)}\n</p>'
             for paragraph in paragraphs
         )
-        if len(text_removed) == 0:
+        if len(extracted_text) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
             return
@@ -131,7 +131,7 @@ class IndexWarcReader:
                   index.domain, index.index, index.url, index.warc,
                   index.offset, index.length, index.status, index.mime,
                   bio.getvalue().decode('utf-8').strip(),
-                  header.decode('utf-8').strip(), text_removed),
+                  header.decode('utf-8').strip(), extracted_text),
               file=self.outf)
 
         if index_id % 1000 == 0:
