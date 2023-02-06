@@ -8,10 +8,12 @@ semi-XML format.
 
 from argparse import ArgumentParser
 from collections import namedtuple
+from collections.abc import Generator
 from fnmatch import fnmatch
 import functools
 import gzip
 import io
+from itertools import chain
 import logging
 from multiprocessing import Pool
 import os
@@ -20,10 +22,12 @@ import xml.sax.saxutils
 
 from multiprocessing_logging import install_mp_handler
 import warc
+from warc import WARCRecord
 
 from cc_corpus.boilerplate import (
     BoilerplateRemover, JustextRemover, TrafilatureRemover
 )
+from cc_corpus.content_conversion import convert
 from cc_corpus.utils import consume, otqdm, unquote_inf
 
 
@@ -98,15 +102,19 @@ class IndexWarcReader:
         """Runs the supplied boilerplate remover."""
         pass
 
-    def process_record(self, index_id: int, index, warc):
+    def process_record(self, index_id: int, index, warc: WARCRecord):
         """Writes the output file."""
         # We need the WARC header...
         bio = io.BytesIO()
         warc.header.write_to(bio)
         # And the HTML header and text as well. jusText can handle bytes
-        header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
+        # header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
+        header, chunks = convert(warc)
+        logging.debug(f'chunks: {chunks}')
         try:
-            paragraphs = self.remover.remove(text, index.url)
+            paragraphs = chain.from_iterable(
+                self.remover.remove(chunk, index.url) for chunk in chunks
+            )
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
         except:  # noqa
             # Do not distinguish between the different errors
@@ -146,7 +154,7 @@ class IndexWarcReader:
                 yield IndexTuple(op.splitext(index_file)[0],
                                  *line.strip().split())
 
-    def warc_records(self, index_file):
+    def warc_records(self, index_file) -> Generator[WARCRecord]:
         """
         Enumerates WARC records from the WARC files that correspond to
         index_file.
