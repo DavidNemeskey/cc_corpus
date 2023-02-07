@@ -64,7 +64,7 @@ def convert(record: WARCRecord):
     elif content_type == 'application/rss+xml':
         chunks = convert_rss(text)
     else:
-        chunks.append(text)
+        chunks = [text]
 
     return header, [chunk for chunk in chunks if chunk and chunk.strip()]
     # return header, [str(BeautifulSoup(chunk)) for chunk in chunks
