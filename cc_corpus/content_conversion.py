@@ -9,7 +9,7 @@ HTML that boilerplate removers can consume based on their content types.
 from typing import Any, Optional
 
 import atoma
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 from warc import WARCRecord
 
 
@@ -46,5 +46,7 @@ def convert(record: WARCRecord):
             chunks.append('\n\n'.join(feed_chunks))
     else:
         chunks.append(text)
-    return header, [str(BeautifulSoup(chunk)) for chunk in chunks
-                    if chunk and chunk.strip()]
+
+    return header, [chunk for chunk in chunks if chunk and chunk.strip()]
+    # return header, [str(BeautifulSoup(chunk)) for chunk in chunks
+    #                 if chunk and chunk.strip()]
