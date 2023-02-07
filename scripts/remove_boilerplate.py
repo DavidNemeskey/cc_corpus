@@ -110,7 +110,6 @@ class IndexWarcReader:
         # And the HTML header and text as well. jusText can handle bytes
         # header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
         header, chunks = convert(warc)
-        logging.debug(f'chunks: {chunks}')
         try:
             paragraphs = chain.from_iterable(
                 self.remover.remove(chunk, index.url) for chunk in chunks

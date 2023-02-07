@@ -341,5 +341,13 @@ def consume(iterator: Iterator):
     collections.deque(iterator, maxlen=0)
 
 
+def is_empty(s: Union[bytes, str]) -> bool:
+    """
+    Checks if _s_ is empty; i.e. it is either ``None`` or contains only
+    whitespaces.
+    """
+    return s is None or not s.strip()
+
+
 # tqdm to print the progress bar to stdout. This helps keeping the log clean.
 otqdm = partial(tqdm, file=sys.stdout)
