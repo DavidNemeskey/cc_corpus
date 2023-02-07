@@ -46,4 +46,5 @@ def convert(record: WARCRecord):
             chunks.append('\n\n'.join(feed_chunks))
     else:
         chunks.append(text)
-    return header, [str(BeautifulSoup(chunk)) for chunk in chunks]
+    return header, [str(BeautifulSoup(chunk)) for chunk in chunks
+                    if chunk and chunk.strip()]
