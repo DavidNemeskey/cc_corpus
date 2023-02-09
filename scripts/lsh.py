@@ -359,7 +359,6 @@ def cumulative_directory_deduplication(args):
     number_of_past_batches = len(past_batches)
 
     with TemporaryDirectory() as tmp_root_dir:
-        print(f"The temporary directory is {tmp_root_dir}")
         current_input_dir = args.input_dir
         i = 0
         for past_batch in past_batches:
