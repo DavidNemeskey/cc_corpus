@@ -14,8 +14,10 @@ import logging
 from multiprocessing import Pool
 import os
 import os.path as op
+import re
 import shutil
 import sys
+from tempfile import TemporaryDirectory
 
 from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
@@ -61,6 +63,15 @@ def parse_arguments():
                               help='the directory that contains the minhash '
                                    'values for the corpus to cross-deduplicate '
                                    'with.')
+
+    parser_cumulative_cross = subparsers.add_parser(
+        'cumulative', help ='Remove all documents from a corpus that are found in any of the earlier corpora'
+    )
+    parser_cumulative_cross.set_defaults(command="cumulative")
+    parser_cumulative_cross.add_argument('--cumulative-dir', '-c', required=True,
+                                         help='the directory which contains the subdirectories '
+                                            'with the minhash values of the corpora to '
+                                            'be used as the basis for deduplication')
 
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
@@ -229,7 +240,7 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
     return len(lsh.keys), initial_len
 
 
-def self_main(args):
+def single_directory_deduplication(args):
     """The "real" main function of the "self" mode."""
     working_dir = op.join(args.output_dir, 'self')
     if not os.path.isdir(working_dir):
@@ -282,23 +293,24 @@ def self_main(args):
     shutil.rmtree(working_dir)
 
 
-def other_main(args):
+def pairwise_directory_deduplication(input_dir, output_dir, cross_dir,
+                                     processes, permutations, threshold):
     """The "real" main function of the "other" mode."""
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
 
-    batch_prefixes = find_all_batches(args.input_dir)
+    batch_prefixes = find_all_batches(input_dir)
     logging.info('Found a total of {} batches in {}.'.format(
-        len(batch_prefixes), args.input_dir))
+        len(batch_prefixes), input_dir))
 
-    batches_to_subtract = find_all_batches(args.cross_dir)
-    logging.info('Found a total of {} batches in {}to deduplicate against.'.format(
-        len(batches_to_subtract), args.cross_dir))
+    batches_to_subtract = find_all_batches(cross_dir)
+    logging.info('Found a total of {} batches in {} to deduplicate against.'.format(
+        len(batches_to_subtract), cross_dir))
 
-    with ProcessPoolExecutor(max_workers=args.processes) as executor:
+    with ProcessPoolExecutor(max_workers=processes) as executor:
         f = partial(deduplicate_other, batches_to_subtract=batches_to_subtract,
-                    output_dir=args.output_dir,
-                    threshold=args.threshold, permutations=args.permutations)
+                    output_dir=output_dir,
+                    threshold=threshold, permutations=permutations)
         original_doc_num, final_doc_num = 0, 0
         for new_num, old_num in executor.map(f, batch_prefixes):
             original_doc_num += old_num
@@ -307,6 +319,69 @@ def other_main(args):
     logging.info('Cross deduplication done; in all, kept '
                  '{} documents out of {}.'.format(final_doc_num,
                                                   original_doc_num))
+
+
+def collect_previous_dirs(path, deadline_date):
+    """ Collects the directories which are directly under the path given
+     and whose name, when interpreted as a date, are earlier than the
+     deadline_date
+
+     TODO If we want to use this functionality in other scripts, it should be
+      moved to utils.py."""
+
+    logging.info(f"We are looking for dirs older than {deadline_date} in {path}")
+    collected_dirs= []
+    deadline_year, deadline_month = deadline_date.split('_')
+    dirs_in_path = os.listdir(path)
+    for filename in dirs_in_path:
+        # We suppose that the directories obey our strict naming convention:
+        # y_m and that all years are written in the same number of digits.
+        if re.match('^[0-9]+_[0-9]+$', filename):
+            filename_year, filename_month = filename.split('_')
+            if filename_year > deadline_year:
+                continue
+            elif filename_year == deadline_year:
+                if filename_month >= deadline_month:
+                    continue
+            else:
+                collected_dirs.append(os.path.join(path, filename))
+    logging.info("The following directories have been collected as the cumulative past:")
+    logging.info(collected_dirs)
+    return collected_dirs
+
+def cumulative_directory_deduplication(args):
+    """The "real" main function of the "cumulative" mode. """
+
+    # We suppose here that the final part of the input directory is a
+    # date-like string e.g.: 06_filtered/2022_12/
+    input_date = os.path.basename(os.path.normpath(args.input_dir))
+    past_batches = collect_previous_dirs(args.cumulative_dir, input_date)
+    number_of_past_batches = len(past_batches)
+
+    with TemporaryDirectory() as tmp_root_dir:
+        print(f"The temporary directory is {tmp_root_dir}")
+        current_input_dir = args.input_dir
+        i = 0
+        for past_batch in past_batches:
+            i += 1
+            if i == number_of_past_batches:
+                # This is the last cross-deduplication, the results will go to the
+                # final output dir
+                current_output_dir = args.output_dir
+            else:
+                past_batch_date = os.path.basename(past_batch)
+                # There are still cross-deduplications to do, the results will go
+                # to the tmp output dir.
+                current_output_dir = f"{tmp_root_dir}/{input_date}" \
+                                     f"_against_{past_batch_date}/"
+            logging.info(f"Cross-deduplicating {current_input_dir} with {past_batch}, "
+                  f"moving results to {current_output_dir}")
+            pairwise_directory_deduplication(current_input_dir, current_output_dir,
+                                             past_batch, args.processes,
+                                             args.permutations, args.threshold)
+            current_input_dir = current_output_dir
+    # TODO do we need any extra statistics to log at the end?
+
 
 
 def main():
@@ -319,7 +394,16 @@ def main():
     install_mp_handler()
     os.nice(20)
 
-    self_main(args) if args.command == 'self' else other_main(args)
+    if args.command == "self":
+        single_directory_deduplication(args)
+    elif args.command == "other":
+        pairwise_directory_deduplication(args.input_dir, args.output_dir,
+                                         args.cross_dir, args.processes,
+                                         args.permutations, args.threshold)
+    elif args.command == "cumulative":
+        cumulative_directory_deduplication(args)
+
+
 
 
 if __name__ == '__main__':
