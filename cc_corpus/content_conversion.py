@@ -66,6 +66,6 @@ def convert(record: WARCRecord):
     else:
         chunks = [text]
 
-    return header, [chunk for chunk in chunks if chunk and chunk.strip()]
+    return header, [chunk for chunk in chunks if not is_empty(chunk)]
     # return header, [str(BeautifulSoup(chunk)) for chunk in chunks
     #                 if chunk and chunk.strip()]
