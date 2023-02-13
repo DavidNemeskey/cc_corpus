@@ -16,7 +16,7 @@ from multiprocessing_logging import install_mp_handler
 import warc
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import collect_inputs
+from cc_corpus.utils import collect_inputs, otqdm
 
 
 def parse_arguments():
@@ -101,6 +101,10 @@ def count_warc_file(filename, docs, ps, words, chars):
     return num_docs, 0, 0, num_chars
 
 
+def tqdm_info(inputs):
+    return ', '.join(inputs[:3]) + ('...' if len(inputs) >= 3 else '')
+
+
 def main():
     args = parse_arguments()
 
@@ -119,7 +123,8 @@ def main():
         f = partial(count_fn, docs=args.documents, ps=args.paragraphs,
                     words=args.words, chars=args.characters)
         stats = [0, 0, 0, 0]
-        for sub_stats in p.map(f, files):
+        tqdm_msg = f'Counting {tqdm_info(args.inputs)}'
+        for sub_stats in p.imap_unordered(f, otqdm(files, tqdm_msg)):
             for i in range(len(stats)):
                 stats[i] += sub_stats[i]
 
