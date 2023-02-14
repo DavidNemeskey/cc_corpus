@@ -305,8 +305,8 @@ def pairwise_directory_deduplication(input_dir, output_dir, cross_dir,
         len(batch_prefixes), input_dir))
 
     batches_to_subtract = find_all_batches(cross_dir)
-    logging.info('Found a total of {} batches in {} to deduplicate against.'.format(
-        len(batches_to_subtract), cross_dir))
+    logging.info(f'Found a total of {len(batches_to_subtract)} batches in '
+                 f'{cross_dir} to deduplicate against.')
 
     with ProcessPoolExecutor(max_workers=processes) as executor:
         f = partial(deduplicate_other, batches_to_subtract=batches_to_subtract,

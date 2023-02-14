@@ -62,6 +62,7 @@ def read_urls(urls_file: str, url_fn: UrlFn) -> UrlSet:
     document deduplication will take care of this.
     """
     with openall(urls_file) as inf:
+        logging.info(f'Loading urls from {urls_file}...')
         urls = set()
         no_urls = 0
         for no_urls, url in enumerate(map(str.strip, inf), start=1):
@@ -130,7 +131,7 @@ CollectStats = Stats.create(
 def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
                 keep: str) -> str:
     """
-    Uniq's a record. Returns whether the record is uniq (not in uniqs), or is
+    Uniq's a record. Returns whether the record is unique (not in uniqs), or is
     the representative of its URL (i.e. it is the latest / biggest). Returns
     a string that describes what happened to the URL (``reject`` / ``new``
     / ``overwrite``).
