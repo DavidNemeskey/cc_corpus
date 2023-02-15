@@ -13,8 +13,8 @@ from functools import partial
 import logging
 from multiprocessing import Pool
 import os
-import os.path as op
-import re
+# import os.path as op
+from pathlib import Path
 import shutil
 import sys
 from tempfile import TemporaryDirectory
@@ -78,7 +78,7 @@ def parse_arguments():
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
-    if args.command == 'other' and not op.isdir(args.cross_dir):
+    if args.command == 'other' and not Path(args.cross_dir).is_dir():
         parser.error('The minhash directory for the other corpus (-c) must exist.')
     return args
 
@@ -91,8 +91,8 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
     Warning: only works for full documents at this point!
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    file_base = op.basename(file_prefix)
-    logging.info('Processing batch {}...'.format(file_base))
+    file_base = Path(file_prefix).name
+    logging.info(f'Processing batch {file_base}...')
     total_read = 0
     duplicate_urls = 0
     with closing(BatchWriter(sys.maxsize, output_dir,
@@ -135,8 +135,8 @@ def deduplicate_other_old(file_prefix, input_dir, output_dir,
     Warning: only works for full documents at this point!
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    file_base = op.basename(file_prefix)
-    logging.info('Processing batch {}...'.format(file_base))
+    file_base = Path(file_prefix).name
+    logging.info(f'Processing batch {file_base}...')
 
     # First, load the (already deduplicated) batch...
     for input_file, results in read_batch(file_prefix):
@@ -157,7 +157,7 @@ def deduplicate_other_old(file_prefix, input_dir, output_dir,
                     lsh.remove(duplicate)
         logging.info(
             'Cross-deduplicated batch {} with batch {}: {} -> {} documents.'.format(
-                file_base, op.basename(batch), initial_batch_len, len(lsh.keys))
+                file_base, Path(batch).name, initial_batch_len, len(lsh.keys))
         )
 
     # Finally, we print the documents left. Unfortunately, in order to
@@ -187,8 +187,8 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
     Warning: only works for full documents at this point!
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    main_base = op.basename(main_batch)
-    logging.info('Processing input batch {}...'.format(main_base))
+    main_base = Path(main_batch).name
+    logging.info(f'Processing input batch {main_base}...')
 
     # First, load the (already deduplicated) batch...
     for input_file, results in read_batch(main_batch):
@@ -215,7 +215,7 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
         logging.info(
             'Cross-deduplicated input batch {} with cross batch {}: {} -> {} '
             'documents (removed {} by url, {} by content).'.format(
-                main_base, op.basename(batch), initial_batch_len, len(lsh.keys),
+                main_base, Path(batch).name, initial_batch_len, len(lsh.keys),
                 batch_url_duplicates, batch_content_duplicates)
         )
         content_duplicates += batch_content_duplicates
@@ -243,13 +243,11 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
 def single_directory_deduplication(input_dir, output_dir,
                                    processes, permutations, threshold):
     """The "real" main function of the "self" mode."""
-    working_dir = op.join(output_dir, 'self')
-    if not os.path.isdir(working_dir):
-        os.makedirs(working_dir)
+    working_dir = Path(output_dir).joinpath('self')
+    working_dir.mkdir(exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
-    logging.info('Found a total of {} batches in {}.'.format(
-        len(batch_prefixes), input_dir))
+    logging.info(f'Found a total of {len(batch_prefixes)} batches in {input_dir}.')
 
     # First, deduplicate documents _within_ the same batch
     original_doc_num, self_doc_num, final_doc_num = 0, 0, 0
@@ -262,9 +260,8 @@ def single_directory_deduplication(input_dir, output_dir,
     pool.close()
     pool.join()
 
-    logging.info('Self deduplication done; in all, kept '
-                 '{} documents out of {}.'.format(self_doc_num,
-                                                  original_doc_num))
+    logging.info(f'Self deduplication done; in all, kept '
+                 f'{self_doc_num} documents out of {original_doc_num}.')
 
     # Now, we need to do the deduplication between batches. The idea here is
     # to load one batch into memory, and delete all documents from it that are
@@ -276,7 +273,7 @@ def single_directory_deduplication(input_dir, output_dir,
     # for counting final_doc_num.
     batch_prefixes = find_all_batches(working_dir)
     batches_to_subtract = [
-        find_all_batches(working_dir, int(op.basename(file_prefix)))
+        find_all_batches(working_dir, int(Path(file_prefix).name))
         for file_prefix in batch_prefixes
     ]
 
@@ -297,12 +294,10 @@ def single_directory_deduplication(input_dir, output_dir,
 def pairwise_directory_deduplication(input_dir, output_dir, cross_dir,
                                      processes, permutations, threshold):
     """The "real" main function of the "other" mode."""
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
+    Path(output_dir).mkdir(exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
-    logging.info('Found a total of {} batches in {}.'.format(
-        len(batch_prefixes), input_dir))
+    logging.info(f'Found a total of {len(batch_prefixes)} batches in {input_dir}.')
 
     batches_to_subtract = find_all_batches(cross_dir)
     logging.info(f'Found a total of {len(batches_to_subtract)} batches in '
@@ -317,9 +312,8 @@ def pairwise_directory_deduplication(input_dir, output_dir, cross_dir,
             original_doc_num += old_num
             final_doc_num += new_num
 
-    logging.info('Cross deduplication done; in all, kept '
-                 '{} documents out of {}.'.format(final_doc_num,
-                                                  original_doc_num))
+    logging.info(f'Cross deduplication done; in all, kept '
+                 f'{final_doc_num} documents out of {original_doc_num}.')
 
 
 def collect_previous_dirs(path, deadline_date):
@@ -331,12 +325,11 @@ def collect_previous_dirs(path, deadline_date):
 
     logging.info(f"We are looking for dirs older than {deadline_date} in {path}")
     collected_dirs = []
-    dirs_in_path = os.listdir(path)
-    for filename in dirs_in_path:
+    for directory in Path(path).iterdir():
         # We suppose that the directories obey our strict naming convention:
         # string comparison of directory names coincides with date order.
-        if filename < deadline_date:
-            collected_dirs.append(os.path.join(path, filename))
+        if directory.name < deadline_date:
+            collected_dirs.append(directory)
     logging.info(f'The following directories have been collected as the cumulative past: {collected_dirs}')
     return collected_dirs
 
@@ -346,7 +339,8 @@ def cumulative_directory_deduplication(input_dir, output_dir, cumulative_dir,
 
     # We suppose here that the final part of the input directory is a
     # date-like string e.g.: 06_filtered/2022_12/
-    input_date = os.path.basename(os.path.normpath(input_dir))
+    # input_date = os.path.basename(os.path.normpath(input_dir))
+    input_date = Path(input_dir).name
     past_batches = collect_previous_dirs(cumulative_dir, input_date)
     number_of_past_batches = len(past_batches)
 
@@ -358,13 +352,13 @@ def cumulative_directory_deduplication(input_dir, output_dir, cumulative_dir,
                 # final output dir
                 current_output_dir = output_dir
             else:
-                past_batch_date = os.path.basename(past_batch)
                 # There are still cross-deduplications to do, the results will go
                 # to the tmp output dir.
-                current_output_dir = f'{tmp_root_dir}/{input_date}' \
-                                     f'_against_{past_batch_date}/'
-            logging.info(f'Cross-deduplicating {current_input_dir} with {past_batch},'
-                         f'moving results to {current_output_dir}')
+                current_output_dir = Path(tmp_root_dir).joinpath(
+                    f'{input_date}_against_{past_batch.name}'
+                )
+            logging.info(f'Cross-deduplicating {current_input_dir} with '
+                         f'{past_batch}, moving results to {current_output_dir}')
             pairwise_directory_deduplication(current_input_dir, current_output_dir,
                                              past_batch, processes,
                                              permutations, threshold)
