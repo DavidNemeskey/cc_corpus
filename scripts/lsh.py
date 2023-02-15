@@ -331,22 +331,13 @@ def collect_previous_dirs(path, deadline_date):
 
     logging.info(f"We are looking for dirs older than {deadline_date} in {path}")
     collected_dirs = []
-    deadline_year, deadline_month = deadline_date.split('_')
     dirs_in_path = os.listdir(path)
     for filename in dirs_in_path:
         # We suppose that the directories obey our strict naming convention:
-        # y_m and that all years are written in the same number of digits.
-        if re.match('^[0-9]+_[0-9]+$', filename):
-            filename_year, filename_month = filename.split('_')
-            if filename_year > deadline_year:
-                continue
-            elif filename_year == deadline_year:
-                if filename_month >= deadline_month:
-                    continue
-            else:
-                collected_dirs.append(os.path.join(path, filename))
-    logging.info("The following directories have been collected as the cumulative past:")
-    logging.info(collected_dirs)
+        # string comparison of directory names coincides with date order.
+        if filename < deadline_date:
+            collected_dirs.append(os.path.join(path, filename))
+    logging.info(f'The following directories have been collected as the cumulative past: {collected_dirs}')
     return collected_dirs
 
 def cumulative_directory_deduplication(input_dir, output_dir, cumulative_dir,
@@ -361,10 +352,8 @@ def cumulative_directory_deduplication(input_dir, output_dir, cumulative_dir,
 
     with TemporaryDirectory() as tmp_root_dir:
         current_input_dir = input_dir
-        i = 0
-        for past_batch in past_batches:
-            i += 1
-            if i == number_of_past_batches:
+        for i, past_batch in enumerate(past_batches):
+            if i == (number_of_past_batches - 1):
                 # This is the last cross-deduplication, the results will go to the
                 # final output dir
                 current_output_dir = output_dir
@@ -372,10 +361,10 @@ def cumulative_directory_deduplication(input_dir, output_dir, cumulative_dir,
                 past_batch_date = os.path.basename(past_batch)
                 # There are still cross-deduplications to do, the results will go
                 # to the tmp output dir.
-                current_output_dir = f"{tmp_root_dir}/{input_date}" \
-                                     f"_against_{past_batch_date}/"
-            logging.info(f"Cross-deduplicating {current_input_dir} with {past_batch}, "
-                  f"moving results to {current_output_dir}")
+                current_output_dir = f'{tmp_root_dir}/{input_date}' \
+                                     f'_against_{past_batch_date}/'
+            logging.info(f'Cross-deduplicating {current_input_dir} with {past_batch},'
+                         f'moving results to {current_output_dir}')
             pairwise_directory_deduplication(current_input_dir, current_output_dir,
                                              past_batch, processes,
                                              permutations, threshold)
