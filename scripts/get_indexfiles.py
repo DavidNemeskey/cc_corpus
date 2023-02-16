@@ -14,6 +14,7 @@ import sys
 import subprocess
 import time
 from typing import Dict, List
+import cdx_index_client
 
 
 def parse_arguments():
@@ -31,17 +32,12 @@ def parse_arguments():
                         help='the collection to download. The default is "all".')
     return parser.parse_args()
 
-
-def download_index(query: str, output_dir: str, params: str, log_file: str,
-                   mode: str = 'w'):
+#cdx client meghívása, statikus
+def download_index(query: str, output_dir: str, params: str):
     """Calls the script :program:`cdx-index-client.py` to do the actual work."""
-    with open(log_file, '{}t'.format(mode)) as logf:
-        res = subprocess.run(
-            'cdx-index-client.py --fl url,filename,offset,length,status,mime '
-            '-z {} -d {} {}'.format(query, output_dir, params),
-            stdout=logf, stderr=subprocess.STDOUT, shell=True, check=True
-        )
-        return res.returncode
+    cdx_index_client.main2(query, output_dir, params)
++
+
 
 
 def get_uncompleted(log_file: str) -> Dict[str, List[str]]:
@@ -85,6 +81,9 @@ def main():
         print('Finished after {} of {} iterations please check if everything '
               'is all right!'.format(i + 1, args.max_retry + 1), file=sys.stderr)
 
+
+def main2():
+    rcode=download_index(args.query, args.output_dir)
 
 if __name__ == '__main__':
     main()
