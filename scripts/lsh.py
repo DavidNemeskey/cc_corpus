@@ -83,7 +83,10 @@ def parse_arguments():
     return args
 
 
-def deduplicate_self(file_prefix, output_dir, threshold, permutations):
+def deduplicate_self(file_prefix: str,
+                     output_dir: str,
+                     threshold: float,
+                     permutations: int):
     """
     Deduplicates a set of minhashed documents (3 files with the same minhash
     prefix) and writes them to output_dir.
@@ -124,8 +127,11 @@ def deduplicate_self(file_prefix, output_dir, threshold, permutations):
     return bw.total_written, total_read
 
 
-def deduplicate_other_old(file_prefix, input_dir, output_dir,
-                          threshold, permutations):
+def deduplicate_other_old(file_prefix: str,
+                          input_dir: str,
+                          output_dir: str,
+                          threshold: float,
+                          permutations: int):
     """
     Removes all documents from a set of minhashed documents (3 files with the
     same minhash prefix) that occur in other batches in input_dir. Only
@@ -177,8 +183,11 @@ def deduplicate_other_old(file_prefix, input_dir, output_dir,
     return len(lsh.keys), initial_len
 
 
-def deduplicate_other(main_batch, batches_to_subtract, output_dir,
-                      threshold, permutations):
+def deduplicate_other(main_batch: str,
+                      batches_to_subtract: list[str],
+                      output_dir: str,
+                      threshold: float,
+                      permutations: int):
     """
     Removes all documents from a set of minhashed documents (3 files with the
     same minhash prefix) that occur in other batches. Both main_batch and
@@ -240,8 +249,11 @@ def deduplicate_other(main_batch, batches_to_subtract, output_dir,
     return len(lsh.keys), initial_len
 
 
-def single_directory_deduplication(input_dir, output_dir,
-                                   processes, permutations, threshold):
+def single_directory_deduplication(input_dir: str,
+                                   output_dir: str,
+                                   processes: int,
+                                   permutations: int,
+                                   threshold: float):
     """The "real" main function of the "self" mode."""
     working_dir = Path(output_dir).joinpath('self')
     working_dir.mkdir(exist_ok=True)
@@ -291,8 +303,12 @@ def single_directory_deduplication(input_dir, output_dir,
     shutil.rmtree(working_dir)
 
 
-def pairwise_directory_deduplication(input_dir, output_dir, cross_dir,
-                                     processes, permutations, threshold):
+def pairwise_directory_deduplication(input_dir: str,
+                                     output_dir: str,
+                                     cross_dir: str,
+                                     processes: int,
+                                     permutations: int,
+                                     threshold: float):
     """The "real" main function of the "other" mode."""
     Path(output_dir).mkdir(exist_ok=True)
 
@@ -316,7 +332,7 @@ def pairwise_directory_deduplication(input_dir, output_dir, cross_dir,
                  f'{final_doc_num} documents out of {original_doc_num}.')
 
 
-def collect_previous_dirs(path, deadline_date):
+def collect_previous_dirs(path: str, deadline_date: str) -> Path:
     """
     Collects the directories which are directly under the path given
     and whose name, when interpreted as a date, are earlier than the
@@ -333,8 +349,12 @@ def collect_previous_dirs(path, deadline_date):
     logging.info(f'The following directories have been collected as the cumulative past: {collected_dirs}')
     return collected_dirs
 
-def cumulative_directory_deduplication(input_dir, output_dir, cumulative_dir,
-                                       processes, permutations, threshold):
+def cumulative_directory_deduplication(input_dir: str,
+                                       output_dir: str,
+                                       cumulative_dir: str,
+                                       processes: int,
+                                       permutations: int,
+                                       threshold: float):
     """The "real" main function of the "cumulative" mode."""
 
     # We suppose here that the final part of the input directory is a
