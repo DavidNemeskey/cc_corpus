@@ -28,6 +28,31 @@ DEF_API_BASE = 'http://index.commoncrawl.org/'
 class IndexDownloadError(Exception):
     pass
 
+class Params:
+    url = ""
+    show_num_pages= ""
+    processes = 8
+    fl = ""
+    json = ""
+    gzipped = ""
+    output_prefix = ""
+    directory = ""
+    page_size = 0
+    coll = ""
+    cdx_server_url= ""
+    timeout = 30
+    max_retries = 10
+    verbose = ""
+    pages = 0
+    header = ""
+    in_order = ""
+
+
+
+
+
+
+
 
 def process_quirky_line(line, fields):
     fields = fields.split(',')
@@ -357,7 +382,7 @@ def get_args():
     parser.add_argument('url',
                         help=url_help)
 
-    parser.add_argument('-n', '--show-num-pages', action='store_true',
+    parser.add_argument('-n', '--show_num_pages', action='store_true',
                         help='Show Number of Pages only and exit')
 
     parser.add_argument('-p', '--processes', type=int, default=8,
@@ -372,13 +397,13 @@ def get_args():
     parser.add_argument('-z', '--gzipped', action='store_true',
                         help='Storge gzipped results, with .gz extensions')
 
-    parser.add_argument('-o', '--output-prefix',
+    parser.add_argument('-o', '--output_prefix',
                         help='Custom output prefix, append with -NN for each page')
 
     parser.add_argument('-d', '--directory',
                         help='Specify custom output directory')
 
-    parser.add_argument('--page-size', type=int,
+    parser.add_argument('--page_size', type=int,
                         help='size of each page in blocks, >=1')
 
     group = parser.add_mutually_exclusive_group()
@@ -387,13 +412,13 @@ def get_args():
                              '"all" to use all available indexes. ' +
                              'The default value is the most recent available index'))
 
-    group.add_argument('--cdx-server-url',
+    group.add_argument('--cdx_server_url',
                        help='Set endpoint for CDX Server API')
 
     parser.add_argument('--timeout', default=30, type=int,
                         help='HTTP read timeout before retry')
 
-    parser.add_argument('--max-retries', default=10, type=int,
+    parser.add_argument('--max_retries', default=10, type=int,
                         help='Number of retry attempts')
 
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -406,10 +431,12 @@ def get_args():
     parser.add_argument('--header', nargs='*',
                         help='Add custom header to request')
 
-    parser.add_argument('--in-order', action='store_true',
+    parser.add_argument('--in_order', action='store_true',
                         help='Fetch pages in order (default is to shuffle page list)')
 
     r = parser.parse_args()
+
+
     r.url = r.url.strip('"\'')
     r.directory = r.directory.strip('"\'')
 
@@ -428,7 +455,40 @@ def get_args():
 
     logging.getLogger("requests").setLevel(logging.WARNING)
 
+    r_original = r
+    r = Params()
+    r.header = r_original.header
+    r.url = r_original.url
+    r.cdx_server_url = r_original.cdx_server_url
+    r.in_order = r_original.in_order
+    r.pages = r_original.pages
+    r.verbose = r_original.verbose
+    r.max_retries = r_original.max_retries
+    r.timeout = r_original.timeout
+    r.coll = r_original.coll
+    r.page_size = r_original.page_size
+    r.directory = r_original.directory
+    r.output_prefix = r_original.output_prefix
+    r.fl = r_original.fl
+    r.processes = r_original.processes
+    r.show_num_pages = r_original.show_num_pages
+    r.gzipped = r_original.gzipped
+    r.json = r_original.json
+
+
+
+
     return r
+#fdownload indexes
+#r objektumot
+def main2(query, output_dir, params):
+    r = Params()
+    r.url=params
+    r.fl=["url" , "filename" , "offset", "length", "status", "mime"]
+    r.gzipped=query
+    r.directory=output_dir
+    read_index(r)
+
 
 
 def main():
