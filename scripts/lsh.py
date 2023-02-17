@@ -27,10 +27,10 @@ from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--input-dir', '-i', required=True,
+    parser.add_argument('--input-dir', '-i', type=Path, required=True,
                         help='the input directory that contains the minhash '
                              'batches to deduplicate.')
-    parser.add_argument('--output-dir', '-o', required=True,
+    parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the directory to which the updated minhash '
                              'files are written.')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
@@ -47,7 +47,8 @@ def parse_arguments():
                              'needed, so it is a good idea to be conservative '
                              'with the number of processes.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
-                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        choices=['debug', 'info', 'warning',
+                                 'error', 'critical'],
                         help='the logging level.')
     subparsers = parser.add_subparsers(
         help='Choose between two deduplication tasks.')
@@ -59,34 +60,34 @@ def parse_arguments():
         help='Remove all documents from a corpus that are found in another.'
     )
     parser_other.set_defaults(command='other')
-    parser_other.add_argument('--cross-dir', '-c', required=True,
+    parser_other.add_argument('--cross-dir', '-c', type=Path, required=True,
                               help='the directory that contains the minhash '
-                                   'values for the corpus to cross-deduplicate '
-                                   'with.')
+                                   'values for the corpus to '
+                                   'cross-deduplicate with.')
 
     parser_cumulative_cross = subparsers.add_parser(
-        'cumulative', help ='Remove all documents from a corpus that are found'
-                            ' in any of the earlier corpora'
+        'cumulative', help='Remove all documents from a corpus that are found'
+                           ' in any of the earlier corpora'
     )
     parser_cumulative_cross.set_defaults(command="cumulative")
     parser_cumulative_cross.add_argument(
         '--cumulative-dir', '-c', required=True,
         help='the directory which contains the subdirectories with the minhash'
-             ' values of the corpora to be used as the basis for deduplication')
+             ' values of the corpora to be used as the basis for '
+             'deduplication')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
     if args.command == 'other' and not Path(args.cross_dir).is_dir():
-        parser.error('The minhash directory for the other corpus (-c) must exist.')
+        parser.error('The minhash directory for the other corpus (-c) '
+                     'must exist.')
     return args
 
 
-def deduplicate_self(file_prefix: str,
-                     output_dir: str,
-                     threshold: float,
-                     permutations: int):
+def deduplicate_self(file_prefix: str, output_dir: str,
+                     threshold: float, permutations: int):
     """
     Deduplicates a set of minhashed documents (3 files with the same minhash
     prefix) and writes them to output_dir.
@@ -161,10 +162,9 @@ def deduplicate_other_old(file_prefix: str,
             for i, minhash in enumerate(results['minhash']):
                 for duplicate in lsh.query(minhash):
                     lsh.remove(duplicate)
-        logging.info(
-            'Cross-deduplicated batch {} with batch {}: {} -> {} documents.'.format(
-                file_base, Path(batch).name, initial_batch_len, len(lsh.keys))
-        )
+        logging.info(f'Cross-deduplicated batch {file_base} with batch '
+                     f'{Path(batch).name}: {initial_batch_len} -> '
+                     f'{len(lsh.keys)} documents.')
 
     # Finally, we print the documents left. Unfortunately, in order to
     # keep the format, we have to read the original batch again.
@@ -249,8 +249,8 @@ def deduplicate_other(main_batch: str,
     return len(lsh.keys), initial_len
 
 
-def single_directory_deduplication(input_dir: str,
-                                   output_dir: str,
+def single_directory_deduplication(input_dir: Path,
+                                   output_dir: Path,
                                    processes: int,
                                    permutations: int,
                                    threshold: float):
@@ -259,7 +259,8 @@ def single_directory_deduplication(input_dir: str,
     working_dir.mkdir(exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
-    logging.info(f'Found a total of {len(batch_prefixes)} batches in {input_dir}.')
+    logging.info(f'Found a total of {len(batch_prefixes)} batches '
+                 f'in {input_dir}.')
 
     # First, deduplicate documents _within_ the same batch
     original_doc_num, self_doc_num, final_doc_num = 0, 0, 0
@@ -293,7 +294,8 @@ def single_directory_deduplication(input_dir: str,
         f = partial(deduplicate_other, output_dir=output_dir,
                     threshold=threshold, permutations=permutations)
         final_doc_num = sum(num for num, _ in
-                            executor.map(f, batch_prefixes, batches_to_subtract))
+                            executor.map(f, batch_prefixes,
+                                         batches_to_subtract))
 
     logging.info('Full deduplication done; in all, kept '
                  '{} documents out of {}.'.format(final_doc_num,
@@ -303,9 +305,9 @@ def single_directory_deduplication(input_dir: str,
     shutil.rmtree(working_dir)
 
 
-def pairwise_directory_deduplication(input_dir: str,
-                                     output_dir: str,
-                                     cross_dir: str,
+def pairwise_directory_deduplication(input_dir: Path,
+                                     output_dir: Path,
+                                     cross_dir: Path,
                                      processes: int,
                                      permutations: int,
                                      threshold: float):
@@ -313,7 +315,8 @@ def pairwise_directory_deduplication(input_dir: str,
     Path(output_dir).mkdir(exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
-    logging.info(f'Found a total of {len(batch_prefixes)} batches in {input_dir}.')
+    logging.info(f'Found a total of {len(batch_prefixes)} batches '
+                 f'in {input_dir}.')
 
     batches_to_subtract = find_all_batches(cross_dir)
     logging.info(f'Found a total of {len(batches_to_subtract)} batches in '
@@ -339,19 +342,22 @@ def collect_previous_dirs(path: str, deadline_date: str) -> Path:
     deadline_date
     """
 
-    logging.info(f"We are looking for dirs older than {deadline_date} in {path}")
+    logging.info(f"We are looking for dirs older than {deadline_date} "
+                 f"in {path}")
     collected_dirs = []
     for directory in Path(path).iterdir():
         # We suppose that the directories obey our strict naming convention:
         # string comparison of directory names coincides with date order.
         if directory.name < deadline_date:
             collected_dirs.append(directory)
-    logging.info(f'The following directories have been collected as the cumulative past: {collected_dirs}')
+    logging.info(f'The following directories have been collected as the '
+                 f'cumulative past: {collected_dirs}')
     return collected_dirs
 
-def cumulative_directory_deduplication(input_dir: str,
-                                       output_dir: str,
-                                       cumulative_dir: str,
+
+def cumulative_directory_deduplication(input_dir: Path,
+                                       output_dir: Path,
+                                       cumulative_dir: Path,
                                        processes: int,
                                        permutations: int,
                                        threshold: float):
@@ -368,18 +374,20 @@ def cumulative_directory_deduplication(input_dir: str,
         current_input_dir = input_dir
         for i, past_batch in enumerate(past_batches):
             if i == (number_of_past_batches - 1):
-                # This is the last cross-deduplication, the results will go to the
-                # final output dir
+                # This is the last cross-deduplication, the results will go to
+                # the final output dir
                 current_output_dir = output_dir
             else:
-                # There are still cross-deduplications to do, the results will go
-                # to the tmp output dir.
+                # There are still cross-deduplications to do, the results will
+                # go to the tmp output dir.
                 current_output_dir = Path(tmp_root_dir).joinpath(
                     f'{input_date}_against_{past_batch.name}'
                 )
             logging.info(f'Cross-deduplicating {current_input_dir} with '
-                         f'{past_batch}, moving results to {current_output_dir}')
-            pairwise_directory_deduplication(current_input_dir, current_output_dir,
+                         f'{past_batch}, moving results '
+                         f'to {current_output_dir}')
+            pairwise_directory_deduplication(current_input_dir,
+                                             current_output_dir,
                                              past_batch, processes,
                                              permutations, threshold)
             current_input_dir = current_output_dir
@@ -405,10 +413,8 @@ def main():
                                          args.permutations, args.threshold)
     elif args.command == "cumulative":
         cumulative_directory_deduplication(args.input_dir, args.output_dir,
-                                         args.cumulative_dir, args.processes,
-                                         args.permutations, args.threshold)
-
-
+                                           args.cumulative_dir, args.processes,
+                                           args.permutations, args.threshold)
 
 
 if __name__ == '__main__':

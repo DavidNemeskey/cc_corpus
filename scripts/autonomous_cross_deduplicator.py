@@ -13,12 +13,9 @@ import re
 
 from lsh import cumulative_directory_deduplication
 
+
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--log-level', '-L', type=str, default='info',
-                        choices=['debug', 'info', 'warning', 'error', 'critical'],
-                        help='the logging level.')
-
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--processes', '-P', type=int, default=1,
@@ -29,22 +26,24 @@ def parse_arguments():
                              'with the number of processes.')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
                         help='the Jaccard similarity threshold (0.9).')
-
-    parser.add_argument('--working-dir', '-w', required=True,
+    parser.add_argument('--working-dir', '-w', type=Path, required=True,
                         help='the directory that contains the batches')
-    parser.add_argument('--processed-dir', type=str, default='07c_minhash_full',
+    parser.add_argument('--processed-dir', type=str,
+                        default='07c_minhash_full',
                         help='the directory containing the fully processed '
                              'minhashes (07c_minhash_full).')
     parser.add_argument('--inputs-dir', type=str, default='07b_minhash_self',
                         help='the directory containing the self-deduplicated '
                              'minhashes (07b_minhash_self).')
-
-
-
+    parser.add_argument('--log-level', '-L', type=str, default='info',
+                        choices=['debug', 'info', 'warning',
+                                 'error', 'critical'],
+                        help='the logging level.')
     args = parser.parse_args()
     if not Path(args.working_dir).is_dir():
         parser.error('The directory for the batches must exist.')
     return args
+
 
 def collect_processed_batches(finished_batches_dir: Path) -> list[Path]:
     """
@@ -61,8 +60,10 @@ def collect_processed_batches(finished_batches_dir: Path) -> list[Path]:
                 collected_dirs.append(directory)
         else:
             logging.info(f'Directory name {directory.name} was not datelike')
-    logging.info(f'The following directories contain fully processed batches: {collected_dirs}')
+    logging.info(f'The following directories contain fully processed '
+                 f'batches: {collected_dirs}')
     return collected_dirs
+
 
 def find_batch_to_process(self_dedup_dir: Path,
                           finished_batch_names: list[str]) -> Path:
@@ -80,25 +81,28 @@ def find_batch_to_process(self_dedup_dir: Path,
             return directory
     return None
 
+
 def main():
     args = parse_arguments()
-    working_dir = Path(args.working_dir)
 
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    processed_dir =working_dir.joinpath(args.processed_dir)
+    processed_dir = args.working_dir.joinpath(args.processed_dir)
     while True:
         processed_batches = collect_processed_batches(processed_dir)
         processed_batch_names = list(map(lambda x: x.name, processed_batches))
-        current_batch = find_batch_to_process(working_dir.joinpath(args.inputs_dir),
-                                              processed_batch_names)
+        current_batch = find_batch_to_process(
+            args.working_dir.joinpath(args.inputs_dir),
+            processed_batch_names
+        )
         if not current_batch:
             logging.info('No more batches to process.')
             break
-        current_output = working_dir.joinpath(args.processed_dir, current_batch.name)
+        current_output = args.working_dir.joinpath(args.processed_dir,
+                                                   current_batch.name)
         cumulative_directory_deduplication(current_batch,
                                            current_output,
                                            processed_dir,
@@ -109,4 +113,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
