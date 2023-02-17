@@ -89,7 +89,7 @@ def main():
 
     while True:
         processed_batches = collect_processed_batches(args.output_dir)
-        processed_batch_names = list(map(lambda x: x.name, processed_batches))
+        processed_batch_names = {x.name for x in processed_batches}
         current_batch = find_batch_to_process(
             args.input_dir,
             processed_batch_names

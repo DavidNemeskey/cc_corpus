@@ -13,7 +13,6 @@ from functools import partial
 import logging
 from multiprocessing import Pool
 import os
-# import os.path as op
 from pathlib import Path
 import shutil
 import sys
@@ -126,61 +125,6 @@ def deduplicate_self(file_prefix: str, output_dir: str,
                  '{} duplicate urls.'.format(
                      file_base, bw.total_written, total_read, duplicate_urls))
     return bw.total_written, total_read
-
-
-def deduplicate_other_old(file_prefix: str,
-                          input_dir: str,
-                          output_dir: str,
-                          threshold: float,
-                          permutations: int):
-    """
-    Removes all documents from a set of minhashed documents (3 files with the
-    same minhash prefix) that occur in other batches in input_dir. Only
-    batches whose number is higher than the batch in question are considered
-    (i.e. upper triangular matrix).
-
-    Warning: only works for full documents at this point!
-    """
-    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    file_base = Path(file_prefix).name
-    logging.info(f'Processing batch {file_base}...')
-
-    # First, load the (already deduplicated) batch...
-    for input_file, results in read_batch(file_prefix):
-        for doc_id, minhash in zip(results['id'], results['minhash']):
-            lsh.insert('\t'.join(doc_id), minhash)
-
-    initial_len = len(lsh.keys)
-    to_match_with = find_all_batches(input_dir,
-                                     int(file_prefix.rpartition(os.sep)[-1]))
-
-    # Now, remove all documents in it that are contained in other batches
-    # to the "right" of it (with greater batch numbers)
-    for batch in to_match_with:
-        initial_batch_len = len(lsh.keys)
-        for _, results in read_batch(batch):
-            for i, minhash in enumerate(results['minhash']):
-                for duplicate in lsh.query(minhash):
-                    lsh.remove(duplicate)
-        logging.info(f'Cross-deduplicated batch {file_base} with batch '
-                     f'{Path(batch).name}: {initial_batch_len} -> '
-                     f'{len(lsh.keys)} documents.')
-
-    # Finally, we print the documents left. Unfortunately, in order to
-    # keep the format, we have to read the original batch again.
-    with closing(BatchWriter(sys.maxsize, output_dir,
-                             len(file_base), int(file_base))) as bw:
-        # OK, we need to re-read the batch unfortunately
-        for input_file, results in read_batch(file_prefix):
-            doc_ids, minhashes = [], []
-            for doc_id, minhash in zip(results['id'], results['minhash']):
-                if '\t'.join(doc_id) in lsh:
-                    doc_ids.append(doc_id)
-                    minhashes.append(minhash)
-            bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
-    logging.info('Processed batch {}; kept {} out of {} documents.'.format(
-        file_base, len(lsh.keys), initial_len))
-    return len(lsh.keys), initial_len
 
 
 def deduplicate_other(main_batch: str,
