@@ -16,31 +16,28 @@ from lsh import cumulative_directory_deduplication
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
+    parser.add_argument('--input-dir', '-i', type=Path, required=True,
+                        help='the input directory that contains the self-'
+                             'deduplicated subdirectories.')
+    parser.add_argument('--output-dir', '-o', type=Path, required=True,
+                        help='the directory that contains the fully-'
+                             'deduplicated subdirectories.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
+    parser.add_argument('--threshold', '-t', type=float, default=0.9,
+                        help='the Jaccard similarity threshold (0.9).')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
                              'to deduplicate documents, much memory might be '
                              'needed, so it is a good idea to be conservative '
                              'with the number of processes.')
-    parser.add_argument('--threshold', '-t', type=float, default=0.9,
-                        help='the Jaccard similarity threshold (0.9).')
-    parser.add_argument('--working-dir', '-w', type=Path, required=True,
-                        help='the directory that contains the batches')
-    parser.add_argument('--processed-dir', type=str,
-                        default='07c_minhash_full',
-                        help='the directory containing the fully processed '
-                             'minhashes (07c_minhash_full).')
-    parser.add_argument('--inputs-dir', type=str, default='07b_minhash_self',
-                        help='the directory containing the self-deduplicated '
-                             'minhashes (07b_minhash_self).')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning',
                                  'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
-    if not Path(args.working_dir).is_dir():
+    if not Path(args.output_dir).is_dir():
         parser.error('The directory for the batches must exist.')
     return args
 
@@ -90,22 +87,20 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    processed_dir = args.working_dir.joinpath(args.processed_dir)
     while True:
-        processed_batches = collect_processed_batches(processed_dir)
+        processed_batches = collect_processed_batches(args.output_dir)
         processed_batch_names = list(map(lambda x: x.name, processed_batches))
         current_batch = find_batch_to_process(
-            args.working_dir.joinpath(args.inputs_dir),
+            args.input_dir,
             processed_batch_names
         )
         if not current_batch:
             logging.info('No more batches to process.')
             break
-        current_output = args.working_dir.joinpath(args.processed_dir,
-                                                   current_batch.name)
+        current_output = args.output_dir.joinpath(current_batch.name)
         cumulative_directory_deduplication(current_batch,
                                            current_output,
-                                           processed_dir,
+                                           args.output_dir,
                                            args.processes,
                                            args.permutations,
                                            args.threshold)
