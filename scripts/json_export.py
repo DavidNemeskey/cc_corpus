@@ -27,7 +27,6 @@ def parse_arguments():
 
 
 def write_json(document, output_file):
-    logging.info(f'Writing document to file: {output_file}')
     restructured_document = {}
     restructured_document['id'] = document.attrs.pop('url')
     restructured_document['meta'] = document.attrs
@@ -35,12 +34,10 @@ def write_json(document, output_file):
     # This is exactly what we wanted, isn't it?
     restructured_document['text'] = document.content()
     json_document = json.dumps(restructured_document, ensure_ascii=False)
-    logging.info(json_document)
     print(json_document, file=output_file)
 
 
 def main():
-    print("===Json export starting===")
     args = parse_arguments()
 
     logging.basicConfig(
@@ -60,7 +57,6 @@ def main():
         with openall(args.output_dir / input_file.name, 'wt') as f:
             for document in parse_file(input_file):
                 write_json(document, f)
-                break
 
 
 if __name__ == '__main__':
