@@ -9,6 +9,7 @@ from pathlib import Path
 from cc_corpus.utils import collect_inputs, openall
 from cc_corpus.corpus import parse_file
 
+
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--input-dir', '-i', type=Path, required=True,
@@ -33,8 +34,10 @@ def write_json(document, output_file):
     # The content() function joins the paragraphs with a \n
     # This is exactly what we wanted, isn't it?
     restructured_document['text'] = document.content()
+    json_document = json.dumps(restructured_document, ensure_ascii=False)
     logging.info(json_document)
     print(json_document, file=output_file)
+
 
 def main():
     print("===Json export starting===")
@@ -47,7 +50,7 @@ def main():
 
     # todo handle multiple directories in one go.
     input_files = collect_inputs([args.input_dir])
-    logging.info('Scheduled {} files for renumbering.'.format(len(input_files)))
+    logging.info('Scheduled {} files to convert.'.format(len(input_files)))
     logging.info(f'the files are: {input_files}')
     for os_input_file in input_files:
         # The utils.collected_inputs() is still using os.path, not pathlib.
@@ -59,6 +62,6 @@ def main():
                 write_json(document, f)
                 break
 
+
 if __name__ == '__main__':
     main()
-
