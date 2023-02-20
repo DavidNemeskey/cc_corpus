@@ -199,8 +199,8 @@ def single_directory_deduplication(input_dir: Path,
                                    permutations: int,
                                    threshold: float):
     """The "real" main function of the "self" mode."""
-    working_dir = Path(output_dir).joinpath('self')
-    working_dir.mkdir(exist_ok=True)
+    working_dir = Path(output_dir) / 'self'
+    working_dir.mkdir(parents=True, exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
     logging.info(f'Found a total of {len(batch_prefixes)} batches '
@@ -256,7 +256,7 @@ def pairwise_directory_deduplication(input_dir: Path,
                                      permutations: int,
                                      threshold: float):
     """The "real" main function of the "other" mode."""
-    Path(output_dir).mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
     logging.info(f'Found a total of {len(batch_prefixes)} batches '

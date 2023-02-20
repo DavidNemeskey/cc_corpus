@@ -37,26 +37,34 @@ def parse_arguments():
                                  'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
-    if not Path(args.output_dir).is_dir():
+    if not args.output_dir.is_dir():
         parser.error('The directory for the batches must exist.')
     return args
+
+
+def has_minhash_content(directory: Path) -> bool:
+    """
+    Tells whether a given directory contains all the following files or not:
+    1.doc_ids, 1.files, 1.minhashes
+    """
+    return ((directory / '1.doc_ids').is_file()
+            and (directory / '1.files').is_file()
+            and (directory / '1.minhashes').is_file())
 
 
 def collect_processed_batches(finished_batches_dir: Path) -> list[Path]:
     """
     Collects the directories within the finished_batches_dir
-    which have datelike names and contain the following files:
+    which have date-like names and contain the following files:
     1.doc_ids, 1.files, 1.minhashes
     """
     collected_dirs = []
     for directory in finished_batches_dir.iterdir():
         if re.match('^[0-9_]+$', directory.name):
-            if (directory.joinpath('1.doc_ids').is_file()
-                    and directory.joinpath('1.files').is_file()
-                    and directory.joinpath('1.minhashes').is_file()):
+            if has_minhash_content(directory):
                 collected_dirs.append(directory)
         else:
-            logging.info(f'Directory name {directory.name} was not datelike')
+            logging.info(f'Directory name {directory.name} was not date-like')
     logging.info(f'The following directories contain fully processed '
                  f'batches: {collected_dirs}')
     return collected_dirs
@@ -71,9 +79,7 @@ def find_batch_to_process(self_dedup_dir: Path,
     for directory in sorted(self_dedup_dir.iterdir()):
         if directory.name in finished_batch_names:
             continue
-        if (directory.joinpath('1.doc_ids').is_file()
-                and directory.joinpath('1.files').is_file()
-                and directory.joinpath('1.minhashes').is_file()):
+        if has_minhash_content(directory):
             logging.info(f'The first valid batch is {directory}')
             return directory
     return None
@@ -97,7 +103,7 @@ def main():
         if not current_batch:
             logging.info('No more batches to process.')
             break
-        current_output = args.output_dir.joinpath(current_batch.name)
+        current_output = args.output_dir / current_batch.name
         cumulative_directory_deduplication(current_batch,
                                            current_output,
                                            args.output_dir,
