@@ -45,16 +45,26 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    # todo handle multiple directories in one go.
-    input_files = collect_inputs([args.input_dir])
-    logging.info('Scheduled {} files to convert.'.format(len(input_files)))
-    logging.info(f'the files are: {input_files}')
+    # Because utils.py#collected_inputs() cannot be given dirs which contain
+    # subdirs, we have to work around this:
+    input_dirs = [x for x in args.input_dir.iterdir() if x.is_dir()]
+    if not input_dirs:
+        input_dirs = [args.input_dir]
+    input_files = collect_inputs(input_dirs)
+
+    logging.info(f'We have {len(input_files)} files to convert to JSON.')
+    logging.debug(f'the files are: {input_files}')
+
+    # The utils.collected_inputs() is still using os.path, not pathlib:
     for os_input_file in input_files:
-        # The utils.collected_inputs() is still using os.path, not pathlib.
+        logging.debug(f'The current dir to process: {os_input_file}')
         input_file = Path(os_input_file)
+        os_output_file = os_input_file.replace(str(args.input_dir),
+                                               str(args.output_dir))
+        logging.debug(f'Output file {os_output_file}')
         # todo is there a parent=True setting for openall, so it creates the
         # parent directories as well?
-        with openall(args.output_dir / input_file.name, 'wt') as f:
+        with openall(os_output_file, 'wt') as f:
             for document in parse_file(input_file):
                 write_json(document, f)
 
