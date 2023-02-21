@@ -65,8 +65,9 @@ def collect_processed_batches(finished_batches_dir: Path) -> list[Path]:
                 collected_dirs.append(directory)
         else:
             logging.info(f'Directory name {directory.name} was not date-like')
+    collected_dirs.sort()
     logging.info(f'The following directories contain fully processed '
-                 f'batches: {collected_dirs}')
+                 f'batches: {", ".join(str(d) for d in collected_dirs)}')
     return collected_dirs
 
 
