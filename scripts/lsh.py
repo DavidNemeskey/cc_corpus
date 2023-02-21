@@ -279,7 +279,7 @@ def pairwise_directory_deduplication(input_dir: Path,
                  f'{final_doc_num} documents out of {original_doc_num}.')
 
 
-def collect_previous_dirs(path: str, deadline_date: str) -> Path:
+def collect_previous_dirs(path: str, deadline_date: str) -> list[Path]:
     """
     Collects the directories which are directly under the path given
     and whose name, when interpreted as a date, are earlier than the
@@ -288,14 +288,12 @@ def collect_previous_dirs(path: str, deadline_date: str) -> Path:
 
     logging.info(f"We are looking for dirs older than {deadline_date} "
                  f"in {path}")
-    collected_dirs = []
-    for directory in Path(path).iterdir():
-        # We suppose that the directories obey our strict naming convention:
-        # string comparison of directory names coincides with date order.
-        if directory.name < deadline_date:
-            collected_dirs.append(directory)
+    # We suppose that the directories obey our strict naming convention:
+    # string comparison of directory names coincides with date order.
+    collected_dirs = sorted(directory for directory in Path(path).iterdir()
+                            if directory.name < deadline_date)
     logging.info(f'The following directories have been collected as the '
-                 f'cumulative past: {collected_dirs}')
+                 f'cumulative past: {", ".join(str(d) for d in collected_dirs)}')
     return collected_dirs
 
 
@@ -314,27 +312,42 @@ def cumulative_directory_deduplication(input_dir: Path,
     past_batches = collect_previous_dirs(cumulative_dir, input_date)
     number_of_past_batches = len(past_batches)
 
-    with TemporaryDirectory() as tmp_root_dir:
-        current_input_dir = input_dir
-        for i, past_batch in enumerate(past_batches):
-            if i == (number_of_past_batches - 1):
-                # This is the last cross-deduplication, the results will go to
-                # the final output dir
-                current_output_dir = output_dir
-            else:
-                # There are still cross-deduplications to do, the results will
-                # go to the tmp output dir.
-                current_output_dir = Path(tmp_root_dir).joinpath(
-                    f'{input_date}_against_{past_batch.name}'
-                )
-            logging.info(f'Cross-deduplicating {current_input_dir} with '
-                         f'{past_batch}, moving results '
-                         f'to {current_output_dir}')
-            pairwise_directory_deduplication(current_input_dir,
-                                             current_output_dir,
-                                             past_batch, processes,
-                                             permutations, threshold)
-            current_input_dir = current_output_dir
+    # If this is the earliest batch: just copy the input to the output
+    if number_of_past_batches == 0:
+        logging.info(f'No previous directories found: copying {input_dir} '
+                     f'to {output_dir}...')
+        shutil.copytree(input_dir, output_dir)
+    else:
+        with TemporaryDirectory() as tmp_root_dir:
+            logging.debug(f'Created temporary directory {tmp_root_dir}.')
+            current_input_dir = input_dir
+            for i, past_batch in enumerate(past_batches, start=1):
+                if i == number_of_past_batches:
+                    # This is the last cross-deduplication, the results will
+                    # go to the final output dir
+                    current_output_dir = output_dir
+                else:
+                    # There are still cross-deduplications to do, the results
+                    # will go to the tmp output dir.
+                    current_output_dir = Path(tmp_root_dir).joinpath(
+                        f'{input_date}_against_{past_batch.name}'
+                    )
+                logging.info(f'Cross-deduplicating {current_input_dir} with '
+                             f'{past_batch}, moving results '
+                             f'to {current_output_dir}')
+                pairwise_directory_deduplication(current_input_dir,
+                                                 current_output_dir,
+                                                 past_batch, processes,
+                                                 permutations, threshold)
+                # We cannot (at least, should not) keep all the temporary
+                # directories on disk at the same time, so let's just
+                # delete the input directory once it's not needed anymore
+                # Obviously, we mustn't delete the original input...
+                if i != 1:
+                    logging.debug('Deleting temporary input directory '
+                                  f'{current_input_dir}...')
+                    shutil.rmtree(current_input_dir)
+                current_input_dir = current_output_dir
 
 
 def main():
