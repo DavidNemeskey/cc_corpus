@@ -3,7 +3,7 @@
 
 """
 Exports files to JSONL format.
-Operates with gz files
+Operates with gz files.
 If given a directory that contains subdirectories, it will process those.
 """
 
@@ -42,12 +42,11 @@ def write_json(document: Document, output_file: typing.TextIO):
     The metadata contained in the request and response fields are discarded.
     The paragraphs of the document, appended by \n will be the 'text' field.
     """
-    restructured_document = {}
-    restructured_document['id'] = document.attrs.pop('url')
-    restructured_document['meta'] = document.attrs
+    restructured_document = {'id': document.attrs.pop('url'),
+                             'meta': document.attrs,
+                             'text': document.content()}
     # If we need to structure the text differently, then we will have to work
     # with the document.paragraph attribute instead of the content() function.
-    restructured_document['text'] = document.content()
     json_document = json.dumps(restructured_document, ensure_ascii=False)
     print(json_document, file=output_file)
 
@@ -66,18 +65,17 @@ def main():
     if not input_dirs:
         input_dirs = [args.input_dir]
     input_files = collect_inputs(input_dirs)
+    # The utils.collected_inputs() is still using os.path, not pathlib.
     logging.info(f'We have {len(input_files)} files to convert to JSON.')
-    logging.debug(f'the files are: {input_files}')
+    logging.debug(f'The files are: {input_files}.')
 
-    # The utils.collected_inputs() is still using os.path, not pathlib:
-    for os_input_file in input_files:
-        logging.debug(f'The current file to process: {os_input_file}')
-        input_file = Path(os_input_file)
-        os_output_file = os_input_file.replace(str(args.input_dir),
-                                               str(args.output_dir))
-        output_dir = Path(os_output_file).parents[0]
+    for input_file in input_files:
+        logging.debug(f'The current file to process: {input_file}')
+        rel_path = Path(input_file).relative_to(args.input_dir)
+        output_file = args.output_dir / rel_path
+        output_dir = Path(output_file).parents[0]
         output_dir.mkdir(parents=True, exist_ok=True)
-        with openall(os_output_file, 'wt') as f:
+        with openall(output_file, 'wt') as f:
             for document in parse_file(input_file):
                 write_json(document, f)
 
