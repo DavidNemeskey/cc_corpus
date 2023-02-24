@@ -40,7 +40,7 @@ def write_json(document: Document, output_file: typing.TextIO):
     The rest of the  metadata contained in the original <doc> tag will be the
     'meta' field.
     The metadata contained in the request and response fields are discarded.
-    The paragraphs of the document, appended by \n will be the 'text' field.
+    The paragraphs of the document, separated by ''\n'' will be the 'text'.
     """
     restructured_document = {'id': document.attrs.pop('url'),
                              'meta': document.attrs,
@@ -71,13 +71,18 @@ def main():
 
     for input_file in input_files:
         logging.debug(f'The current file to process: {input_file}')
-        rel_path = Path(input_file).relative_to(args.input_dir)
+        # The current extension is .txt.gz we need .jsonl.gz:
+        rel_path = Path(input_file).relative_to(args.input_dir).\
+            with_suffix('').with_suffix('.jsonl.gz')
+        print(f'The relative path: {rel_path}')
         output_file = args.output_dir / rel_path
         output_dir = Path(output_file).parents[0]
         output_dir.mkdir(parents=True, exist_ok=True)
         with openall(output_file, 'wt') as f:
             for document in parse_file(input_file):
                 write_json(document, f)
+            logging.debug(f'Completed exporting to {output_file} as JSON')
+    logging.info('Finished exporting files to JSONL.')
 
 
 if __name__ == '__main__':
