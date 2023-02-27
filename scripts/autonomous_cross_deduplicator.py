@@ -22,6 +22,9 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the directory that contains the fully-'
                              'deduplicated subdirectories.')
+    parser.add_argument('--temp-dir', '-T', type=Path,
+                        help='the directory used to temporarily store partial '
+                             'results')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
@@ -39,6 +42,9 @@ def parse_arguments():
     args = parser.parse_args()
     if not args.output_dir.is_dir():
         parser.error('The directory for the batches must exist.')
+    if args.temp_dir:
+        if not args.temp_dir.is_dir():
+            parser.error('The temporary directory, if set, must exist.')
     return args
 
 
@@ -108,6 +114,7 @@ def main():
         cumulative_directory_deduplication(current_batch,
                                            current_output,
                                            args.output_dir,
+                                           args.temp_dir,
                                            args.processes,
                                            args.permutations,
                                            args.threshold)

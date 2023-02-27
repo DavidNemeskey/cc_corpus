@@ -39,6 +39,9 @@ def parse_arguments():
     parser.add_argument('--skip-same-doc', '-s', action='store_true',
                         help='if true, does not deduplicate paragraphs from '
                              'the same document.')
+    parser.add_argument('--temp-dir', '-T', type=Path,
+                        help='the directory used to temporarily store partial '
+                             'results')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
@@ -300,6 +303,7 @@ def collect_previous_dirs(path: str, deadline_date: str) -> list[Path]:
 def cumulative_directory_deduplication(input_dir: Path,
                                        output_dir: Path,
                                        cumulative_dir: Path,
+                                       temp_dir: Path,
                                        processes: int,
                                        permutations: int,
                                        threshold: float):
@@ -318,7 +322,7 @@ def cumulative_directory_deduplication(input_dir: Path,
                      f'to {output_dir}...')
         shutil.copytree(input_dir, output_dir)
     else:
-        with TemporaryDirectory() as tmp_root_dir:
+        with TemporaryDirectory(dir=temp_dir) as tmp_root_dir:
             logging.debug(f'Created temporary directory {tmp_root_dir}.')
             current_input_dir = input_dir
             for i, past_batch in enumerate(past_batches, start=1):
@@ -370,8 +374,9 @@ def main():
                                          args.permutations, args.threshold)
     elif args.command == "cumulative":
         cumulative_directory_deduplication(args.input_dir, args.output_dir,
-                                           args.cumulative_dir, args.processes,
-                                           args.permutations, args.threshold)
+                                           args.cumulative_dir, args.temp_dir,
+                                           args.processes, args.permutations,
+                                           args.threshold)
 
 
 if __name__ == '__main__':
