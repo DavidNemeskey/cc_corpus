@@ -15,7 +15,7 @@ from multiprocessing import Pool
 from pathlib import Path
 import typing
 
-from cc_corpus.utils import collect_inputs, openall, otqdm
+from cc_corpus.utils import collect_inputs, consume, openall, otqdm
 from cc_corpus.corpus import Document, parse_file
 
 
@@ -94,12 +94,11 @@ def main():
 
     f = partial(write_file_to_json, input_root_dir=args.input_dir,
                 output_root_dir=args.output_dir)
-    p = Pool(args.processes)
-    for _ in otqdm(p.imap_unordered(f, input_files),
-                   'Exporting corpus...', total=len(input_files)):
-        pass
-    p.close()
-    p.join()
+    with Pool(args.processes) as p:
+        consume(otqdm(p.imap_unordered(f, input_files),
+                      'Exporting corpus...', total=len(input_files)))
+        p.close()
+        p.join()
     logging.info('Finished exporting files to JSONL.')
 
 
