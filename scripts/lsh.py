@@ -73,7 +73,7 @@ def parse_arguments():
     )
     parser_cumulative_cross.set_defaults(command="cumulative")
     parser_cumulative_cross.add_argument(
-        '--cumulative-dir', '-c', required=True,
+        '--cumulative-dir', '-c', type=Path, required=True,
         help='the directory which contains the subdirectories with the minhash'
              ' values of the corpora to be used as the basis for '
              'deduplication')
@@ -82,13 +82,13 @@ def parse_arguments():
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
-    if args.command == 'other' and not Path(args.cross_dir).is_dir():
+    if args.command == 'other' and not args.cross_dir.is_dir():
         parser.error('The minhash directory for the other corpus (-c) '
                      'must exist.')
     return args
 
 
-def deduplicate_self(file_prefix: str, output_dir: str,
+def deduplicate_self(file_prefix: Path, output_dir: Path,
                      threshold: float, permutations: int):
     """
     Deduplicates a set of minhashed documents (3 files with the same minhash
@@ -97,7 +97,7 @@ def deduplicate_self(file_prefix: str, output_dir: str,
     Warning: only works for full documents at this point!
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    file_base = Path(file_prefix).name
+    file_base = file_prefix.name
     logging.info(f'Processing batch {file_base}...')
     total_read = 0
     duplicate_urls = 0
@@ -130,9 +130,18 @@ def deduplicate_self(file_prefix: str, output_dir: str,
     return bw.total_written, total_read
 
 
-def deduplicate_other(main_batch: str,
-                      batches_to_subtract: list[str],
-                      output_dir: str,
+def read_batch_to_lsh(batch: Path, threshold: float, permutations: int) \
+        -> MinHashLSH:
+    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+    for input_file, results in read_batch(batch):
+        for doc_id, minhash in zip(results['id'], results['minhash']):
+            lsh.insert('\t'.join(doc_id), minhash)
+    return lsh
+
+
+def deduplicate_other(main_batch: Path,
+                      batches_to_subtract: list[Path],
+                      output_dir: Path,
                       threshold: float,
                       permutations: int):
     """
@@ -142,17 +151,12 @@ def deduplicate_other(main_batch: str,
 
     Warning: only works for full documents at this point!
     """
-    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    main_base = Path(main_batch).name
+    main_base = main_batch.name
     logging.info(f'Processing input batch {main_base}...')
-
-    # First, load the (already deduplicated) batch...
-    for input_file, results in read_batch(main_batch):
-        for doc_id, minhash in zip(results['id'], results['minhash']):
-            lsh.insert('\t'.join(doc_id), minhash)
+    lsh = read_batch_to_lsh(main_batch, threshold, permutations)
     initial_len = len(lsh.keys)
 
-    # Now, remove all documents in it that are contained in th batches
+    # Now, remove all documents in it that are contained in the batches
     # to subtract
     content_duplicates, url_duplicates = 0, 0
     for batch in batches_to_subtract:
@@ -171,7 +175,7 @@ def deduplicate_other(main_batch: str,
         logging.info(
             'Cross-deduplicated input batch {} with cross batch {}: {} -> {} '
             'documents (removed {} by url, {} by content).'.format(
-                main_base, Path(batch).name, initial_batch_len, len(lsh.keys),
+                main_base, batch.name, initial_batch_len, len(lsh.keys),
                 batch_url_duplicates, batch_content_duplicates)
         )
         content_duplicates += batch_content_duplicates
@@ -202,7 +206,7 @@ def single_directory_deduplication(input_dir: Path,
                                    permutations: int,
                                    threshold: float):
     """The "real" main function of the "self" mode."""
-    working_dir = Path(output_dir) / 'self'
+    working_dir = output_dir / 'self'
     working_dir.mkdir(parents=True, exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
@@ -233,7 +237,7 @@ def single_directory_deduplication(input_dir: Path,
     # for counting final_doc_num.
     batch_prefixes = find_all_batches(working_dir)
     batches_to_subtract = [
-        find_all_batches(working_dir, int(Path(file_prefix).name))
+        find_all_batches(working_dir, int(file_prefix.name))
         for file_prefix in batch_prefixes
     ]
 
@@ -282,7 +286,7 @@ def pairwise_directory_deduplication(input_dir: Path,
                  f'{final_doc_num} documents out of {original_doc_num}.')
 
 
-def collect_previous_dirs(path: str, deadline_date: str) -> list[Path]:
+def collect_previous_dirs(path: Path, deadline_date: str) -> list[Path]:
     """
     Collects the directories which are directly under the path given
     and whose name, when interpreted as a date, are earlier than the
@@ -293,7 +297,7 @@ def collect_previous_dirs(path: str, deadline_date: str) -> list[Path]:
                  f"in {path}")
     # We suppose that the directories obey our strict naming convention:
     # string comparison of directory names coincides with date order.
-    collected_dirs = sorted(directory for directory in Path(path).iterdir()
+    collected_dirs = sorted(directory for directory in path.iterdir()
                             if directory.name < deadline_date)
     logging.info(f'The following directories have been collected as the '
                  f'cumulative past: {", ".join(str(d) for d in collected_dirs)}')
@@ -311,8 +315,7 @@ def cumulative_directory_deduplication(input_dir: Path,
 
     # We suppose here that the final part of the input directory is a
     # date-like string e.g.: 06_filtered/2022_12/
-    # input_date = os.path.basename(os.path.normpath(input_dir))
-    input_date = Path(input_dir).name
+    input_date = input_dir.name
     past_batches = collect_previous_dirs(cumulative_dir, input_date)
     number_of_past_batches = len(past_batches)
 

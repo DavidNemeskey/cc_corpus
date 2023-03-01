@@ -8,7 +8,7 @@ Stuff common to all deduplication scripts (minhash.py, lsh.py, etc.)
 from itertools import islice
 import logging
 import os
-import os.path as op
+from pathlib import Path
 import pickle
 import re
 import shutil
@@ -49,7 +49,8 @@ class BatchWriter:
             self.mh_offset += self.minhashf.write(pickle.dumps(mh))
         for id_fields in results['id']:
             self.di_offset += self.doc_idf.write(
-                '{}\n'.format('\t'.join(str(f) for f in id_fields)).encode('utf-8'))
+                '{}\n'.format('\t'.join(str(f) for f in id_fields))
+                .encode('utf-8'))
         self.p_written += len(results['minhash'])
 
     def copy_file(self, input_prefix):
@@ -100,17 +101,19 @@ class BatchWriter:
         self.close()
 
 
-def read_batch(batch_file_prefix):
+def read_batch(batch_file_prefix: Path):
     """
-    Reads a single batch written previously with BatchWriter. Yields a (document
-    name, results) tuple for each input file in the batch.
+    Reads a single batch written previously with BatchWriter. Yields a
+    (document name, results) tuple for each input file in the batch.
 
     Kind of sluggish because of the unpickling, but that's how usually we need
     the result.
     """
-    with open(batch_file_prefix + '.minhashes', 'rb') as minhashf, \
-         open(batch_file_prefix + '.doc_ids', 'rt', encoding='utf-8') as doc_idf, \
-         open(batch_file_prefix + '.files', 'rt', encoding='utf-8') as filef:
+    with open(batch_file_prefix.with_suffix('.minhashes'), 'rb') as minhashf, \
+         open(batch_file_prefix.with_suffix('.doc_ids'), 'rt',
+              encoding='utf-8') as doc_idf, \
+         open(batch_file_prefix.with_suffix('.files'), 'rt',
+              encoding='utf-8') as filef:
         for doc_file, num_lines, _, _ in (l.strip().split() for l in filef):
             doc_ids = [doc_id.strip().split('\t') for doc_id in
                        islice(doc_idf, int(num_lines))]
@@ -118,17 +121,18 @@ def read_batch(batch_file_prefix):
             yield doc_file, {'minhash': minhashes, 'id': doc_ids}
 
 
-def find_all_batches(input_dir, greater_than=None):
+def find_all_batches(input_dir: Path, greater_than=None) -> list[Path]:
     """
     Returns all minhash batches file prefixes in the specified directory. If
     greater_than is specified, only those batches are returned that are
     numerically greater than the specified number.
     """
-    batches = [f[:-6] for f in os.listdir(input_dir)
-               if re.match('[0-9]+.files', f)]
+    batch_stems = [f.stem for f in input_dir.iterdir()
+                   if re.match('[0-9]+.files', f.name)]
+    batch_stems = sorted(batch_stems, key=int)
     if greater_than is not None:
-        batches = [b for b in batches if int(b) > greater_than]
-    return [op.join(input_dir, b) for b in sorted(batches, key=int)]
+        batch_stems = [b for b in batch_stems if int(b) > greater_than]
+    return [input_dir / b for b in batch_stems]
 
 
 class MinHasher:
