@@ -5,7 +5,7 @@
 Stuff common to all deduplication scripts (minhash.py, lsh.py, etc.)
 """
 
-from itertools import islice
+from itertools import islice, cycle
 import logging
 import os
 from pathlib import Path
@@ -101,6 +101,32 @@ class BatchWriter:
         self.close()
 
 
+def read_batch_to_memory(batch_file_prefix: Path):
+    """
+    Reads a single batch written previously with BatchWriter into memory.
+    Returns a list of tuples. Each tuple is one document.  The elements of a
+    tuple are:
+    1. document title (it's url), represented as a list of strings
+    ?? the url is split along tabs, but why ??
+    2. minhash,
+    3. source file (the .gz it comes from)
+    """
+    collected_data = []
+    with open(batch_file_prefix.with_suffix('.minhashes'), 'rb') as minhashf, \
+            open(batch_file_prefix.with_suffix('.doc_ids'), 'rt',
+                 encoding='utf-8') as doc_idf, \
+            open(batch_file_prefix.with_suffix('.files'), 'rt',
+                 encoding='utf-8') as filef:
+        for doc_file, num_lines, _, _ in (l.strip().split() for l in filef):
+            doc_ids = [doc_id.strip().split('\t') for doc_id in
+                       islice(doc_idf, int(num_lines))]
+            minhashes = [pickle.load(minhashf) for _ in range(int(num_lines))]
+            # Combine the data into a tuple, add the current doc_file as well:
+            data_in_file = zip(doc_ids, minhashes, cycle([doc_file]))
+            collected_data += data_in_file
+    return collected_data
+
+
 def read_batch(batch_file_prefix: Path):
     """
     Reads a single batch written previously with BatchWriter. Yields a
@@ -115,6 +141,7 @@ def read_batch(batch_file_prefix: Path):
          open(batch_file_prefix.with_suffix('.files'), 'rt',
               encoding='utf-8') as filef:
         for doc_file, num_lines, _, _ in (l.strip().split() for l in filef):
+            # TODO I think that splitting the urls by tabs are unnecessary.
             doc_ids = [doc_id.strip().split('\t') for doc_id in
                        islice(doc_idf, int(num_lines))]
             minhashes = [pickle.load(minhashf) for _ in range(int(num_lines))]

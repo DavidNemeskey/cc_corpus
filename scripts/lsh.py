@@ -21,7 +21,8 @@ from tempfile import TemporaryDirectory
 from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
-from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
+from cc_corpus.deduplication import BatchWriter, find_all_batches, \
+    read_batch, read_batch_to_memory
 
 
 def parse_arguments():
@@ -153,51 +154,50 @@ def deduplicate_other(main_batch: Path,
     """
     main_base = main_batch.name
     logging.info(f'Processing input batch {main_base}...')
-    lsh = read_batch_to_lsh(main_batch, threshold, permutations)
-    initial_len = len(lsh.keys)
+    main_batch_data = read_batch_to_memory(main_batch)
+    initial_len = len(main_batch_data)
 
     # Now, remove all documents in it that are contained in the batches
-    # to subtract
-    content_duplicates, url_duplicates = 0, 0
+    # to subtract:
     for batch in batches_to_subtract:
-        batch_content_duplicates, batch_url_duplicates = 0, 0
-        initial_batch_len = len(lsh.keys)
-        for _, results in read_batch(batch):
-            for doc_id, minhash in zip(results['id'], results['minhash']):
-                key = '_'.join(doc_id)
-                if key in lsh:
-                    batch_url_duplicates += 1
-                    lsh.remove(key)
-                else:
-                    for duplicate in lsh.query(minhash):
-                        lsh.remove(duplicate)
-                        batch_content_duplicates += 1
+        initial_batch_len = len(main_batch_data)
+        lsh = read_batch_to_lsh(batch, threshold, permutations)
+        main_batch_data = [x for x in main_batch_data if not lsh.query(x[1])]
         logging.info(
-            'Cross-deduplicated input batch {} with cross batch {}: {} -> {} '
-            'documents (removed {} by url, {} by content).'.format(
-                main_base, batch.name, initial_batch_len, len(lsh.keys),
-                batch_url_duplicates, batch_content_duplicates)
+            f'Cross-deduplicated input batch {main_base} with cross batch '
+            f'{batch.name}: {initial_batch_len} -> {len(main_batch_data)} '
+            'documents'
         )
-        content_duplicates += batch_content_duplicates
-        url_duplicates += batch_url_duplicates
-
-    # Finally, we print the documents left. Unfortunately, in order to
-    # keep the format, we have to read the original batch again.
+    # We print the documents left:
     with closing(BatchWriter(sys.maxsize, output_dir,
                              len(main_base), int(main_base))) as bw:
-        # OK, we need to re-read the batch unfortunately
-        for input_file, results in read_batch(main_batch):
-            doc_ids, minhashes = [], []
-            for doc_id, minhash in zip(results['id'], results['minhash']):
-                if '\t'.join(doc_id) in lsh:
-                    doc_ids.append(doc_id)
-                    minhashes.append(minhash)
-            bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
-    logging.info('Processed input batch {}; kept {} out of {} documents '
-                 '(removed {} by url, {} by content).'.format(
-                     main_base, len(lsh.keys), initial_len,
-                     url_duplicates, content_duplicates))
-    return len(lsh.keys), initial_len
+        # We have to organize the data into subsets per source file:
+        current_docfile = None
+        doc_ids = []
+        minhashes = []
+        for doc_id, minhash, docfile in main_batch_data:
+            if docfile == current_docfile:
+                # We are collecting doc_ids and minhashes per source files.
+                doc_ids.append(doc_id)
+                minhashes.append(minhash)
+            else:
+                # We reached the contents of another source .gz file.
+                # write data here
+                if doc_ids:
+                    bw.write_results(current_docfile, {'id': doc_ids,
+                                                       'minhash': minhashes})
+                current_docfile = docfile
+                doc_ids = []
+                minhashes = []
+        # To write the data for the last source file:
+        if doc_ids:
+            bw.write_results(current_docfile, {'id': doc_ids,
+                                               'minhash': minhashes})
+
+    logging.info(f'Processed input batch {main_base}; '
+                 f'kept {len(main_batch_data)} out of {initial_len} documents'
+                 )
+    return len(main_batch_data), initial_len
 
 
 def single_directory_deduplication(input_dir: Path,
@@ -300,7 +300,8 @@ def collect_previous_dirs(path: Path, deadline_date: str) -> list[Path]:
     collected_dirs = sorted(directory for directory in path.iterdir()
                             if directory.name < deadline_date)
     logging.info(f'The following directories have been collected as the '
-                 f'cumulative past: {", ".join(str(d) for d in collected_dirs)}')
+                 f'cumulative past: '
+                 f'{", ".join(str(d) for d in collected_dirs)}')
     return collected_dirs
 
 
