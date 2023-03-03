@@ -17,6 +17,7 @@ from pathlib import Path
 import shutil
 import sys
 from tempfile import TemporaryDirectory
+from time import sleep
 
 from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
@@ -140,11 +141,24 @@ def read_batch_to_lsh(batch: Path, threshold: float, permutations: int) \
     return lsh
 
 
+def check_and_wait_for_batch(batch: Path):
+    """
+    Checks if there is a done.txt in the given batch.
+    If not, then it waits until there is.
+    """
+    logging.debug(f'Checking batch {batch} whether it\'s done or not')
+    while True:
+        if (batch / 'done.txt').is_file():
+            break
+        sleep(5)
+
+
 def deduplicate_other(main_batch: Path,
                       batches_to_subtract: list[Path],
                       output_dir: Path,
                       threshold: float,
-                      permutations: int):
+                      permutations: int,
+                      multiproc_coordination=False):
     """
     Removes all documents from a set of minhashed documents (3 files with the
     same minhash prefix) that occur in other batches. Both main_batch and
@@ -160,6 +174,8 @@ def deduplicate_other(main_batch: Path,
     # Now, remove all documents in it that are contained in the batches
     # to subtract:
     for batch in batches_to_subtract:
+        if multiproc_coordination:
+            check_and_wait_for_batch(batch.parent)
         initial_batch_len = len(main_batch_data)
         lsh = read_batch_to_lsh(batch, threshold, permutations)
         main_batch_data = [x for x in main_batch_data if not lsh.query(x[1])]
@@ -193,6 +209,11 @@ def deduplicate_other(main_batch: Path,
         if doc_ids:
             bw.write_results(current_docfile, {'id': doc_ids,
                                                'minhash': minhashes})
+
+    if multiproc_coordination:
+        with open(output_dir / 'done.txt', "wt") as f:
+            f.write('This file flags this batch done for multiprocess'
+                    ' deduplication')
 
     logging.info(f'Processed input batch {main_base}; '
                  f'kept {len(main_batch_data)} out of {initial_len} documents'

@@ -7,12 +7,14 @@
 
 from setuptools import find_packages, setup
 
+
 def readme():
     with open('README.md') as f:
         return f.read()
 
+
 setup(name='commoncrawl-downloader',
-      version='1.11.2',
+      version='1.11.3',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -51,6 +53,7 @@ setup(name='commoncrawl-downloader',
       # Install the scripts
       scripts=[
           'scripts/autonomous_cross_deduplicator.py',
+          'scripts/autonomous_cross_deduplicator_par.py',
           'scripts/batch_deduplicate_index_urls.py',
           'scripts/cdx-index-client.py',
           'scripts/get_indexfiles.py',
