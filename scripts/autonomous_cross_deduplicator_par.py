@@ -5,7 +5,7 @@
 Does cross-deduplication for a series of batches. Parallel processing version.
 It is given a target range of batches, and cross-deduplicates them with every
 older one using the functions in lsh.py
-Important note: this version treats a batch done if there is a done.txt in the
+Important note: this version treats a batch done if there is a DONE.txt in the
 minhash_full directory. If some of the batches are already done by other modes
 they must be marked this way.
 """

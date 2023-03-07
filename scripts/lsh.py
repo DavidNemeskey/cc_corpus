@@ -25,6 +25,8 @@ from multiprocessing_logging import install_mp_handler
 from cc_corpus.deduplication import BatchWriter, find_all_batches, \
     read_batch, read_batch_to_memory
 
+done_file = "DONE.txt"
+
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
@@ -143,12 +145,12 @@ def read_batch_to_lsh(batch: Path, threshold: float, permutations: int) \
 
 def check_and_wait_for_batch(batch: Path):
     """
-    Checks if there is a done.txt in the given batch.
+    Checks if there is a DONE.txt in the given batch.
     If not, then it waits until there is.
     """
     logging.debug(f'Checking batch {batch} whether it\'s done or not')
     while True:
-        if (batch / 'done.txt').is_file():
+        if (batch / done_file).is_file():
             break
         sleep(5)
 
@@ -211,7 +213,7 @@ def deduplicate_other(main_batch: Path,
                                                'minhash': minhashes})
 
     if multiproc_coordination:
-        with open(output_dir / 'done.txt', "wt") as f:
+        with open(output_dir / done_file, "wt") as f:
             f.write('This file flags this batch done for multiprocess'
                     ' deduplication')
 
