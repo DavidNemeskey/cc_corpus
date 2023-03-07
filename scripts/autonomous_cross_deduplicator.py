@@ -24,7 +24,7 @@ def parse_arguments():
                              'deduplicated subdirectories.')
     parser.add_argument('--temp-dir', '-T', type=Path,
                         help='the directory used to temporarily store partial '
-                             'results')
+                             'results. The default is the system tmp dir.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
@@ -42,9 +42,8 @@ def parse_arguments():
     args = parser.parse_args()
     if not args.output_dir.is_dir():
         parser.error('The directory for the batches must exist.')
-    if args.temp_dir:
-        if not args.temp_dir.is_dir():
-            parser.error('The temporary directory, if set, must exist.')
+    if args.temp_dir and not args.temp_dir.is_dir():
+        parser.error('The temporary directory, if set, must exist.')
     return args
 
 

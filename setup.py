@@ -117,7 +117,7 @@ setup(name='commoncrawl-downloader',
           # Will maybe remove this later
           'simplejson',
           # Boilerplate removal
-          'trafilatura',  # 1.2.2
+          'trafilatura==1.2.2',  # 1.2.2
           # Easier TLD extraction
           'tldextract',
           # Language identification -- cld2 master doesn't compile ATM

@@ -53,9 +53,8 @@ def parse_arguments():
     args = parser.parse_args()
     if not args.output_dir.is_dir():
         parser.error('The directory for the batches must exist.')
-    if args.temp_dir:
-        if not args.temp_dir.is_dir():
-            parser.error('The temporary directory, if set, must exist.')
+    if args.temp_dir and not args.temp_dir.is_dir():
+        parser.error('The temporary directory, if set, must exist.')
     return args
 
 
@@ -106,7 +105,7 @@ def assemble_targets(input_dir: Path, output_dir: Path,
         # TODO we do not support multiple minhash files per batch.
         target_as_input = input_dir / target / '1'
         target_as_output = output_dir / target
-        past = [output_dir / dir / '1' for dir in full_list[: from_i + index]]
+        past = [output_dir / dir / '1' for dir in full_list[:from_i + index]]
         pairings.append((target_as_input, past, target_as_output,))
     return pairings
 

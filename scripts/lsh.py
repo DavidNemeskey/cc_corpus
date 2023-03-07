@@ -22,8 +22,9 @@ from time import sleep
 from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
-from cc_corpus.deduplication import BatchWriter, find_all_batches, \
-    read_batch, read_batch_to_memory
+from cc_corpus.deduplication import (
+    BatchWriter, find_all_batches, read_batch, read_batch_to_memory
+)
 
 done_file = "DONE.txt"
 
@@ -134,8 +135,9 @@ def deduplicate_self(file_prefix: Path, output_dir: Path,
     return bw.total_written, total_read
 
 
-def read_batch_to_lsh(batch: Path, threshold: float, permutations: int) \
-        -> MinHashLSH:
+def read_batch_to_lsh(
+        batch: Path, threshold: float, permutations: int
+) -> MinHashLSH:
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
     for input_file, results in read_batch(batch):
         for doc_id, minhash in zip(results['id'], results['minhash']):
@@ -218,8 +220,7 @@ def deduplicate_other(main_batch: Path,
                     ' deduplication')
 
     logging.info(f'Processed input batch {main_base}; '
-                 f'kept {len(main_batch_data)} out of {initial_len} documents'
-                 )
+                 f'kept {len(main_batch_data)} out of {initial_len} documents')
     return len(main_batch_data), initial_len
 
 
