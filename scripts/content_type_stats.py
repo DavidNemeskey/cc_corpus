@@ -129,8 +129,6 @@ def main():
         for _ in p.imap_unordered(f, task_dirs):
             pass
 
-    # process_batch(task_dirs[0], args.output_dir)
-
 
 if __name__ == '__main__':
     main()
