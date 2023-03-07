@@ -26,7 +26,7 @@ from cc_corpus.deduplication import (
     BatchWriter, find_all_batches, read_batch, read_batch_to_memory
 )
 
-done_file = "DONE.txt"
+done_file = "DONE"
 
 
 def parse_arguments():
@@ -151,10 +151,9 @@ def check_and_wait_for_batch(batch: Path):
     If not, then it waits until there is.
     """
     logging.debug(f'Checking batch {batch} whether it\'s done or not')
-    while True:
-        if (batch / done_file).is_file():
-            break
+    while not (batch / done_file).is_file():
         sleep(5)
+    logging.debug(f'We waited on batch {batch} and now it\'s done!')
 
 
 def deduplicate_other(main_batch: Path,
