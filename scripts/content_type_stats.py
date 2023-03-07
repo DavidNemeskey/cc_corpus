@@ -70,9 +70,10 @@ def process_batch(input_dir, output_dir):
     Writes the results into a single tsv.gz file.
     """
     stat_file = (output_dir / input_dir.name).with_suffix('.tsv.gz')
+    matcher_ct = re.compile(r'Content-Type: ([\w/]+)', re.I)
+    matcher_wi = re.compile(r'WARC-IDentified-Payload-Type: ([\w/]+)', re.I)
+    matcher_cd = re.compile(r'(Content-Disposition: )([^\n^"]*)"([^\n^"]*)"', re.I)
     with openall(stat_file, "wt", encoding="utf-8") as f:
-        matcher1 = re.compile(r'Content-Type: ([\w/]+)', re.I)
-        matcher2 = re.compile(r'WARC-IDentified-Payload-Type: ([\w/]+)', re.I)
         for file in input_dir.iterdir():
             file_name = input_dir.name + '/' + file.name
             for doc in parse_file(file):
@@ -82,22 +83,33 @@ def process_batch(input_dir, output_dir):
                 else:
                     type_from_doctag = '-'
                 # Get the type from the warc request header:
-                match_warcid = matcher2.search(doc.meta['request'])
+                match_warcid = matcher_wi.search(doc.meta['request'])
                 if match_warcid:
                     type_from_warc_id = match_warcid.groups(1)[0]
                 else:
                     type_from_warc_id = '-'
                 # Get the type from the response header:
-                match_resp = matcher1.search(doc.meta['response'])
+                match_resp = matcher_ct.search(doc.meta['response'])
                 if match_resp:
                     type_from_response = match_resp.groups(1)[0]
                 else:
                     type_from_response = '-'
+                # Get the info about the attached file, if any:
+                match_cd = matcher_cd.search(doc.meta['response'])
+                if match_cd:
+                    attached_file = match_cd.group(3)
+                    if '.' in attached_file:
+                        attachment_ext = attached_file.split('.')[-1]
+                    else:
+                        attachment_ext = 'no_extension'
+                else:
+                    attachment_ext = '-'
                 # Process the results for this doc:
                 line = file_name + '\t'
                 line += type_from_doctag + '\t'
                 line += type_from_warc_id + '\t'
                 line += type_from_response + '\t'
+                line += attachment_ext + '\t'
                 print(line, file=f)
 
 
