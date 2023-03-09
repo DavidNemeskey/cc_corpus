@@ -3,7 +3,12 @@
 
 """
 Collects content-type data from the corpus.
-Operates with gz files.
+Content-type information appears in multiple sections of the metadata,
+and they are not consistent. We collect:
+* the mime-type from the <doc> tag
+* the warc identified content type from the request header
+* the content type from the response header
+* the extension of the attachment file, if any.
 Writes the output as a tsv.gz.
 """
 
@@ -37,8 +42,6 @@ def parse_arguments():
                                  'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
-    if not args.output_dir.is_dir():
-        parser.error('The directory for the output must exist.')
     return args
 
 
@@ -121,6 +124,7 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     task_dirs = fetch_directories(args.input_dir, args.from_dir, args.upto_dir)
     logging.debug(f'The directories to process are: {task_dirs}')
 
