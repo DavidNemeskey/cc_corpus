@@ -79,33 +79,33 @@ def assemble_targets(input_dir: Path, output_dir: Path,
 
     Ignores dirs which do not contain the required files
     """
-    list = [dir.name for dir in sorted(input_dir.iterdir())
+    list_of_dirs = [dir.name for dir in sorted(input_dir.iterdir())
             if has_minhash_content(dir)]
     if upto_dir:
         try:
-            upto_i = list.index(upto_dir)
+            upto_i = list_of_dirs.index(upto_dir)
         except ValueError:
             logging.error('The upto-dir is not a valid batch')
             raise
-        list = list[:upto_i+1]
+        list_of_dirs = list_of_dirs[:upto_i+1]
     if from_dir:
         try:
-            from_i = list.index(from_dir)
+            from_i = list_of_dirs.index(from_dir)
         except ValueError:
             logging.error('The from-dir is not a valid batch')
             raise
-        target_list = list[from_i:]
+        target_list = list_of_dirs[from_i:]
     else:
         from_i = 0
-        target_list = list
+        target_list = list_of_dirs
     logging.debug(f'The list of targets is: {target_list} \n They start from '
-                  f'pos {from_i} of the relevant history: {list}')
+                  f'pos {from_i} of the relevant history: {list_of_dirs}')
     pairings = []
     for index, target in enumerate(target_list):
         # TODO we do not support multiple minhash files per batch.
         target_as_input = input_dir / target / '1'
         target_as_output = output_dir / target
-        past = [output_dir / dir / '1' for dir in list[:from_i + index]]
+        past = [output_dir / dir / '1' for dir in list_of_dirs[:from_i + index]]
         pairings.append((target_as_input, past, target_as_output,))
     return pairings
 

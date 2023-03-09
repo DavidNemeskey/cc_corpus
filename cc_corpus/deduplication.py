@@ -50,7 +50,8 @@ class BatchWriter:
         for id_fields in results['id']:
             self.di_offset += self.doc_idf.write(
                 '{}\n'.format('\t'.join(str(f) for f in id_fields))
-                .encode('utf-8'))
+                .encode('utf-8')
+            )
         self.p_written += len(results['minhash'])
 
     def copy_file(self, input_prefix):
@@ -107,7 +108,7 @@ def read_batch_to_memory(batch_file_prefix: Path):
     Returns a list of tuples. Each tuple is one document.  The elements of a
     tuple are:
     1. document title (it's url), represented as a list of strings
-    ?? the url is split along tabs, but why ??
+    note:: the url is split along tabs, for reasons unknown to me.
     2. minhash,
     3. source file (the .gz it comes from)
     """
