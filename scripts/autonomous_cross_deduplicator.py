@@ -51,10 +51,20 @@ def parse_arguments():
                                  'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
+    if not args.input_dir.is_dir():
+        parser.error('The input directory for the batches must exist.')
     if not args.output_dir.is_dir():
-        parser.error('The directory for the batches must exist.')
+        parser.error('The output directory for the batches must exist.')
     if args.temp_dir and not args.temp_dir.is_dir():
         parser.error('The temporary directory, if set, must exist.')
+    if args.from_dir:
+        fd_path = args.input_dir / args.from_dir
+        if not (fd_path.is_dir() and has_minhash_content(fd_path)):
+            parser.error('The from-dir is not a proper input batch')
+    if args.upto_dir:
+        ud_path = args.input_dir / args.upto_dir
+        if not (ud_path.is_dir() and has_minhash_content(ud_path)):
+            parser.error('The upto-dir is not a proper input batch')
     return args
 
 
@@ -80,20 +90,12 @@ def assemble_targets(input_dir: Path, output_dir: Path,
     Ignores dirs which do not contain the required files
     """
     list_of_dirs = [dir.name for dir in sorted(input_dir.iterdir())
-            if has_minhash_content(dir)]
+                    if has_minhash_content(dir)]
     if upto_dir:
-        try:
-            upto_i = list_of_dirs.index(upto_dir)
-        except ValueError:
-            logging.error('The upto-dir is not a valid batch')
-            raise
+        upto_i = list_of_dirs.index(upto_dir)
         list_of_dirs = list_of_dirs[:upto_i+1]
     if from_dir:
-        try:
-            from_i = list_of_dirs.index(from_dir)
-        except ValueError:
-            logging.error('The from-dir is not a valid batch')
-            raise
+        from_i = list_of_dirs.index(from_dir)
         target_list = list_of_dirs[from_i:]
     else:
         from_i = 0
@@ -105,7 +107,8 @@ def assemble_targets(input_dir: Path, output_dir: Path,
         # TODO we do not support multiple minhash files per batch.
         target_as_input = input_dir / target / '1'
         target_as_output = output_dir / target
-        past = [output_dir / dir / '1' for dir in list_of_dirs[:from_i + index]]
+        past = [output_dir / dir / '1' for dir
+                in list_of_dirs[:from_i + index]]
         pairings.append((target_as_input, past, target_as_output,))
     return pairings
 
