@@ -2,16 +2,22 @@
 # -*- coding: utf-8 -*-
 
 """
-Does cross-deduplication for a series of batches. It selects which batch to do
-next and cross-deduplicates it using the functions in lsh.py
+Does cross-deduplication for a series of batches. Parallel processing version.
+It is given a target range of batches, and cross-deduplicates them with every
+older one using the functions in lsh.py
+Important note: this version treats a batch done if there is a DONE.txt in the
+minhash_full directory. If some of the batches are already done by other modes
+they must be marked this way.
 """
 
 from argparse import ArgumentParser
+from functools import partial
 import logging
+import cc_corpus.istarmap   # It is here because this patches multiprocessing.
+from multiprocessing import Pool
 from pathlib import Path
-import re
 
-from lsh import cumulative_directory_deduplication
+from lsh import deduplicate_other
 
 
 def parse_arguments():
@@ -22,6 +28,15 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the directory that contains the fully-'
                              'deduplicated subdirectories.')
+    parser.add_argument('--from-dir', '-f',
+                        help='the earlies batch to work on. Only use this if'
+                             'other tasks are working on the preceding'
+                             'batches, otherwise it will stall forever.')
+    parser.add_argument('--upto-dir', '-u',
+                        help='the latest batch to work on.')
+    parser.add_argument('--temp-dir', '-T', type=Path,
+                        help='the directory used to temporarily store partial '
+                             'results. The default is the system tmp dir.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
@@ -37,8 +52,18 @@ def parse_arguments():
                                  'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
-    if not args.output_dir.is_dir():
-        parser.error('The directory for the batches must exist.')
+    if not args.input_dir.is_dir():
+        parser.error('The input directory for the batches must exist.')
+    if args.temp_dir and not args.temp_dir.is_dir():
+        parser.error('The temporary directory, if set, must exist.')
+    if args.from_dir:
+        fd_path = args.input_dir / args.from_dir
+        if not (fd_path.is_dir() and has_minhash_content(fd_path)):
+            parser.error('The from-dir is not a proper input batch')
+    if args.upto_dir:
+        ud_path = args.input_dir / args.upto_dir
+        if not (ud_path.is_dir() and has_minhash_content(ud_path)):
+            parser.error('The upto-dir is not a proper input batch')
     return args
 
 
@@ -52,38 +77,39 @@ def has_minhash_content(directory: Path) -> bool:
             and (directory / '1.minhashes').is_file())
 
 
-def collect_processed_batches(finished_batches_dir: Path) -> list[Path]:
+def assemble_targets(input_dir: Path, output_dir: Path,
+                     from_dir: Path, upto_dir):
     """
-    Collects the directories within the finished_batches_dir
-    which have date-like names and contain the following files:
-    1.doc_ids, 1.files, 1.minhashes
-    """
-    collected_dirs = []
-    for directory in finished_batches_dir.iterdir():
-        if re.match('^[0-9_]+$', directory.name):
-            if has_minhash_content(directory):
-                collected_dirs.append(directory)
-        else:
-            logging.info(f'Directory name {directory.name} was not date-like')
-    collected_dirs.sort()
-    logging.info(f'The following directories contain fully processed '
-                 f'batches: {", ".join(str(d) for d in collected_dirs)}')
-    return collected_dirs
+    Returns a list of tuples. The tuples contain the parameters for the
+    deduplicate_other() method:
+    The input (minhash self) dir of the target
+    The list of dirs of older batches (minhash full)
+    The output (minhash full) dir for the target.
 
-
-def find_batch_to_process(self_dedup_dir: Path,
-                          finished_batch_names: list[str]) -> Path:
+    Ignores dirs which do not contain the required files
     """
-    Finds the directory whose name when interpreted as a date is the earliest
-    and is not contained in the blacklist of already finished batches
-    """
-    for directory in sorted(self_dedup_dir.iterdir()):
-        if directory.name in finished_batch_names:
-            continue
-        if has_minhash_content(directory):
-            logging.info(f'The first valid batch is {directory}')
-            return directory
-    return None
+    list_of_dirs = [dir.name for dir in sorted(input_dir.iterdir())
+                    if has_minhash_content(dir)]
+    if upto_dir:
+        upto_i = list_of_dirs.index(upto_dir)
+        list_of_dirs = list_of_dirs[:upto_i+1]
+    if from_dir:
+        from_i = list_of_dirs.index(from_dir)
+        target_list = list_of_dirs[from_i:]
+    else:
+        from_i = 0
+        target_list = list_of_dirs
+    logging.debug(f'The list of targets is: {target_list} \n They start from '
+                  f'pos {from_i} of the relevant history: {list_of_dirs}')
+    pairings = []
+    for index, target in enumerate(target_list):
+        # TODO we do not support multiple minhash files per batch.
+        target_as_input = input_dir / target / '1'
+        target_as_output = output_dir / target
+        past = [output_dir / dir / '1' for dir
+                in list_of_dirs[:from_i + index]]
+        pairings.append((target_as_input, past, target_as_output,))
+    return pairings
 
 
 def main():
@@ -94,23 +120,19 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    while True:
-        processed_batches = collect_processed_batches(args.output_dir)
-        processed_batch_names = {x.name for x in processed_batches}
-        current_batch = find_batch_to_process(
-            args.input_dir,
-            processed_batch_names
-        )
-        if not current_batch:
-            logging.info('No more batches to process.')
-            break
-        current_output = args.output_dir / current_batch.name
-        cumulative_directory_deduplication(current_batch,
-                                           current_output,
-                                           args.output_dir,
-                                           args.processes,
-                                           args.permutations,
-                                           args.threshold)
+    pairings = assemble_targets(args.input_dir, args.output_dir,
+                                args.from_dir, args.upto_dir)
+    # Create the output folders if missing:
+    for _, _, output_dir in pairings:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    f = partial(deduplicate_other, threshold=args.threshold,
+                permutations=args.permutations)
+    with Pool(args.processes) as p:
+        for _ in p.istarmap(f, pairings):
+            pass
+        p.close()
+        p.join()
 
 
 if __name__ == '__main__':
