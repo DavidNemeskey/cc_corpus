@@ -7,9 +7,11 @@
 
 from setuptools import find_packages, setup
 
+
 def readme():
     with open('README.md') as f:
         return f.read()
+
 
 setup(name='commoncrawl-downloader',
       version='1.11.4',
@@ -53,7 +55,6 @@ setup(name='commoncrawl-downloader',
           'scripts/autonomous_cross_deduplicator.py',
           'scripts/batch_deduplicate_index_urls.py',
           'scripts/cdx-index-client.py',
-          'scripts/content_type_stats.py',
           'scripts/get_indexfiles.py',
           'scripts/filter_index.py',
           'scripts/deduplicate_index_urls.py',

@@ -17,7 +17,7 @@ from functools import partial
 import logging
 from multiprocessing import Pool
 import os
-import os.path as op
+from pathlib import Path
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.deduplication import find_all_batches, read_batch
@@ -26,14 +26,14 @@ from cc_corpus.utils import notempty, openall, otqdm
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--minhash-dir', '-m', required=True,
+    parser.add_argument('--minhash-dir', '-m', type=Path, required=True,
                         help='the input directory that contains the minhash '
                              'batches to deduplicate. The .files file contains '
                              'the names of the (corpus) input files.')
-    parser.add_argument('--output-dir', '-o', required=True,
+    parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the directory to which the filtered corpus '
                              'files are written.')
-    parser.add_argument('--input-dir', '-i',
+    parser.add_argument('--input-dir', '-i',type=Path,
                         help='the directory that contains the corpus files to '
                              'filter. Since the minhash files store the names '
                              'of the input files, this argument is only '
@@ -59,8 +59,8 @@ def parse_arguments():
     return args
 
 
-def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None,
-                                ignore_missing_files=False):
+def deduplicate_batch_documents(batch_prefix: Path, output_dir: Path,
+                                input_dir=None, ignore_missing_files=False):
     """
     Filters documents not present in the batch and writes the filtered corpus
     files to output_dir. As above, input_dir can be specified if the location
@@ -68,17 +68,17 @@ def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None,
 
     Empty files will not be written.
     """
-    batch_base = op.basename(batch_prefix)
-    logging.info('Filtering batch {}...'.format(batch_base))
+    batch_base = batch_prefix.name
+    logging.info(f'Filtering batch {batch_base}...')
 
     kept, total = 0, 0
     num_files = 0
     for input_file, results in read_batch(batch_prefix):
-        file_base = op.basename(input_file)
+        file_base = Path(input_file).name
         url_set = set('_'.join(doc_id) for doc_id in results['id'])
-        input_file = op.join(input_dir, file_base) if input_dir else input_file
-        if os.path.isfile(input_file):
-            with notempty(openall(op.join(output_dir, file_base), 'wt')) as outf:
+        input_file = input_dir / file_base if input_dir else Path(input_file)
+        if input_file.is_file():
+            with notempty(openall(output_dir / file_base, 'wt')) as outf:
                 for doc_no, doc in enumerate(parse_file(input_file), start=1):
                     if doc.attrs['url'] in url_set:
                         print(doc, file=outf)
@@ -89,8 +89,7 @@ def deduplicate_batch_documents(batch_prefix, output_dir, input_dir=None,
             logging.debug('Input file {} was not found; ignoring...'.format(
                 input_file))
         else:
-            raise FileNotFoundError(
-                'Input file {} not found.'.format(input_file))
+            raise FileNotFoundError(f'Input file {input_file} not found.')
 
     logging.info('Filtered batch {} of {} files; '
                  'kept {} documents out of {}.'.format(
@@ -107,9 +106,7 @@ def main():
     )
 
     os.nice(20)
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
-
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     batch_prefixes = find_all_batches(args.minhash_dir)
     logging.info('Found a total of {} batches.'.format(len(batch_prefixes)))
 

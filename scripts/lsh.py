@@ -17,11 +17,16 @@ from pathlib import Path
 import shutil
 import sys
 from tempfile import TemporaryDirectory
+from time import sleep
 
 from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
-from cc_corpus.deduplication import BatchWriter, find_all_batches, read_batch
+from cc_corpus.deduplication import (
+    BatchWriter, find_all_batches, read_batch, read_batch_to_memory
+)
+
+done_file = "DONE"
 
 
 def parse_arguments():
@@ -39,6 +44,9 @@ def parse_arguments():
     parser.add_argument('--skip-same-doc', '-s', action='store_true',
                         help='if true, does not deduplicate paragraphs from '
                              'the same document.')
+    parser.add_argument('--temp-dir', '-T', type=Path,
+                        help='the directory used to temporarily store partial '
+                             'results')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
@@ -70,7 +78,7 @@ def parse_arguments():
     )
     parser_cumulative_cross.set_defaults(command="cumulative")
     parser_cumulative_cross.add_argument(
-        '--cumulative-dir', '-c', required=True,
+        '--cumulative-dir', '-c', type=Path, required=True,
         help='the directory which contains the subdirectories with the minhash'
              ' values of the corpora to be used as the basis for '
              'deduplication')
@@ -79,13 +87,13 @@ def parse_arguments():
     if args.processes < 1 or args.processes > num_procs:
         parser.error('Number of processes must be between 1 and {}'.format(
             num_procs))
-    if args.command == 'other' and not Path(args.cross_dir).is_dir():
+    if args.command == 'other' and not args.cross_dir.is_dir():
         parser.error('The minhash directory for the other corpus (-c) '
                      'must exist.')
     return args
 
 
-def deduplicate_self(file_prefix: str, output_dir: str,
+def deduplicate_self(file_prefix: Path, output_dir: Path,
                      threshold: float, permutations: int):
     """
     Deduplicates a set of minhashed documents (3 files with the same minhash
@@ -94,7 +102,7 @@ def deduplicate_self(file_prefix: str, output_dir: str,
     Warning: only works for full documents at this point!
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    file_base = Path(file_prefix).name
+    file_base = file_prefix.name
     logging.info(f'Processing batch {file_base}...')
     total_read = 0
     duplicate_urls = 0
@@ -127,11 +135,33 @@ def deduplicate_self(file_prefix: str, output_dir: str,
     return bw.total_written, total_read
 
 
-def deduplicate_other(main_batch: str,
-                      batches_to_subtract: list[str],
-                      output_dir: str,
+def read_batch_to_lsh(
+        batch: Path, threshold: float, permutations: int
+) -> MinHashLSH:
+    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+    for input_file, results in read_batch(batch):
+        for doc_id, minhash in zip(results['id'], results['minhash']):
+            lsh.insert('\t'.join(doc_id), minhash)
+    return lsh
+
+
+def check_and_wait_for_batch(batch: Path):
+    """
+    Checks if there is a DONE.txt in the given batch.
+    If not, then it waits until there is.
+    """
+    logging.debug(f'Checking batch {batch} whether it\'s done or not')
+    while not (batch / done_file).is_file():
+        sleep(5)
+    logging.debug(f'We waited on batch {batch} and now it\'s done!')
+
+
+def deduplicate_other(main_batch: Path,
+                      batches_to_subtract: list[Path],
+                      output_dir: Path,
                       threshold: float,
-                      permutations: int):
+                      permutations: int,
+                      multiproc_coordination=False):
     """
     Removes all documents from a set of minhashed documents (3 files with the
     same minhash prefix) that occur in other batches. Both main_batch and
@@ -139,58 +169,58 @@ def deduplicate_other(main_batch: str,
 
     Warning: only works for full documents at this point!
     """
-    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    main_base = Path(main_batch).name
+    main_base = main_batch.name
     logging.info(f'Processing input batch {main_base}...')
+    main_batch_data = read_batch_to_memory(main_batch)
+    initial_len = len(main_batch_data)
 
-    # First, load the (already deduplicated) batch...
-    for input_file, results in read_batch(main_batch):
-        for doc_id, minhash in zip(results['id'], results['minhash']):
-            lsh.insert('\t'.join(doc_id), minhash)
-    initial_len = len(lsh.keys)
-
-    # Now, remove all documents in it that are contained in th batches
-    # to subtract
-    content_duplicates, url_duplicates = 0, 0
+    # Now, remove all documents in it that are contained in the batches
+    # to subtract:
     for batch in batches_to_subtract:
-        batch_content_duplicates, batch_url_duplicates = 0, 0
-        initial_batch_len = len(lsh.keys)
-        for _, results in read_batch(batch):
-            for doc_id, minhash in zip(results['id'], results['minhash']):
-                key = '_'.join(doc_id)
-                if key in lsh:
-                    batch_url_duplicates += 1
-                    lsh.remove(key)
-                else:
-                    for duplicate in lsh.query(minhash):
-                        lsh.remove(duplicate)
-                        batch_content_duplicates += 1
+        if multiproc_coordination:
+            check_and_wait_for_batch(batch.parent)
+        initial_batch_len = len(main_batch_data)
+        lsh = read_batch_to_lsh(batch, threshold, permutations)
+        main_batch_data = [x for x in main_batch_data if not lsh.query(x[1])]
         logging.info(
-            'Cross-deduplicated input batch {} with cross batch {}: {} -> {} '
-            'documents (removed {} by url, {} by content).'.format(
-                main_base, Path(batch).name, initial_batch_len, len(lsh.keys),
-                batch_url_duplicates, batch_content_duplicates)
+            f'Cross-deduplicated input batch {main_base} with cross batch '
+            f'{batch.name}: {initial_batch_len} -> {len(main_batch_data)} '
+            'documents'
         )
-        content_duplicates += batch_content_duplicates
-        url_duplicates += batch_url_duplicates
-
-    # Finally, we print the documents left. Unfortunately, in order to
-    # keep the format, we have to read the original batch again.
+    # We print the documents left:
     with closing(BatchWriter(sys.maxsize, output_dir,
                              len(main_base), int(main_base))) as bw:
-        # OK, we need to re-read the batch unfortunately
-        for input_file, results in read_batch(main_batch):
-            doc_ids, minhashes = [], []
-            for doc_id, minhash in zip(results['id'], results['minhash']):
-                if '\t'.join(doc_id) in lsh:
-                    doc_ids.append(doc_id)
-                    minhashes.append(minhash)
-            bw.write_results(input_file, {'id': doc_ids, 'minhash': minhashes})
-    logging.info('Processed input batch {}; kept {} out of {} documents '
-                 '(removed {} by url, {} by content).'.format(
-                     main_base, len(lsh.keys), initial_len,
-                     url_duplicates, content_duplicates))
-    return len(lsh.keys), initial_len
+        # We have to organize the data into subsets per source file:
+        current_docfile = None
+        doc_ids = []
+        minhashes = []
+        for doc_id, minhash, docfile in main_batch_data:
+            if docfile == current_docfile:
+                # We are collecting doc_ids and minhashes per source files.
+                doc_ids.append(doc_id)
+                minhashes.append(minhash)
+            else:
+                # We reached the contents of another source .gz file.
+                # write data here
+                if doc_ids:
+                    bw.write_results(current_docfile, {'id': doc_ids,
+                                                       'minhash': minhashes})
+                current_docfile = docfile
+                doc_ids = []
+                minhashes = []
+        # To write the data for the last source file:
+        if doc_ids:
+            bw.write_results(current_docfile, {'id': doc_ids,
+                                               'minhash': minhashes})
+
+    if multiproc_coordination:
+        with open(output_dir / done_file, "wt") as f:
+            f.write('This file flags this batch done for multiprocess'
+                    ' deduplication')
+
+    logging.info(f'Processed input batch {main_base}; '
+                 f'kept {len(main_batch_data)} out of {initial_len} documents')
+    return len(main_batch_data), initial_len
 
 
 def single_directory_deduplication(input_dir: Path,
@@ -199,7 +229,7 @@ def single_directory_deduplication(input_dir: Path,
                                    permutations: int,
                                    threshold: float):
     """The "real" main function of the "self" mode."""
-    working_dir = Path(output_dir) / 'self'
+    working_dir = output_dir / 'self'
     working_dir.mkdir(parents=True, exist_ok=True)
 
     batch_prefixes = find_all_batches(input_dir)
@@ -230,7 +260,7 @@ def single_directory_deduplication(input_dir: Path,
     # for counting final_doc_num.
     batch_prefixes = find_all_batches(working_dir)
     batches_to_subtract = [
-        find_all_batches(working_dir, int(Path(file_prefix).name))
+        find_all_batches(working_dir, int(file_prefix.name))
         for file_prefix in batch_prefixes
     ]
 
@@ -279,7 +309,7 @@ def pairwise_directory_deduplication(input_dir: Path,
                  f'{final_doc_num} documents out of {original_doc_num}.')
 
 
-def collect_previous_dirs(path: str, deadline_date: str) -> list[Path]:
+def collect_previous_dirs(path: Path, deadline_date: str) -> list[Path]:
     """
     Collects the directories which are directly under the path given
     and whose name, when interpreted as a date, are earlier than the
@@ -290,16 +320,18 @@ def collect_previous_dirs(path: str, deadline_date: str) -> list[Path]:
                  f"in {path}")
     # We suppose that the directories obey our strict naming convention:
     # string comparison of directory names coincides with date order.
-    collected_dirs = sorted(directory for directory in Path(path).iterdir()
+    collected_dirs = sorted(directory for directory in path.iterdir()
                             if directory.name < deadline_date)
     logging.info(f'The following directories have been collected as the '
-                 f'cumulative past: {", ".join(str(d) for d in collected_dirs)}')
+                 f'cumulative past: '
+                 f'{", ".join(str(d) for d in collected_dirs)}')
     return collected_dirs
 
 
 def cumulative_directory_deduplication(input_dir: Path,
                                        output_dir: Path,
                                        cumulative_dir: Path,
+                                       temp_dir: Path,
                                        processes: int,
                                        permutations: int,
                                        threshold: float):
@@ -307,8 +339,7 @@ def cumulative_directory_deduplication(input_dir: Path,
 
     # We suppose here that the final part of the input directory is a
     # date-like string e.g.: 06_filtered/2022_12/
-    # input_date = os.path.basename(os.path.normpath(input_dir))
-    input_date = Path(input_dir).name
+    input_date = input_dir.name
     past_batches = collect_previous_dirs(cumulative_dir, input_date)
     number_of_past_batches = len(past_batches)
 
@@ -318,7 +349,7 @@ def cumulative_directory_deduplication(input_dir: Path,
                      f'to {output_dir}...')
         shutil.copytree(input_dir, output_dir)
     else:
-        with TemporaryDirectory() as tmp_root_dir:
+        with TemporaryDirectory(dir=temp_dir) as tmp_root_dir:
             logging.debug(f'Created temporary directory {tmp_root_dir}.')
             current_input_dir = input_dir
             for i, past_batch in enumerate(past_batches, start=1):
@@ -370,8 +401,9 @@ def main():
                                          args.permutations, args.threshold)
     elif args.command == "cumulative":
         cumulative_directory_deduplication(args.input_dir, args.output_dir,
-                                           args.cumulative_dir, args.processes,
-                                           args.permutations, args.threshold)
+                                           args.cumulative_dir, args.temp_dir,
+                                           args.processes, args.permutations,
+                                           args.threshold)
 
 
 if __name__ == '__main__':
