@@ -35,7 +35,7 @@ def parse_arguments():
                         help='the latest batch to work on.')
     parser.add_argument('--temp-dir', '-T', type=Path,
                         help='the directory used to temporarily store partial '
-                             'results')
+                             'results. The default is the system tmp dir.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
@@ -53,8 +53,6 @@ def parse_arguments():
     args = parser.parse_args()
     if not args.input_dir.is_dir():
         parser.error('The input directory for the batches must exist.')
-    if not args.output_dir.is_dir():
-        parser.error('The output directory for the batches must exist.')
     if args.temp_dir and not args.temp_dir.is_dir():
         parser.error('The temporary directory, if set, must exist.')
     if args.from_dir:
