@@ -13,6 +13,7 @@ they must be marked this way.
 from argparse import ArgumentParser
 from functools import partial
 import logging
+import cc_corpus.istarmap   # It is here because this patches multiprocessing.
 from multiprocessing import Pool
 from pathlib import Path
 
@@ -111,19 +112,6 @@ def assemble_targets(input_dir: Path, output_dir: Path,
     return pairings
 
 
-def wrapped_deduplicate(input_tuple, threshold, permutations):
-    """
-    Pool does not have a function that combines the features of imap and
-    starmap, so we need a wrapper for deduplicate other. But we can't access
-    the args from here, so we still need a partial wrapped around this one...
-    """
-
-    input, past, output = input_tuple
-    result = deduplicate_other(input, past, output, threshold, permutations,
-                               multiproc_coordination=True)
-    return result
-
-
 def main():
     args = parse_arguments()
 
@@ -138,10 +126,10 @@ def main():
     for _, _, output_dir in pairings:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    f = partial(wrapped_deduplicate, threshold=args.threshold,
+    f = partial(deduplicate_other, threshold=args.threshold,
                 permutations=args.permutations)
     with Pool(args.processes) as p:
-        for _ in p.imap(f, pairings):
+        for _ in p.istarmap(f, pairings):
             pass
         p.close()
         p.join()
