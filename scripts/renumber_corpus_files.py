@@ -22,12 +22,14 @@ def parse_arguments():
                         help='the input directories.')
     parser.add_argument('--output-dir', '-o', required=True,
                         help='the output directory.')
-    size_group = parser.add_mutually_exclusive_group()
+    size_group = parser.add_mutually_exclusive_group(required=True)
     size_group.add_argument('--documents', '-d', type=int,
                             help='the number of documents a file should contain.')
     size_group.add_argument('--keep-sizes', '-k', action='store_true',
                             help='do not merge or split files; i.e. only '
                                  'copies files to the output directory.')
+    parser.add_argument('--jsonl', '-j', action='store_true',
+                        help='save output in jsonl format.')
     parser.add_argument('--zeroes', '-Z', type=int, default=4,
                         help='the number of zeroes in the output files\' names.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
@@ -53,7 +55,7 @@ def main():
 
     batch_size = args.documents if not args.keep_sizes else sys.maxsize
     num_docs = 0
-    with closing(BatchWriter(batch_size, args.output_dir, args.zeroes)) as bw:
+    with closing(BatchWriter(batch_size, args.output_dir, args.zeroes, jsonl=args.jsonl)) as bw:
         for input_file in input_files:
             if not args.keep_sizes:
                 logging.debug('Reading file {}...'.format(input_file))

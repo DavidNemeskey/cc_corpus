@@ -6,13 +6,17 @@
 from collections import OrderedDict
 import concurrent.futures as cf
 import io
+import json
 import logging
 import os
+from pathlib import Path
 from queue import Empty, Queue
 import re
 import shutil
+import typing
 
 from cc_corpus.utils import openall
+
 
 
 class ParseError(Exception):
@@ -293,7 +297,7 @@ def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
 class BatchWriter:
     """Writes Documents into a batch of files with consecutive numbering."""
     def __init__(self, batch_size, out_dir, zeroes=4,
-                 name_prefix='', first_batch=1):
+                 name_prefix='', first_batch=1, jsonl=False):
         """
         Parameters:
         :param batch_size: the number of documents after which a new batch file
@@ -301,14 +305,16 @@ class BatchWriter:
         :param out_dir: the output directory
         :param zeroes: the number of zeroes in the batch files' name (e.g. if 2,
                        the first batches will be called 01, 02, etc.)
-        :param name_prefix: prepend this string to all file names.
-        :param first_batch: start batch numbering here instead of the default 1.
+        :param name_prefix: prepend this string to all file names
+        :param first_batch: start batch numbering here instead of the default 1
+        :param jsonl: write output in JSONL format if true.
         """
         self.batch_size = batch_size
-        self.out_dir = out_dir
+        self.out_dir = Path(out_dir)
         self.zeroes = zeroes
         self.name_prefix = name_prefix
         self.batch = first_batch - 1
+        self.jsonl = jsonl
         self.outf = None
         self.doc_written = self.batch_size + 1  # so that we invoke new_file
         self.total_written = 0
@@ -321,7 +327,10 @@ class BatchWriter:
         if self.doc_written >= self.batch_size:
             self.new_file()
 
-        print(document, file=self.outf)
+        if self.jsonl:
+            write_document_to_json(document, self.outf)
+        else:
+            print(document, file=self.outf)
         self.doc_written += 1
 
     def copy_file(self, input_file):
@@ -331,19 +340,24 @@ class BatchWriter:
         self.new_file()
         self.close()
 
-        new_file = os.path.join(
-            self.out_dir, '{}{{:0{}}}.txt.gz'.format(
-                self.name_prefix, self.zeroes).format(self.batch))
-        shutil.copy(input_file, new_file)
+        new_file_name = f'{self.name_prefix}{{:0{self.zeroes}}}'.format(self.batch)
+        if self.jsonl:
+            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
+            write_file_to_json(input_file, new_file)
+        else:
+            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
+            shutil.copy(input_file, new_file)
 
     def new_file(self):
         """Closes the old file and opens a new one."""
         self.close()
 
         self.batch += 1
-        new_file = os.path.join(
-            self.out_dir, '{}{{:0{}}}.txt.gz'.format(
-                self.name_prefix, self.zeroes).format(self.batch))
+        new_file_name = f'{self.name_prefix}{{:0{self.zeroes}}}'.format(self.batch)
+        if self.jsonl:
+            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
+        else:
+            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
         logging.debug('Opening file {}...'.format(new_file))
         self.outf = openall(new_file, 'wt')
 
@@ -363,3 +377,32 @@ class BatchWriter:
     def __del__(self):
         """Just calls close()."""
         self.close()
+
+
+def write_document_to_json(document: Document, output_file: typing.TextIO):
+    """
+    Writes the document given into the output file, using JSONL format.
+    The url of the document will be its 'id' field.
+    The rest of the  metadata contained in the original <doc> tag will be the
+    'meta' field.
+    The metadata contained in the request and response fields are discarded.
+    The paragraphs of the document, separated by ''\n'' will be the 'text'.
+    """
+    restructured_document = {'id': document.attrs.pop('url'),
+                             'meta': document.attrs,
+                             'text': document.content()}
+    # If we need to structure the text differently, then we will have to work
+    # with the document.paragraph attribute instead of the content() function.
+    json_document = json.dumps(restructured_document, ensure_ascii=False)
+    print(json_document, file=output_file)
+
+
+def write_file_to_json(input_file: Path, output_file: Path):
+    """
+    Writes a file containing documents in our format into the output as JSONL.
+    """
+    logging.debug(f'The current file to process: {input_file}')
+    with openall(output_file, 'wt') as f:
+        for document in parse_file(input_file):
+            write_document_to_json(document, f)
+        logging.debug(f'Completed exporting to {output_file} as JSON')
