@@ -89,9 +89,15 @@ def main():
     )
 
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    input_files = list(args.input_dir.iterdir())
     with openall(args.output_file, "wt", encoding="utf-8") as f:
         with Pool(args.processes) as p:
-            for stats in otqdm(p.imap_unordered(process_file, args.input_dir.iterdir())):
+            for stats in otqdm(
+                p.imap_unordered(process_file, input_files),
+                f'Collecting statistics from {args.input_dir}...',
+                total=len(input_files)
+            ):
                 print(stats, file=f, end='')
         p.close()
         p.join()
