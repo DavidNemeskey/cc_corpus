@@ -20,7 +20,7 @@ from pathlib import Path
 import re
 
 from cc_corpus.corpus import parse_file
-from cc_corpus.utils import openall
+from cc_corpus.utils import openall, otqdm
 
 
 def parse_arguments():
@@ -91,7 +91,7 @@ def main():
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
     with openall(args.output_file, "wt", encoding="utf-8") as f:
         with Pool(args.processes) as p:
-            for stats in p.imap_unordered(process_file, args.input_dir.iterdir()):
+            for stats in otqdm(p.imap_unordered(process_file, args.input_dir.iterdir())):
                 print(stats, file=f, end='')
         p.close()
         p.join()
