@@ -49,8 +49,8 @@ def process_file(input_file: Path) -> str:
     values are separated by tabs within the line.
     """
     results = ""
-    matcher_ct = re.compile(r'Content-Type: ([\w/]+)', re.I)
-    matcher_wi = re.compile(r'WARC-IDentified-Payload-Type: ([\w/]+)', re.I)
+    matcher_ct = re.compile(r'Content-Type: ([-\w/+]+)', re.I)
+    matcher_wi = re.compile(r'WARC-IDentified-Payload-Type: ([-\w/+]+)', re.I)
     matcher_cd = re.compile(r'(Content-Disposition: )([^\n"]*)"([^\n^"]*)"', re.I)
     for doc in parse_file(input_file):
         type_from_doctag = type_from_warc_id = type_from_response = '-'
