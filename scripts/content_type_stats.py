@@ -6,6 +6,7 @@ Collects content-type data from the corpus.
 Content-type information appears in multiple sections of the metadata,
 and they are not consistent. We collect:
 * the mime-type from the <doc> tag
+  (for reference; should be the same as in the response header)
 * the warc identified content type from the request header
 * the content type from the response header
 * the extension of the attachment file, if any.
@@ -49,9 +50,9 @@ def process_file(input_file: Path) -> str:
     values are separated by tabs within the line.
     """
     results = ""
-    matcher_ct = re.compile(r'Content-Type: ([-\w/+]+)', re.I)
-    matcher_wi = re.compile(r'WARC-IDentified-Payload-Type: ([-\w/+]+)', re.I)
-    matcher_cd = re.compile(r'(Content-Disposition: )([^\n"]*)"([^\n^"]*)"', re.I)
+    matcher_ct = re.compile(r'Content-Type:\s*"?([-\w/+]+)"?', re.I)
+    matcher_wi = re.compile(r'WARC-IDentified-Payload-Type:\s*([-\w/+]+)', re.I)
+    matcher_cd = re.compile(r'(Content-Disposition:\s*)([^\n"]*)"([^\n^"]*)"', re.I)
     for doc in parse_file(input_file):
         type_from_doctag = type_from_warc_id = type_from_response = '-'
         attachment_ext = '-'
@@ -90,11 +91,11 @@ def main():
 
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    input_files = list(args.input_dir.iterdir())
+    input_files = sorted(args.input_dir.iterdir())
     with openall(args.output_file, "wt", encoding="utf-8") as f:
         with Pool(args.processes) as p:
             for stats in otqdm(
-                p.imap_unordered(process_file, input_files),
+                p.imap(process_file, input_files),
                 f'Collecting statistics from {args.input_dir}...',
                 total=len(input_files)
             ):
