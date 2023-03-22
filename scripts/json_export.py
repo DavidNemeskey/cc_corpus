@@ -9,14 +9,12 @@ If given a directory that contains subdirectories, it will process those.
 
 from argparse import ArgumentParser
 from functools import partial
-import json
 import logging
 from multiprocessing import Pool
 from pathlib import Path
-import typing
 
-from cc_corpus.utils import collect_inputs, consume, openall, otqdm
-from cc_corpus.corpus import Document, parse_file
+from cc_corpus.utils import collect_inputs, consume, otqdm
+from cc_corpus.corpus import write_file_to_json
 
 
 def parse_arguments():
@@ -38,28 +36,12 @@ def parse_arguments():
     return args
 
 
-def write_document_to_json(document: Document, output_file: typing.TextIO):
+def export_file_to_jsonl(input_file: Path, input_root_dir: Path,
+                         output_root_dir: Path):
     """
-    Writes the document given into the output file, using JSONL format.
-    The url of the document will be its 'id' field.
-    The rest of the  metadata contained in the original <doc> tag will be the
-    'meta' field.
-    The metadata contained in the request and response fields are discarded.
-    The paragraphs of the document, separated by ''\n'' will be the 'text'.
-    """
-    restructured_document = {'id': document.attrs.pop('url'),
-                             'meta': document.attrs,
-                             'text': document.content()}
-    # If we need to structure the text differently, then we will have to work
-    # with the document.paragraph attribute instead of the content() function.
-    json_document = json.dumps(restructured_document, ensure_ascii=False)
-    print(json_document, file=output_file)
-
-
-def write_file_to_json(input_file: Path, input_root_dir: Path,
-                       output_root_dir: Path):
-    """
-    Writes a file containing documents in our format into the output as JSONL.
+    Exports a file containing documents in our format into the output as JSONL.
+    Output files are put under the output_root_dir, matching the subdir and
+    file name of the input file.
     """
     logging.debug(f'The current file to process: {input_file}')
     # The current extension is .txt.gz we need .jsonl.gz:
@@ -68,10 +50,7 @@ def write_file_to_json(input_file: Path, input_root_dir: Path,
     output_file = output_root_dir / rel_path
     output_dir = Path(output_file).parents[0]
     output_dir.mkdir(parents=True, exist_ok=True)
-    with openall(output_file, 'wt') as f:
-        for document in parse_file(input_file):
-            write_document_to_json(document, f)
-        logging.debug(f'Completed exporting to {output_file} as JSON')
+    write_file_to_json(input_file, output_file)
 
 
 def main():
@@ -92,7 +71,7 @@ def main():
     logging.info(f'We have {len(input_files)} files to convert to JSON.')
     logging.debug(f'The files are: {input_files}.')
 
-    f = partial(write_file_to_json, input_root_dir=args.input_dir,
+    f = partial(export_file_to_jsonl, input_root_dir=args.input_dir,
                 output_root_dir=args.output_dir)
     with Pool(args.processes) as p:
         consume(otqdm(p.imap_unordered(f, input_files),
