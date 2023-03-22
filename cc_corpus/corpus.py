@@ -250,7 +250,7 @@ class CorpusHandler:
             self.meta_data.append(line)
 
 
-def _parse(input, parse_fn, attrs=True, meta=True, content=True, **meta_fields):
+def _parse_docs(input, parse_fn, attrs=True, meta=True, content=True, **meta_fields):
     """Common background function for parse and parse_file."""
     queue = Queue()
     ch = CorpusHandler(queue, attrs, meta, content, **meta_fields)
@@ -271,7 +271,28 @@ def _parse(input, parse_fn, attrs=True, meta=True, content=True, **meta_fields):
         return future.result()
 
 
-def parse(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
+def _parse_jsonl(file: Path):
+    """
+    Reads a jsonl file into our internal data format.
+    The JSONL contains less metadata than the original docs.
+    Only the tags in the original <doc> tag are kept. This becomes the 'attrs'
+    field of the Document object. The request and response content from the
+    original docs, which would be the 'meta' field of the Document object
+    are missing.
+    """
+    with openall(file)  as f:
+        for line in f:
+            json_object = json.loads(line)
+            attrs = json_object['meta']
+            url = json_object['id']
+            attrs['url'] = url
+            paragraphs = json_object['text'].split("\n")
+            yield Document(attrs, None, paragraphs)
+
+
+
+
+def parse_docs(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
     """
     Enumerates Documents in a text stream in the corpus format. The rest of the
     parameters specify what parts of the documents to keep:
@@ -281,17 +302,24 @@ def parse(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
     - meta_fields: can be used to include / exclude specific meta fields. This
                    setting takes precedence over the general meta argument.
     """
-    yield from _parse(corpus_stream, SAXParser.parse,
-                      attrs, meta, content, **meta_fields)
+    yield from _parse_docs(corpus_stream, SAXParser.parse,
+                           attrs, meta, content, **meta_fields)
+
+
+def is_it_jsonl(filename: Path):
+    return '.jsonl' in Path(filename).suffixes
 
 
 def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
     """
-    Enumerates Documents in a text file in the corpus format. The arguments
-    behave the same as in parse().
+    Enumerates Documents in a text file in the corpus or jsonl format.
+    The arguments behave the same as in parse().
     """
-    yield from _parse(corpus_file, SAXParser.parseFile,
-                      attrs, meta, content, **meta_fields)
+    if is_it_jsonl(corpus_file):
+        yield from _parse_jsonl(corpus_file)
+    else:
+        yield from _parse_docs(corpus_file, SAXParser.parseFile,
+                               attrs, meta, content, **meta_fields)
 
 
 class BatchWriter:
@@ -341,12 +369,18 @@ class BatchWriter:
         self.close()
 
         new_file_name = f'{self.name_prefix}{{:0{self.zeroes}}}'.format(self.batch)
-        if self.jsonl:
+        if self.jsonl and is_it_jsonl(input_file):
+            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
+            shutil.copy(input_file, new_file)
+        elif self.jsonl and not is_it_jsonl(input_file):
             new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
             write_file_to_json(input_file, new_file)
-        else:
+        elif not self.jsonl and not is_it_jsonl(new_file_name):
             new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
             shutil.copy(input_file, new_file)
+        else:
+            raise('converting JSONL back to old-style doc is currently not supported.')
+
 
     def new_file(self):
         """Closes the old file and opens a new one."""

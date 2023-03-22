@@ -22,7 +22,7 @@ from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.code import Filter
-from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
+from cc_corpus.corpus import BatchWriter, Document, parse_file, parse_docs
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData, RandomPDataReader
 from cc_corpus.frequent import open as pdata_open
@@ -320,7 +320,7 @@ def read_group_documents(group: Iterator[str]) -> Iterator[Document]:
                 f = openall(doc_file, 'rb')
                 last_file = doc_file
             f.seek(int(doc_pos))
-            yield from parse(f.read(int(doc_len)).decode('utf-8').split('\n'))
+            yield from parse_docs(f.read(int(doc_len)).decode('utf-8').split('\n'))
     finally:
         if f:
             f.close()
