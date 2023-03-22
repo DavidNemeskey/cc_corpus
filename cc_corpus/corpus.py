@@ -18,7 +18,6 @@ import typing
 from cc_corpus.utils import openall
 
 
-
 class ParseError(Exception):
     """Raised if the file or stream is not in the corpus XML format."""
     pass
@@ -280,7 +279,7 @@ def _parse_jsonl(file: Path):
     original docs, which would be the 'meta' field of the Document object
     are missing.
     """
-    with openall(file)  as f:
+    with openall(file) as f:
         for line in f:
             json_object = json.loads(line)
             attrs = json_object['meta']
@@ -288,8 +287,6 @@ def _parse_jsonl(file: Path):
             attrs['url'] = url
             paragraphs = json_object['text'].split("\n")
             yield Document(attrs, None, paragraphs)
-
-
 
 
 def parse_docs(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
@@ -379,8 +376,8 @@ class BatchWriter:
             new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
             shutil.copy(input_file, new_file)
         else:
-            raise('converting JSONL back to old-style doc is currently not supported.')
-
+            raise('converting JSONL back to old-style doc is currently '
+                  'not supported.')
 
     def new_file(self):
         """Closes the old file and opens a new one."""
