@@ -49,8 +49,8 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
-    parser.add_argument('--zeroes', '-Z', type=int, default=4,
-                        help='the number of zeroes in the batch files\' names.')
+    parser.add_argument('--digits', '-Z', type=int, default=4,
+                        help='the number of digits in the batch files\' names.')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
@@ -127,7 +127,7 @@ def main():
     logging.info('Found a total of {} input files.'.format(len(files)))
 
     with closing(
-        BatchWriter(args.batch_size, args.output_dir, args.zeroes)
+        BatchWriter(args.batch_size, args.output_dir, args.digits)
     ) as writer:
         with Pool(args.processes) as pool:
             minhash_fun = minhash_ps if args.unit == 'p' else minhash_docs

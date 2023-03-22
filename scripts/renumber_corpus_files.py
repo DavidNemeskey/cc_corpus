@@ -30,8 +30,8 @@ def parse_arguments():
                                  'copies files to the output directory.')
     parser.add_argument('--jsonl', '-j', action='store_true',
                         help='save output in jsonl format.')
-    parser.add_argument('--zeroes', '-Z', type=int, default=4,
-                        help='the number of zeroes in the output files\' names.')
+    parser.add_argument('--digits', '-Z', type=int, default=4,
+                        help='the number of digits in the output files\' names.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
@@ -55,7 +55,8 @@ def main():
 
     batch_size = args.documents if not args.keep_sizes else sys.maxsize
     num_docs = 0
-    with closing(BatchWriter(batch_size, args.output_dir, args.zeroes, jsonl=args.jsonl)) as bw:
+    with closing(BatchWriter(batch_size, args.output_dir, args.digits,
+                             jsonl=args.jsonl)) as bw:
         for input_file in input_files:
             if not args.keep_sizes:
                 logging.debug('Reading file {}...'.format(input_file))

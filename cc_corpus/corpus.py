@@ -321,14 +321,14 @@ def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
 
 class BatchWriter:
     """Writes Documents into a batch of files with consecutive numbering."""
-    def __init__(self, batch_size, out_dir, zeroes=4,
+    def __init__(self, batch_size, out_dir, digits=4,
                  name_prefix='', first_batch=1, jsonl=False):
         """
         Parameters:
         :param batch_size: the number of documents after which a new batch file
                            is opened (with consecutive numbering)
         :param out_dir: the output directory
-        :param zeroes: the number of zeroes in the batch files' name (e.g. if 2,
+        :param digits: the number of zeroes in the batch files' name (e.g. if 2,
                        the first batches will be called 01, 02, etc.)
         :param name_prefix: prepend this string to all file names
         :param first_batch: start batch numbering here instead of the default 1
@@ -336,7 +336,7 @@ class BatchWriter:
         """
         self.batch_size = batch_size
         self.out_dir = Path(out_dir)
-        self.zeroes = zeroes
+        self.digits = digits
         self.name_prefix = name_prefix
         self.batch = first_batch - 1
         self.jsonl = jsonl
@@ -365,7 +365,7 @@ class BatchWriter:
         self.new_file()
         self.close()
 
-        new_file_name = f'{self.name_prefix}{{:0{self.zeroes}}}'.format(self.batch)
+        new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
         if self.jsonl and is_it_jsonl(input_file):
             new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
             shutil.copy(input_file, new_file)
@@ -384,7 +384,7 @@ class BatchWriter:
         self.close()
 
         self.batch += 1
-        new_file_name = f'{self.name_prefix}{{:0{self.zeroes}}}'.format(self.batch)
+        new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
         if self.jsonl:
             new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
         else:

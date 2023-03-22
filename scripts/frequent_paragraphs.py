@@ -155,8 +155,8 @@ def parse_arguments():
     parser_filter.add_argument('--documents', '-d', type=int, default=1000,
                                help='the number of documents an output file '
                                     'should contain (1000).')
-    parser_filter.add_argument('--zeroes', '-z', type=int, default=4,
-                               help='the number of zeroes in the output '
+    parser_filter.add_argument('--digits', '-z', type=int, default=4,
+                               help='the number of digits in the output '
                                     'files\' names.')
     parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
@@ -642,7 +642,7 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
     sum_stats = FilterStats()
     minhasher = MinHasher(args.permutations, args.n)
     with closing(BatchWriter(sys.maxsize, args.output_dir,
-                 args.zeroes, first_batch=file_id)) as bw:
+                             args.digits, first_batch=file_id)) as bw:
         for domain, group in group_index(index_lines):
             logging.debug('Filtering domain {}...'.format(domain))
             stats = FilterStats()

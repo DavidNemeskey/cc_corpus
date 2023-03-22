@@ -18,19 +18,19 @@ from datasketch import MinHash, LeanMinHash
 
 class BatchWriter:
     """Writes batches of minhash data."""
-    def __init__(self, batch_size, out_dir, zeroes=4, first_batch=1):
+    def __init__(self, batch_size, out_dir, digits=4, first_batch=1):
         """
         Parameters:
         - batch_size: the number of documents after which a new batch file is
                       opened (with consecutive numbering)
         - out_dir: the output directory
-        - zeroes: the number of zeroes in the batch files' name (e.g. if 2,
+        - digits: the number of zeroes in the batch files' name (e.g. if 2,
                   the first batches will be called 01, 02, etc.)
         - first_batch: what should be the number (name) of the first batch
         """
         self.batch_size = batch_size
         self.out_dir = out_dir
-        self.zeroes = zeroes
+        self.digits = digits
         self.batch = first_batch - 1
         self.minhashf = self.doc_idf = self.filef = None
         self.mh_offset = self.di_offset = 0
@@ -63,7 +63,7 @@ class BatchWriter:
         self.close()
 
         prefix = os.path.join(
-            self.out_dir, '{{:0{}}}'.format(self.zeroes).format(self.batch))
+            self.out_dir, '{{:0{}}}'.format(self.digits).format(self.batch))
         for ext in ['.minhashes', '.doc_ids', '.files']:
             shutil.copy(input_prefix + ext, prefix + ext)
 
@@ -74,7 +74,7 @@ class BatchWriter:
         self.batch += 1
         logging.info('Opening file {}...'.format(self.batch))
         prefix = os.path.join(
-            self.out_dir, '{{:0{}}}'.format(self.zeroes).format(self.batch))
+            self.out_dir, '{{:0{}}}'.format(self.digits).format(self.batch))
         self.minhashf = open(prefix + '.minhashes', 'wb')
         self.doc_idf = open(prefix + '.doc_ids', 'wb')
         self.filef = open(prefix + '.files', 'wt', encoding='utf-8')
