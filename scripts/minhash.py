@@ -126,6 +126,8 @@ def main():
     print(f'Number of processes: {args.processes}')
     logging.info('Found a total of {} input files.'.format(len(files)))
 
+    unit_str = 'paragraph' if args.unit == 'p' else 'document'
+    input_str = str(args.inputs[0]) + (' (etc)' if len(args.inputs) > 1 else '')
     with closing(
         BatchWriter(args.batch_size, args.output_dir, args.zeroes)
     ) as writer:
@@ -133,7 +135,8 @@ def main():
             minhash_fun = minhash_ps if args.unit == 'p' else minhash_docs
             f = partial(minhash_fun, permutations=args.permutations, n=args.n)
             for input_file, results in otqdm(
-                pool.imap_unordered(f, files), 'Minhashing...', total=len(files)
+                pool.imap_unordered(f, files),
+                f'Minhashing {unit_str}s from {input_str}...', total=len(files)
             ):
                 logging.debug('Got results for {}: {}'.format(
                     input_file, len(results['minhash'])))
@@ -143,7 +146,7 @@ def main():
             pool.join()
         logging.info('Done.')
 
-    logging.info('Hashed in total {} paragraphs.'.format(writer.total_written))
+    logging.info(f'Hashed in total {writer.total_written} {unit_str}s.')
 
 
 if __name__ == '__main__':
