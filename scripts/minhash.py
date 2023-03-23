@@ -123,7 +123,6 @@ def main():
         os.makedirs(args.output_dir)
 
     files = sorted(collect_inputs(args.inputs))
-    print(f'Number of processes: {args.processes}')
     logging.info('Found a total of {} input files.'.format(len(files)))
 
     unit_str = 'paragraph' if args.unit == 'p' else 'document'
