@@ -13,7 +13,6 @@ from pathlib import Path
 from queue import Empty, Queue
 import re
 import shutil
-import typing
 
 from cc_corpus.utils import openall
 
@@ -353,7 +352,7 @@ class BatchWriter:
             self.new_file()
 
         if self.jsonl:
-            write_document_to_json(document, self.outf)
+            print(convert_document_to_json(document), file=self.outf)
         else:
             print(document, file=self.outf)
         self.doc_written += 1
@@ -371,7 +370,7 @@ class BatchWriter:
             shutil.copy(input_file, new_file)
         elif self.jsonl and not is_it_jsonl(input_file):
             new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
-            write_file_to_json(input_file, new_file)
+            convert_file_to_jsonl(input_file, new_file)
         elif not self.jsonl and not is_it_jsonl(new_file_name):
             new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
             shutil.copy(input_file, new_file)
@@ -410,7 +409,7 @@ class BatchWriter:
         self.close()
 
 
-def write_document_to_json(document: Document, output_file: typing.TextIO):
+def convert_document_to_json(document: Document):
     """
     Writes the document given into the output file, using JSONL format.
     The url of the document will be its 'id' field.
@@ -424,16 +423,15 @@ def write_document_to_json(document: Document, output_file: typing.TextIO):
                              'text': document.content()}
     # If we need to structure the text differently, then we will have to work
     # with the document.paragraph attribute instead of the content() function.
-    json_document = json.dumps(restructured_document, ensure_ascii=False)
-    print(json_document, file=output_file)
+    return json.dumps(restructured_document, ensure_ascii=False)
 
 
-def write_file_to_json(input_file: Path, output_file: Path):
+def convert_file_to_jsonl(input_file: Path, output_file: Path):
     """
     Writes a file containing documents in our format into the output as JSONL.
     """
     logging.debug(f'The current file to process: {input_file}')
     with openall(output_file, 'wt') as f:
         for document in parse_file(input_file):
-            write_document_to_json(document, f)
+            print(convert_document_to_json(document), file=f)
         logging.debug(f'Completed exporting to {output_file} as JSON')

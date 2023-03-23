@@ -14,7 +14,7 @@ from multiprocessing import Pool
 from pathlib import Path
 
 from cc_corpus.utils import collect_inputs, consume, otqdm
-from cc_corpus.corpus import write_file_to_json
+from cc_corpus.corpus import convert_file_to_jsonl
 
 
 def parse_arguments():
@@ -50,7 +50,7 @@ def export_file_to_jsonl(input_file: Path, input_root_dir: Path,
     output_file = output_root_dir / rel_path
     output_dir = Path(output_file).parents[0]
     output_dir.mkdir(parents=True, exist_ok=True)
-    write_file_to_json(input_file, output_file)
+    convert_file_to_jsonl(input_file, output_file)
 
 
 def main():
