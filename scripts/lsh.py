@@ -145,13 +145,18 @@ def read_batch_to_lsh(
     return lsh
 
 
+def check_batch(batch: Path):
+    """Checks if there is a DONE file in the given batch."""
+    return (batch / done_file).is_file()
+
+
 def check_and_wait_for_batch(batch: Path):
     """
-    Checks if there is a DONE.txt in the given batch.
+    Checks if there is a DONE in the given batch.
     If not, then it waits until there is.
     """
-    logging.debug(f'Checking batch {batch} whether it\'s done or not')
-    while not (batch / done_file).is_file():
+    logging.debug(f'Waiting until batch {batch} is done...')
+    while not check_batch(batch):
         sleep(5)
     logging.debug(f'We waited on batch {batch} and now it\'s done!')
 
@@ -170,7 +175,7 @@ def deduplicate_other(main_batch: Path,
     Warning: only works for full documents at this point!
     """
     main_base = main_batch.name
-    logging.info(f'Processing input batch {main_base}...')
+    logging.info(f'Processing input batch {main_batch}...')
     main_batch_data = read_batch_to_memory(main_batch)
     initial_len = len(main_batch_data)
 
@@ -183,8 +188,8 @@ def deduplicate_other(main_batch: Path,
         lsh = read_batch_to_lsh(batch, threshold, permutations)
         main_batch_data = [x for x in main_batch_data if not lsh.query(x[1])]
         logging.info(
-            f'Cross-deduplicated input batch {main_base} with cross batch '
-            f'{batch.name}: {initial_batch_len} -> {len(main_batch_data)} '
+            f'Cross-deduplicated input batch {main_batch} with cross batch '
+            f'{batch}: {initial_batch_len} -> {len(main_batch_data)} '
             'documents'
         )
     # We print the documents left:
