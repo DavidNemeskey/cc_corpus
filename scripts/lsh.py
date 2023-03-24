@@ -223,7 +223,7 @@ def deduplicate_other(main_batch: Path,
             f.write('This file flags this batch done for multiprocess'
                     ' deduplication')
 
-    logging.info(f'Processed input batch {main_base}; '
+    logging.info(f'Processed input batch {main_batch}; '
                  f'kept {len(main_batch_data)} out of {initial_len} documents')
     return len(main_batch_data), initial_len
 
