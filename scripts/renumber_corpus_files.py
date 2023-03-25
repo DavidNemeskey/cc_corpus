@@ -12,8 +12,8 @@ import logging
 import os
 import sys
 
-from cc_corpus.corpus import BatchWriter, parse_file
-from cc_corpus.utils import collect_inputs
+from cc_corpus.corpus import BatchWriter, is_it_jsonl, parse_file
+from cc_corpus.utils import collect_inputs, otqdm
 
 
 def parse_arguments():
@@ -28,8 +28,6 @@ def parse_arguments():
     size_group.add_argument('--keep-sizes', '-k', action='store_true',
                             help='do not merge or split files; i.e. only '
                                  'copies files to the output directory.')
-    parser.add_argument('--jsonl', '-j', action='store_true',
-                        help='save output in jsonl format.')
     parser.add_argument('--digits', '-Z', type=int, default=4,
                         help='the number of digits in the output files\' names.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
@@ -55,13 +53,12 @@ def main():
 
     batch_size = args.documents if not args.keep_sizes else sys.maxsize
     num_docs = 0
-    with closing(BatchWriter(batch_size, args.output_dir, args.digits,
-                             jsonl=args.jsonl)) as bw:
-        for input_file in input_files:
+    with closing(BatchWriter(batch_size, args.output_dir, args.digits)) as bw:
+        for input_file in otqdm(input_files, 'Renumbering files...'):
             if not args.keep_sizes:
                 logging.debug('Reading file {}...'.format(input_file))
                 for document in parse_file(input_file):
-                    bw.write(document)
+                    bw.write(document, jsonl=is_it_jsonl(input_file))
                     num_docs += 1
             else:
                 logging.debug('Copying file {}...'.format(input_file))

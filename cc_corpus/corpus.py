@@ -97,6 +97,22 @@ class Document:
         print('</doc>', end='', file=buffer)
         return buffer.getvalue()
 
+    def to_json(self):
+        """
+        Returns the document in a JSON dump format.
+        The url of the document will be its 'id' field.
+        The rest of the  metadata contained in the original <doc> tag will be the
+        'meta' field.
+        The metadata contained in the request and response fields are discarded.
+        The paragraphs of the document, separated by ''\n'' will be the 'text'.
+        """
+        restructured_document = {'id': self.attrs.pop('url'),
+                                 'meta': self.attrs,
+                                 'text': self.content()}
+        # If we need to structure the text differently, then we will have to work
+        # with the document.paragraph attribute instead of the content() function.
+        return json.dumps(restructured_document, ensure_ascii=False)
+
     def __repr__(self):
         """
         A short representation of the document: the URL, if available, else the
@@ -321,7 +337,7 @@ def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
 class BatchWriter:
     """Writes Documents into a batch of files with consecutive numbering."""
     def __init__(self, batch_size, out_dir, digits=4,
-                 name_prefix='', first_batch=1, jsonl=False):
+                 name_prefix='', first_batch=1):
         """
         Parameters:
         :param batch_size: the number of documents after which a new batch file
@@ -331,60 +347,52 @@ class BatchWriter:
                        the first batches will be called 01, 02, etc.)
         :param name_prefix: prepend this string to all file names
         :param first_batch: start batch numbering here instead of the default 1
-        :param jsonl: write output in JSONL format if true.
         """
         self.batch_size = batch_size
         self.out_dir = Path(out_dir)
         self.digits = digits
         self.name_prefix = name_prefix
         self.batch = first_batch - 1
-        self.jsonl = jsonl
         self.outf = None
         self.doc_written = self.batch_size + 1  # so that we invoke new_file
         self.total_written = 0
 
-    def write(self, document):
+    def write(self, document, jsonl=False):
         """
         Writes a single document to the currently open file. Opens a new file
         when the current one is full.
         """
         if self.doc_written >= self.batch_size:
-            self.new_file()
+            self.new_file(jsonl)
 
-        if self.jsonl:
-            print(convert_document_to_json(document), file=self.outf)
+        if jsonl:
+            print(document.to_json(), file=self.outf)
         else:
             print(document, file=self.outf)
         self.doc_written += 1
 
     def copy_file(self, input_file):
         """
-        Opens a file and makes it a copy of ``input_file``.
+        Opens a file and makes it a copy of ``input_file``, giving it a
+        (possibly) renumbered filename.
         """
-        self.new_file()
+        self.new_file(is_it_jsonl(input_file))
         self.close()
 
         new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
-        if self.jsonl and is_it_jsonl(input_file):
+        if is_it_jsonl(input_file):
             new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
-            shutil.copy(input_file, new_file)
-        elif self.jsonl and not is_it_jsonl(input_file):
-            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
-            convert_file_to_jsonl(input_file, new_file)
-        elif not self.jsonl and not is_it_jsonl(new_file_name):
-            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
-            shutil.copy(input_file, new_file)
         else:
-            raise('converting JSONL back to old-style doc is currently '
-                  'not supported.')
+            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
+        shutil.copy(input_file, new_file)
 
-    def new_file(self):
+    def new_file(self, jsonl=False):
         """Closes the old file and opens a new one."""
         self.close()
 
         self.batch += 1
         new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
-        if self.jsonl:
+        if jsonl:
             new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
         else:
             new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
@@ -409,23 +417,6 @@ class BatchWriter:
         self.close()
 
 
-def convert_document_to_json(document: Document):
-    """
-    Writes the document given into the output file, using JSONL format.
-    The url of the document will be its 'id' field.
-    The rest of the  metadata contained in the original <doc> tag will be the
-    'meta' field.
-    The metadata contained in the request and response fields are discarded.
-    The paragraphs of the document, separated by ''\n'' will be the 'text'.
-    """
-    restructured_document = {'id': document.attrs.pop('url'),
-                             'meta': document.attrs,
-                             'text': document.content()}
-    # If we need to structure the text differently, then we will have to work
-    # with the document.paragraph attribute instead of the content() function.
-    return json.dumps(restructured_document, ensure_ascii=False)
-
-
 def convert_file_to_jsonl(input_file: Path, output_file: Path):
     """
     Writes a file containing documents in our format into the output as JSONL.
@@ -433,5 +424,5 @@ def convert_file_to_jsonl(input_file: Path, output_file: Path):
     logging.debug(f'The current file to process: {input_file}')
     with openall(output_file, 'wt') as f:
         for document in parse_file(input_file):
-            print(convert_document_to_json(document), file=f)
+            print(document.to_json(), file=f)
         logging.debug(f'Completed exporting to {output_file} as JSON')
