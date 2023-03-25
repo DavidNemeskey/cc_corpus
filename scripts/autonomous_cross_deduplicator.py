@@ -5,7 +5,7 @@
 Does cross-deduplication for a series of batches. Parallel processing version.
 It is given a target range of batches, and cross-deduplicates them with every
 older one using the functions in lsh.py
-Important note: this version treats a batch done if there is a DONE.txt in the
+Important note: this version treats a batch done if there is a DONE in the
 minhash_full directory. If some of the batches are already done by other modes
 they must be marked this way.
 """
@@ -17,7 +17,7 @@ import cc_corpus.istarmap   # It is here because this patches multiprocessing.
 from multiprocessing import Pool
 from pathlib import Path
 
-from lsh import deduplicate_other
+from lsh import check_batch, deduplicate_other
 
 
 def parse_arguments():
@@ -82,11 +82,12 @@ def assemble_targets(input_dir: Path, output_dir: Path,
     """
     Returns a list of tuples. The tuples contain the parameters for the
     deduplicate_other() method:
-    The input (minhash self) dir of the target
-    The list of dirs of older batches (minhash full)
-    The output (minhash full) dir for the target.
+     - the input (minhash self) dir of the target
+     - the list of dirs of older batches (minhash full)
+     - the output (minhash full) dir for the target.
 
-    Ignores dirs which do not contain the required files
+    Ignores dirs which do not contain the required files and those that are
+    already done.
     """
     list_of_dirs = [dir.name for dir in sorted(input_dir.iterdir())
                     if has_minhash_content(dir)]
@@ -108,7 +109,8 @@ def assemble_targets(input_dir: Path, output_dir: Path,
         target_as_output = output_dir / target
         past = [output_dir / dir / '1' for dir
                 in list_of_dirs[:from_i + index]]
-        pairings.append((target_as_input, past, target_as_output,))
+        if not check_batch(target_as_output):
+            pairings.append((target_as_input, past, target_as_output,))
     return pairings
 
 
@@ -122,12 +124,13 @@ def main():
 
     pairings = assemble_targets(args.input_dir, args.output_dir,
                                 args.from_dir, args.upto_dir)
+    logging.debug(f'Pairings: {pairings}.')
     # Create the output folders if missing:
     for _, _, output_dir in pairings:
         output_dir.mkdir(parents=True, exist_ok=True)
 
     f = partial(deduplicate_other, threshold=args.threshold,
-                permutations=args.permutations)
+                permutations=args.permutations, multiproc_coordination=True)
     with Pool(args.processes) as p:
         for _ in p.istarmap(f, pairings):
             pass
