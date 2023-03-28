@@ -22,7 +22,7 @@ from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.code import Filter
-from cc_corpus.corpus import BatchWriter, Document, parse_file, parse
+from cc_corpus.corpus import BatchWriter, Document, parse_file, parse_docs
 from cc_corpus.deduplication import MinHasher
 from cc_corpus.frequent import PData, RandomPDataReader
 from cc_corpus.frequent import open as pdata_open
@@ -155,8 +155,8 @@ def parse_arguments():
     parser_filter.add_argument('--documents', '-d', type=int, default=1000,
                                help='the number of documents an output file '
                                     'should contain (1000).')
-    parser_filter.add_argument('--zeroes', '-z', type=int, default=4,
-                               help='the number of zeroes in the output '
+    parser_filter.add_argument('--digits', '-z', type=int, default=4,
+                               help='the number of digits in the output '
                                     'files\' names.')
     parser_filter.add_argument(
         '--permutations', '-p', type=int, default=256,
@@ -320,7 +320,7 @@ def read_group_documents(group: Iterator[str]) -> Iterator[Document]:
                 f = openall(doc_file, 'rb')
                 last_file = doc_file
             f.seek(int(doc_pos))
-            yield from parse(f.read(int(doc_len)).decode('utf-8').split('\n'))
+            yield from parse_docs(f.read(int(doc_len)).decode('utf-8').split('\n'))
     finally:
         if f:
             f.close()
@@ -642,7 +642,7 @@ def filter_file(file_id: int, index_lines: List[IndexLine], args: Any,
     sum_stats = FilterStats()
     minhasher = MinHasher(args.permutations, args.n)
     with closing(BatchWriter(sys.maxsize, args.output_dir,
-                 args.zeroes, first_batch=file_id)) as bw:
+                             args.digits, first_batch=file_id)) as bw:
         for domain, group in group_index(index_lines):
             logging.debug('Filtering domain {}...'.format(domain))
             stats = FilterStats()

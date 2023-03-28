@@ -36,8 +36,8 @@ def parse_arguments():
     parser.add_argument('--max-pages', '-m', type=int, default=sys.maxsize,
                         help='the maximum number of pages to extract from a '
                              'single WARC file.')
-    parser.add_argument('--zeros', '-Z', type=int, default=3,
-                        help='the minimum number of zeros (digits) in the '
+    parser.add_argument('--digits', '-Z', type=int, default=3,
+                        help='the minimum number of digits in the '
                              'output files\' names.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
@@ -56,13 +56,13 @@ def parse_arguments():
 
 def extract_pages(warc_file: str, input_dir: str,
                   output_dir: str, max_pages: int = sys.maxsize,
-                  zeros: int = 3):
+                  digits: int = 3):
     """
     :return: the file name -> URL mapping.
     """
     input_file = op.join(input_dir, warc_file)
     logging.info('Processing file {}...'.format(warc_file))
-    padding = f'{{0:0{zeros}}}'
+    padding = f'{{0:0{digits}}}'
     mapping = {}
 
     warc_id = 0
@@ -106,12 +106,12 @@ def main():
 
     fn = partial(extract_pages, input_dir=args.input_dir,
                  output_dir=args.output_dir, max_pages=args.max_pages,
-                 zeros=args.zeros)
+                 digits=args.digits)
     with Pool(args.processes) as pool:
         all_mapping = {}
         all_stats = Counter()
         for mapping, stats in otqdm(pool.imap_unordered(fn, warc_files),
-                             'Extracting HTLMs...', total=len(warc_files)):
+                                    'Extracting HTLMs...', total=len(warc_files)):
             all_mapping.update(mapping)
             all_stats.update(stats)
         pool.close()

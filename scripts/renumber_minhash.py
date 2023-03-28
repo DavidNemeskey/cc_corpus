@@ -35,8 +35,8 @@ def parse_arguments():
     batch_group.add_argument('--keep-sizes', '-k', action='store_true',
                              help='do not merge or split batch files; i.e. '
                                   'only copies files to the output directory.')
-    parser.add_argument('--zeroes', '-Z', type=int, default=4,
-                        help='the number of zeroes in the batch files\' names.')
+    parser.add_argument('--digits', '-Z', type=int, default=4,
+                        help='the number of digits in the batch files\' names.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
@@ -62,7 +62,7 @@ def main():
     logging.info('Writing files to {}...'.format(args.output_dir))
 
     batch_size = args.batch_size if not args.keep_sizes else sys.maxsize
-    with closing(BatchWriter(batch_size, args.output_dir, args.zeroes)) as bw:
+    with closing(BatchWriter(batch_size, args.output_dir, args.digits)) as bw:
         for input_batch in input_batches:
             if not args.keep_sizes:
                 logging.info('Reading batch {}...'.format(input_batch))

@@ -6,8 +6,10 @@
 from collections import OrderedDict
 import concurrent.futures as cf
 import io
+import json
 import logging
 import os
+from pathlib import Path
 from queue import Empty, Queue
 import re
 import shutil
@@ -94,6 +96,22 @@ class Document:
             print('<p>\n{}\n</p>'.format(self.paragraphs[-1]), file=buffer)
         print('</doc>', end='', file=buffer)
         return buffer.getvalue()
+
+    def to_json(self):
+        """
+        Returns the document in a JSON dump format.
+        The url of the document will be its 'id' field.
+        The rest of the  metadata contained in the original <doc> tag will be the
+        'meta' field.
+        The metadata contained in the request and response fields are discarded.
+        The paragraphs of the document, separated by ''\n'' will be the 'text'.
+        """
+        restructured_document = {'id': self.attrs.pop('url'),
+                                 'meta': self.attrs,
+                                 'text': self.content()}
+        # If we need to structure the text differently, then we will have to work
+        # with the document.paragraph attribute instead of the content() function.
+        return json.dumps(restructured_document, ensure_ascii=False)
 
     def __repr__(self):
         """
@@ -246,7 +264,7 @@ class CorpusHandler:
             self.meta_data.append(line)
 
 
-def _parse(input, parse_fn, attrs=True, meta=True, content=True, **meta_fields):
+def _parse_docs(input, parse_fn, attrs=True, meta=True, content=True, **meta_fields):
     """Common background function for parse and parse_file."""
     queue = Queue()
     ch = CorpusHandler(queue, attrs, meta, content, **meta_fields)
@@ -267,7 +285,26 @@ def _parse(input, parse_fn, attrs=True, meta=True, content=True, **meta_fields):
         return future.result()
 
 
-def parse(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
+def _parse_jsonl(file: Path):
+    """
+    Reads a jsonl file into our internal data format.
+    The JSONL contains less metadata than the original docs.
+    Only the tags in the original <doc> tag are kept. This becomes the 'attrs'
+    field of the Document object. The request and response content from the
+    original docs, which would be the 'meta' field of the Document object
+    are missing.
+    """
+    with openall(file) as f:
+        for line in f:
+            json_object = json.loads(line)
+            attrs = json_object['meta']
+            url = json_object['id']
+            attrs['url'] = url
+            paragraphs = json_object['text'].split("\n")
+            yield Document(attrs, None, paragraphs)
+
+
+def parse_docs(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
     """
     Enumerates Documents in a text stream in the corpus format. The rest of the
     parameters specify what parts of the documents to keep:
@@ -277,73 +314,88 @@ def parse(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
     - meta_fields: can be used to include / exclude specific meta fields. This
                    setting takes precedence over the general meta argument.
     """
-    yield from _parse(corpus_stream, SAXParser.parse,
-                      attrs, meta, content, **meta_fields)
+    yield from _parse_docs(corpus_stream, SAXParser.parse,
+                           attrs, meta, content, **meta_fields)
+
+
+def is_it_jsonl(filename: Path):
+    return '.jsonl' in Path(filename).suffixes
 
 
 def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
     """
-    Enumerates Documents in a text file in the corpus format. The arguments
-    behave the same as in parse().
+    Enumerates Documents in a text file in the corpus or jsonl format.
+    The arguments behave the same as in parse().
     """
-    yield from _parse(corpus_file, SAXParser.parseFile,
-                      attrs, meta, content, **meta_fields)
+    if is_it_jsonl(corpus_file):
+        yield from _parse_jsonl(corpus_file)
+    else:
+        yield from _parse_docs(corpus_file, SAXParser.parseFile,
+                               attrs, meta, content, **meta_fields)
 
 
 class BatchWriter:
     """Writes Documents into a batch of files with consecutive numbering."""
-    def __init__(self, batch_size, out_dir, zeroes=4,
+    def __init__(self, batch_size, out_dir, digits=4,
                  name_prefix='', first_batch=1):
         """
         Parameters:
         :param batch_size: the number of documents after which a new batch file
                            is opened (with consecutive numbering)
         :param out_dir: the output directory
-        :param zeroes: the number of zeroes in the batch files' name (e.g. if 2,
+        :param digits: the number of zeroes in the batch files' name (e.g. if 2,
                        the first batches will be called 01, 02, etc.)
-        :param name_prefix: prepend this string to all file names.
-        :param first_batch: start batch numbering here instead of the default 1.
+        :param name_prefix: prepend this string to all file names
+        :param first_batch: start batch numbering here instead of the default 1
         """
         self.batch_size = batch_size
-        self.out_dir = out_dir
-        self.zeroes = zeroes
+        self.out_dir = Path(out_dir)
+        self.digits = digits
         self.name_prefix = name_prefix
         self.batch = first_batch - 1
         self.outf = None
         self.doc_written = self.batch_size + 1  # so that we invoke new_file
         self.total_written = 0
 
-    def write(self, document):
+    def write(self, document, jsonl=False):
         """
         Writes a single document to the currently open file. Opens a new file
         when the current one is full.
         """
         if self.doc_written >= self.batch_size:
-            self.new_file()
+            self.new_file(jsonl)
 
-        print(document, file=self.outf)
+        if jsonl:
+            print(document.to_json(), file=self.outf)
+        else:
+            print(document, file=self.outf)
         self.doc_written += 1
 
     def copy_file(self, input_file):
         """
-        Opens a file and makes it a copy of ``input_file``.
+        Opens a file and makes it a copy of ``input_file``, giving it a
+        (possibly) renumbered filename.
         """
-        self.new_file()
+        self.new_file(is_it_jsonl(input_file))
         self.close()
 
-        new_file = os.path.join(
-            self.out_dir, '{}{{:0{}}}.txt.gz'.format(
-                self.name_prefix, self.zeroes).format(self.batch))
+        new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
+        if is_it_jsonl(input_file):
+            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
+        else:
+            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
         shutil.copy(input_file, new_file)
 
-    def new_file(self):
+    def new_file(self, jsonl=False):
         """Closes the old file and opens a new one."""
         self.close()
 
         self.batch += 1
-        new_file = os.path.join(
-            self.out_dir, '{}{{:0{}}}.txt.gz'.format(
-                self.name_prefix, self.zeroes).format(self.batch))
+        new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
+        if jsonl:
+            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
+        else:
+            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
         logging.debug('Opening file {}...'.format(new_file))
         self.outf = openall(new_file, 'wt')
 
@@ -363,3 +415,14 @@ class BatchWriter:
     def __del__(self):
         """Just calls close()."""
         self.close()
+
+
+def convert_file_to_jsonl(input_file: Path, output_file: Path):
+    """
+    Writes a file containing documents in our format into the output as JSONL.
+    """
+    logging.debug(f'The current file to process: {input_file}')
+    with openall(output_file, 'wt') as f:
+        for document in parse_file(input_file):
+            print(document.to_json(), file=f)
+        logging.debug(f'Completed exporting to {output_file} as JSON')
