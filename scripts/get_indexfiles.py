@@ -14,7 +14,7 @@ import sys
 import subprocess
 import time
 from typing import Dict, List
-import cdx_index_client
+from scripts.cdx_index_client import main2
 
 
 def parse_arguments():
@@ -35,8 +35,8 @@ def parse_arguments():
 #cdx client meghívása, statikus
 def download_index(query: str, output_dir: str, params: str):
     """Calls the script :program:`cdx-index-client.py` to do the actual work."""
-    cdx_index_client.main2(query, output_dir, params)
-+
+    main2(query, output_dir, params)
+
 
 
 
@@ -58,7 +58,7 @@ def main():
     i = 0
     log_file = args.log_file + '.{}'.format(i)
     rcode = download_index(args.query, args.output_dir,
-                           '-c {}'.format(args.collection), log_file)
+                           '-c {}'.format(args.collection))
     while rcode == 0 and i <= args.max_retry:
         uncompleted = get_uncompleted(log_file)
         if not uncompleted:
@@ -82,8 +82,8 @@ def main():
               'is all right!'.format(i + 1, args.max_retry + 1), file=sys.stderr)
 
 
-def main2():
-    rcode=download_index(args.query, args.output_dir)
+#def main2():
+    #rcode=download_index(args.query, args.output_dir)
 
 if __name__ == '__main__':
     main()
