@@ -28,9 +28,10 @@ DEF_API_BASE = 'http://index.commoncrawl.org/'
 class IndexDownloadError(Exception):
     pass
 
+
 class Params:
     url = ""
-    show_num_pages= ""
+    show_num_pages = ""
     processes = 8
     fl = ""
     json = ""
@@ -39,19 +40,13 @@ class Params:
     directory = ""
     page_size = 0
     coll = ""
-    cdx_server_url= ""
+    cdx_server_url = ""
     timeout = 30
     max_retries = 10
     verbose = ""
     pages = 0
     header = ""
     in_order = ""
-
-
-
-
-
-
 
 
 def process_quirky_line(line, fields):
@@ -436,7 +431,6 @@ def get_args():
 
     r = parser.parse_args()
 
-
     r.url = r.url.strip('"\'')
     r.directory = r.directory.strip('"\'')
 
@@ -475,20 +469,18 @@ def get_args():
     r.gzipped = r_original.gzipped
     r.json = r_original.json
 
-
-
-
     return r
-#fdownload indexes
-#r objektumot
-def main2(query, output_dir, params):
-    r = Params()
-    r.url=params
-    r.fl=["url" , "filename" , "offset", "length", "status", "mime"]
-    r.gzipped=query
-    r.directory=output_dir
-    read_index(r)
 
+
+def main2(query, output_dir, params):
+    # fdownload indexes
+    # r objektumot
+    r = Params()
+    r.url = params
+    r.fl = ["url", "filename", "offset", "length", "status", "mime"]
+    r.gzipped = query
+    r.directory = output_dir
+    read_index(r)
 
 
 def main():
