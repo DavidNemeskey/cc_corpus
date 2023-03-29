@@ -7,12 +7,14 @@
 
 from setuptools import find_packages, setup
 
+
 def readme():
     with open('README.md') as f:
         return f.read()
 
+
 setup(name='commoncrawl-downloader',
-      version='1.11.0',
+      version='1.11.6',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -50,8 +52,10 @@ setup(name='commoncrawl-downloader',
       packages=find_packages(exclude=['scripts']),
       # Install the scripts
       scripts=[
+          'scripts/autonomous_cross_deduplicator.py',
           'scripts/batch_deduplicate_index_urls.py',
           'scripts/cdx_index_client.py',
+          'scripts/content_type_stats.py',
           'scripts/get_indexfiles.py',
           'scripts/filter_index.py',
           'scripts/deduplicate_index_urls.py',
@@ -62,6 +66,7 @@ setup(name='commoncrawl-downloader',
           'scripts/filter_known_urls.py',
           'scripts/find_finished_downloads.py',
           'scripts/index_statistics.py',
+          'scripts/json_export.py',
           'scripts/remove_boilerplate.py',
           'scripts/wc.py',
           'scripts/extract_pages_from_warc.py',
@@ -87,7 +92,7 @@ setup(name='commoncrawl-downloader',
           'scripts/reparse_documents.py',
           'scripts/fix_corpus.py',
           'scripts/extract_htmls.py',
-          'scripts/find_new_dumps',
+          'scripts/find_new_dumps.py',
       ],
       install_requires=[
           'beautifulsoup4',
@@ -112,7 +117,7 @@ setup(name='commoncrawl-downloader',
           # Will maybe remove this later
           'simplejson',
           # Boilerplate removal
-          'trafilatura',  # 1.2.2
+          'trafilatura==1.2.2',  # 1.2.2
           # Easier TLD extraction
           'tldextract',
           # Language identification -- cld2 master doesn't compile ATM
