@@ -12,6 +12,7 @@ import gzip
 import inspect
 import io
 from itertools import islice, zip_longest
+import math
 import os
 import os.path as op
 from pathlib import Path
@@ -347,6 +348,19 @@ def is_empty(s: Union[bytes, str]) -> bool:
     whitespaces.
     """
     return s is None or not s.strip()
+
+
+def ensure_dir(directory: Union[Path, str]):
+    """Ensures that _directory_ exists."""
+    if not (p := Path(directory)).is_dir():
+        p.mkdir(parents=True, exist_ok=True)
+
+
+def num_digits(items: int) -> int:
+    """
+    Returns the number of digits required to index _items_ different items.
+    """
+    return math.ceil(math.log10(items))
 
 
 # tqdm to print the progress bar to stdout. This helps keeping the log clean.
