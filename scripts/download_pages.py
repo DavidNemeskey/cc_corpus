@@ -24,7 +24,6 @@ import gzip
 import hashlib
 from itertools import groupby
 import logging
-import math
 from operator import itemgetter
 import os
 from pathlib import Path
@@ -36,10 +35,8 @@ import time
 from typing import TextIO
 import zlib
 
-from requests_toolbelt.multipart import decoder
-import requests
-
-from cc_corpus.utils import notempty, openall, otqdm
+from cc_corpus.download import download_warc_ranges, DownloadError
+from cc_corpus.utils import notempty, num_digits, openall, otqdm
 
 
 def parse_arguments():
@@ -64,7 +61,7 @@ def parse_arguments():
     parser.add_argument('--retry', '-r', type=int, default=10,
                         help='Number of retries on downloading or '
                              'decompression errors (default: 10)')
-    parser.add_argument('--chunksize', '-c', type=int, default=99*1000*1000,
+    parser.add_argument('--chunksize', '-c', type=int, default=99 * 1000 * 1000,
                         help='Chunk size in bytes (default: 99 MB)')
     parser.add_argument('--ext', '-e', default='warc.gz',
                         help='Out file extension (default: warc.gz)')
@@ -160,70 +157,6 @@ def step1(glob_pattern: str, out_dir: Path) -> int:
     return retval
 
 
-class DownloadError(Exception):
-    pass
-
-
-def download_ranges(warc_file_name: str,
-                    offsets_and_lengths: list[tuple[int, int]],
-                    retry_left: int) -> list[bytes]:
-    """
-    Downloads a list of ranges from a WARC file document and returns it
-    decompressed. If decompression fails, the range data will be ``None``.
-
-    :param warc_file_name: the name of the WARC file to download from.
-    :param offset: the offset of the document in the WARC file.
-    :param length: the (compressed) size of the document.
-    :param retry_left: the number of retries left.
-    """
-    logging.info(f'DR {warc_file_name=} {len(offsets_and_lengths)=}')
-    range_str = ', '.join(f'{offset}-{offset + length}'
-                          for offset, length in offsets_and_lengths)
-    byte_range = f'bytes={range_str}'
-    orig_retry_left = retry_left
-    while retry_left > 0:
-        logging.info(f'W retry {retry_left}')
-        retry_left -= 1
-        retry_str = f'{retry_left} retr{"y" if retry_left == 1 else "ies"}'
-        try:
-            r = requests.get(
-                f'https://ds5q9oxwqwsfj.cloudfront.net/{warc_file_name}',
-                headers={'Range': byte_range}, stream=True, timeout=60
-            )
-        except Exception as e:
-            logging.exception(f'Exception {e} with file {warc_file_name}; '
-                              f'{retry_str} left.')
-            continue
-
-        if r.status_code == 206:
-            if len(offsets_and_lengths) > 1:
-                try:
-                    multipart_data = decoder.MultipartDecoder.from_response(r)
-                    return [p.content for p in multipart_data.parts]
-                except Exception as e:  # noqa
-                    logging.error(f'Error while reading multipart data with '
-                                  f'file {warc_file_name}: {e}; '
-                                  f'{retry_str} left.')
-            else:
-                return [r.content]
-        elif r.status_code == 200:
-            logging.error(f'Had to download {warc_file_name} as {byte_range} '
-                          'was not available.')
-            time.sleep(orig_retry_left - retry_left)
-            continue
-        elif r.status_code == 404:
-            logging.error(f'{warc_file_name} not found (404).')
-            return [None for _ in offsets_and_lengths]
-        else:
-            logging.error(f'Misc HTTP error for {warc_file_name}: '
-                          f'{r.status_code} - {r.text}; sleeping '
-                          f'{orig_retry_left - retry_left}...')
-            time.sleep(orig_retry_left - retry_left)
-            continue
-    else:
-        raise DownloadError(f'Could not download ranges from {warc_file_name}.')
-
-
 def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
           data_out_dir: Path, error_file: Path, retries: int, chunk_size: int,
           file_prefix: str, doc_padding: int, extension: str):
@@ -253,7 +186,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
     lines_per_file = 1000
     # At least one file...
     num_files = max(num_lines / num_threads / lines_per_file, 1)
-    file_padding = f'{{:0{math.floor(math.log10(num_files)) + 1}}}'
+    file_padding = f'{{:0{num_digits(num_files)}}}'
 
     # TODO use a condition to signal end of processing
     def producer():
@@ -304,7 +237,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
                               for index in index_lines]
                     try:
                         st = time.time()
-                        downloaded = download_ranges(warc, ranges, retries)
+                        downloaded = download_warc_ranges(warc, ranges, retries)
                         logging.info(f'Downloaded in {time.time() - st:.2f} seconds.')
                         for index, doc in zip(index_lines, downloaded):
                             if doc is None:
@@ -349,7 +282,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
     data_out_dir.mkdir(parents=True, exist_ok=True)
     error_file.parent.mkdir(parents=True, exist_ok=True)
 
-    thread_padding = f'{{:0{math.floor(math.log10(num_threads)) + 1}}}'
+    thread_padding = f'{{:0{num_digits(num_threads)}}}'
     progress_bar = otqdm(desc='Downloading WARC ranges...')
     errf = openall(error_file, 'wt')
     try:
