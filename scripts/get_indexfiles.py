@@ -2,88 +2,129 @@
 # -*- coding: utf-8 -*-
 
 """
-Python version of the old get_indexfiles.sh script. Downloads selected
-collection(s) from Common Crawl.
+Downloads a selected top level domain from Common Crawl. Uses the new(er, it's
+from 2015) S3-based method, completely circumventing the index server, which
+can become overloaded.
+
+References:
+- https://groups.google.com/g/common-crawl/c/vBeLAbfH1wY
+- https://groups.google.com/g/common-crawl/c/qRo-gqviaTM/m/40FDmXwRBwAJ
 """
 
 from argparse import ArgumentParser
-from collections import defaultdict
-import os
+from contextlib import closing, nullcontext
+import logging
+from pathlib import Path
 import re
-import sys
-import subprocess
+from tempfile import TemporaryDirectory
 import time
-from typing import Dict, List
+import urllib.request
+
+from cc_corpus.download import DownloadError, download_index_range
+from cc_corpus.index import (
+    BatchWriter, CLUSTER_SIZE,
+    filter_json, find_tld_in_index, process_index_range, ranges_from_clusters
+)
+from cc_corpus.utils import num_digits
 
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--query', '-q', required=True,
-                        help='the query string; e.g. "*.hu".')
-    parser.add_argument('--output-dir', '-o', required=True,
+    parser.add_argument('--tld', '-t', required=True,
+                        help='the TLD to download, e.g. "hu".')
+    parser.add_argument('--collection', '-c', required=True,
+                        help='the collection to download.')
+    parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the output directory.')
-    parser.add_argument('--log-file', '-l', required=True,
-                        help='the (base) name of the (rotating) log file.')
+    parser.add_argument('--lines-per-file', '-l', type=int, default=15000,
+                        help='the number of index lines per output file. The '
+                             'default is 15000.')
+    parser.add_argument('--field-list', '--fl', type=str,
+                        default='url,filename,offset,length,status,mime',
+                        help='the list of fields to keep from the index '
+                             'JSONs. A comma-separated list of field names. '
+                             'The default is '
+                             '"url,filename,offset,length,status,mime"')
+    parser.add_argument('--clusters-dir', type=Path,
+                        help='the directory to where the index-of-index file '
+                             'cluster.idx is downloaded to. The file is '
+                             'renamed to include the collection (see above). '
+                             'If not specified, the file is downloaded to a '
+                             'temporary directory and is deleted afterwards.')
+    parser.add_argument('--delay', '-d', type=float, default=1,
+                        help='the number of seconds to wait between requests '
+                             'to prevent DDoS\'ing the server.')
+    parser.add_argument('--batch-size', '-b', type=int, default=100,
+                        help='how many clusters (of 3,000 URLs each) to ask '
+                             'for per request. The default is 100. Should be '
+                             'balanced with --delay.')
     parser.add_argument('--max-retry', '-m', type=int, default=5,
                         help='maximum number of attempts to redownload a '
                              'specific page.')
-    parser.add_argument('--collection', '-c', default='all',
-                        help='the collection to download. The default is "all".')
-    return parser.parse_args()
+    parser.add_argument('--log-level', '-L', type=str, default='info',
+                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        help='the logging level.')
+    args = parser.parse_args()
 
-
-def download_index(query: str, output_dir: str, params: str, log_file: str,
-                   mode: str = 'w'):
-    """Calls the script :program:`cdx-index-client.py` to do the actual work."""
-    with open(log_file, '{}t'.format(mode)) as logf:
-        res = subprocess.run(
-            'cdx-index-client.py --fl url,filename,offset,length,status,mime '
-            '-z {} -d {} {}'.format(query, output_dir, params),
-            stdout=logf, stderr=subprocess.STDOUT, shell=True, check=True
-        )
-        return res.returncode
-
-
-def get_uncompleted(log_file: str) -> Dict[str, List[str]]:
-    """Returns the list of """
-    mrp = re.compile(r'^Max retries .* page (?P<page>[0-9any]+) '
-                     r'for crawl (?P<coll>[A-Z0-9]+)-index$')
-    with open(log_file, 'rt') as inf:
-        colls = defaultdict(list)
-        for line in map(str.strip, inf):
-            m = mrp.match(line)
-            if m:
-                colls[m.group('coll')].append(m.group('page'))
-    return colls
+    args.field_list = {field.strip() for field in args.field_list.split(',')}
+    return args
 
 
 def main():
     args = parse_arguments()
-    i = 0
-    log_file = args.log_file + '.{}'.format(i)
-    rcode = download_index(args.query, args.output_dir,
-                           '-c {}'.format(args.collection), log_file)
-    while rcode == 0 and i <= args.max_retry:
-        uncompleted = get_uncompleted(log_file)
-        if not uncompleted:
-            break
-        i += 1
-        log_file = args.log_file + '.{}'.format(i)
-        print('Doing {}th round of full retry'.format(i), file=sys.stderr)
-        if os.path.exists(log_file):
-            os.remove(log_file)
-        for coll, pages in uncompleted:
-            time.sleep(30)  # Sleep to prevent DDoS
-            download_index(args.query, args.output_dir,
-                           '-c {} --pages {}'.format(coll, ' '.join(pages)),
-                           log_file, 'a')
 
-    if i <= args.max_retry:
-        print('Successfully finished after {} iterations!'.format(i + 1),
-              file=sys.stderr)
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
+    )
+
+    base_url = 'https://data.commoncrawl.org/cc-index/collections/' \
+               f'{args.collection}/indexes/'
+
+    if args.clusters_dir:
+        clusters_context = nullcontext(args.clusters_dir)
+        logging.info(f'Using clusters directory {args.clusters_dir}.')
+        args.clusters_dir.mkdir(parents=True, exist_ok=True)
     else:
-        print('Finished after {} of {} iterations please check if everything '
-              'is all right!'.format(i + 1, args.max_retry + 1), file=sys.stderr)
+        clusters_context = TemporaryDirectory()
+        logging.info('Using temporary clusters directory '
+                     f'{clusters_context.name}.')
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    with clusters_context as clusters_dir:
+        # First, let's download the cluster.idx file.
+        cluster_idx = Path(clusters_dir) / f'{args.collection}_cluster.idx'
+        if not cluster_idx.is_file():
+            logging.info(f'Downloading cluster index for {args.collection}...')
+            urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
+
+        # Then, get the files and byte ranges that correspond to the TLD
+        clusters = find_tld_in_index(args.tld, cluster_idx)
+        logging.info(f'Found {len(clusters)} clusters to download.')
+        tldp = re.compile(f'^{args.tld},')
+
+        with closing(BatchWriter(
+            args.lines_per_file, args.output_dir,
+            num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
+            f'domain-hu-{args.collection}-'
+        )) as bw:
+            for frange in ranges_from_clusters(clusters, args.batch_size):
+                time.sleep(args.delay)
+                logging.debug(f'Downloading {frange}...')
+                try:
+                    index_range = download_index_range(
+                        base_url + frange.file_name,
+                        frange.offset, frange.length,
+                        args.max_retry
+                    )
+                    for line in process_index_range(index_range):
+                        if tldp.match(line):
+                            bw.write(filter_json(line, args.field_list))
+                except DownloadError as de:
+                    logging.error(f'Could not download range: {de}.')
+
+    logging.info('Done.')
 
 
 if __name__ == '__main__':
