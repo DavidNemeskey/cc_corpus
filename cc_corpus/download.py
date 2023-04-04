@@ -10,6 +10,9 @@ import requests
 from requests_toolbelt.multipart import decoder
 
 
+WARC_BASE_URI = 'https://ds5q9oxwqwsfj.cloudfront.net/'
+
+
 class DownloadError(Exception):
     """Exception raised on if a download fails."""
     pass
@@ -80,7 +83,7 @@ def download_warc_ranges(
     :func:`download_ranges`.
     """
     return download_ranges(
-        f'https://ds5q9oxwqwsfj.cloudfront.net/{warc_file_name}',
+        WARC_BASE_URI + warc_file_name,
         offsets_and_lengths, retry_left
     )
 

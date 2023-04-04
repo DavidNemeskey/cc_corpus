@@ -350,12 +350,6 @@ def is_empty(s: Union[bytes, str]) -> bool:
     return s is None or not s.strip()
 
 
-def ensure_dir(directory: Union[Path, str]):
-    """Ensures that _directory_ exists."""
-    if not (p := Path(directory)).is_dir():
-        p.mkdir(parents=True, exist_ok=True)
-
-
 def num_digits(items: int) -> int:
     """
     Returns the number of digits required to index _items_ different items.

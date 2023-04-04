@@ -12,12 +12,11 @@ References:
 """
 
 from argparse import ArgumentParser
-from contextlib import closing
+from contextlib import closing, nullcontext
 import logging
 from pathlib import Path
 import re
-import shutil
-from tempfile import mkdtemp
+from tempfile import TemporaryDirectory
 import time
 import urllib.request
 
@@ -26,7 +25,7 @@ from cc_corpus.index import (
     BatchWriter, CLUSTER_SIZE,
     filter_json, find_tld_in_index, process_index_range, ranges_from_clusters
 )
-from cc_corpus.utils import ensure_dir, num_digits
+from cc_corpus.utils import num_digits
 
 
 def parse_arguments():
@@ -83,18 +82,19 @@ def main():
                f'{args.collection}/indexes/'
 
     if args.clusters_dir:
-        clusters_dir = args.clusters_dir
-        logging.info(f'Using clusters directory {clusters_dir}.')
+        clusters_context = nullcontext(args.clusters_dir)
+        logging.info(f'Using clusters directory {args.clusters_dir}.')
+        args.clusters_dir.mkdir(parents=True, exist_ok=True)
     else:
-        clusters_dir = Path(mkdtemp())
-        logging.info(f'Created temporary clusters directory {clusters_dir}.')
+        clusters_context = TemporaryDirectory()
+        logging.info('Using temporary clusters directory '
+                     f'{clusters_context.name}.')
 
-    ensure_dir(args.output_dir)
-    ensure_dir(clusters_dir)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
+    with clusters_context as clusters_dir:
         # First, let's download the cluster.idx file.
-        cluster_idx = clusters_dir / f'{args.collection}_cluster.idx'
+        cluster_idx = Path(clusters_dir) / f'{args.collection}_cluster.idx'
         if not cluster_idx.is_file():
             logging.info(f'Downloading cluster index for {args.collection}...')
             urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
@@ -123,11 +123,6 @@ def main():
                             bw.write(filter_json(line, args.field_list))
                 except DownloadError as de:
                     logging.error(f'Could not download range: {de}.')
-    finally:
-        # Let's remove the directory for cluster.idx if it is temporary
-        if not args.clusters_dir:
-            shutil.rmtree(clusters_dir)
-            logging.info(f'Deleted temporary clusters directory {clusters_dir}.')
 
     logging.info('Done.')
 
