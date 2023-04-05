@@ -14,7 +14,7 @@ def readme():
 
 
 setup(name='commoncrawl-downloader',
-      version='1.12.0',
+      version='1.12.1',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -54,7 +54,6 @@ setup(name='commoncrawl-downloader',
       scripts=[
           'scripts/autonomous_cross_deduplicator.py',
           'scripts/batch_deduplicate_index_urls.py',
-          'scripts/cdx-index-client.py',
           'scripts/content_type_stats.py',
           'scripts/get_indexfiles.py',
           'scripts/filter_index.py',
