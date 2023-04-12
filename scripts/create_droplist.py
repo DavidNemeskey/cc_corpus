@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-Takes a list of urls and transforms them using known transformations.
+Takes a list of urls from a file and transforms them using one of the
+predefined transformations, writing the results out to another txt file.
 """
 
 from argparse import ArgumentParser
@@ -30,9 +31,34 @@ def parse_arguments():
 
 
 def nepszava_transformation(input_url: str):
+    """
+    Transformation example:
+    input:
+    https://nepszava.hu/json/cikk.json?id=1001322_elindult-a-bekemenet
+    output:
+    http://nepszava.hu/1001322_elindult-a-bekemenet
+    """
     parsed = parse.urlparse(input_url)
     article_title = parsed.query.split('=', 1)[1]
     new_parsed = ('http', parsed.netloc, article_title, '', '', '',)
+    output_url = parse.urlunparse(new_parsed)
+    return output_url
+
+
+def hu888_transformation(input_url: str):
+    """
+    Transformation example:
+    input:
+    https://888.hu/ketharmad/orban-viktor-5-pontjat-vitatjak-meg-visegradon-4089046/
+    output:
+    http://888.hu/article-orban-viktor-5-pontjat-vitatjak-meg-visegradon
+    """
+    parsed = parse.urlparse(input_url)
+    new_title = parsed.path.split('/')[2]
+    new_title = new_title.split('-')[: -1]
+    new_title.insert(0, 'article')
+    new_title = '-'.join(new_title)
+    new_parsed = ('http', parsed.netloc, new_title, '', '', '',)
     output_url = parse.urlunparse(new_parsed)
     return output_url
 
@@ -49,6 +75,8 @@ def main():
 
     if args.transformation == 'nepszava':
         transf = nepszava_transformation
+    elif args.transformation == '888hu':
+        transf = hu888_transformation
     else:
         raise ValueError(f'Unknown transformation pattern: '
                          f'{args.transformation}')
