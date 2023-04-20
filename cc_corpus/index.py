@@ -65,15 +65,22 @@ def find_tld_in_index(tld: str, cluster_idx: Path) -> list[Cluster]:
     """
     last_cluster = None
     clusters = []
+    logging.debug(f'Searching clusters for the pattern {tld}')
     for cluster in read_cluster_idx(cluster_idx):
         ctld = cluster.surt[:cluster.surt.find(',')]
+        if ')' in ctld:
+            ctld = ctld[: ctld.find(')')]
+            logging.debug(f'Problematic parsing of url by common crawl: '
+                          f'{cluster.surt} -- the fix is {ctld}')
         if ctld < tld:
             last_cluster = cluster
         elif ctld >= tld:
+            logging.debug(f'current cluster {ctld}')
             if last_cluster is not None:
                 clusters.append(last_cluster)
                 last_cluster = None
             if ctld == tld:
+                logging.debug('Patterns match')
                 clusters.append(cluster)
             else:
                 break

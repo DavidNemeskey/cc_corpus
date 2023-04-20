@@ -30,8 +30,8 @@ from cc_corpus.utils import num_digits
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--tld', '-t', required=True,
-                        help='the TLD to download, e.g. "hu".')
+    parser.add_argument('--pattern', '-p', required=True,
+                        help='the url pattern to download, e.g. "*.hu".')
     parser.add_argument('--collection', '-c', required=True,
                         help='the collection to download.')
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
@@ -78,7 +78,7 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    base_url = 'https://data.commoncrawl.org/cc-index/collections/' \
+    base_url = f'https://data.commoncrawl.org/cc-index/collections/' \
                f'{args.collection}/indexes/'
 
     if args.clusters_dir:
@@ -97,17 +97,18 @@ def main():
         cluster_idx = Path(clusters_dir) / f'{args.collection}_cluster.idx'
         if not cluster_idx.is_file():
             logging.info(f'Downloading cluster index for {args.collection}...')
+            logging.debug(base_url + 'cluster.idx')
             urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
 
-        # Then, get the files and byte ranges that correspond to the TLD
-        clusters = find_tld_in_index(args.tld, cluster_idx)
+        # Then, get the files and byte ranges that correspond to the query
+        clusters = find_tld_in_index(args.pattern, cluster_idx)
         logging.info(f'Found {len(clusters)} clusters to download.')
-        tldp = re.compile(f'^{args.tld},')
+        tldp = re.compile(f'^{args.pattern}[,)]')
 
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
             num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
-            f'domain-hu-{args.collection}-'
+            f'pattern-{args.pattern}-{args.collection}-'
         )) as bw:
             for frange in ranges_from_clusters(clusters, args.batch_size):
                 time.sleep(args.delay)
