@@ -9,7 +9,7 @@ import json
 import logging
 from operator import attrgetter
 from pathlib import Path
-from typing import NamedTuple
+from typing import List, NamedTuple
 import zlib
 
 from more_itertools import batched
@@ -52,7 +52,31 @@ def read_cluster_idx(cluster_idx: Path) -> Generator[Cluster]:
             yield Cluster.from_line(line)
 
 
-def find_tld_in_index(tld: str, cluster_idx: Path) -> list[Cluster]:
+def compare_inverse_list_urls(query_url, other_url):
+    """
+    Compares urls, given as inverted lists (e.g. ['hu','elte'] for elte.hu)
+
+    If the two are identical, or if the other url is the subdomain of the query
+    it returns 0
+    If  it is the query url which is the subdomain of the other, or
+    the other url is alphabetically (per domain element) before the query, it
+    returns -1
+    If the other url is alphabetically (per domain element) after the query, it
+    returns 1
+    """
+    for query_element, other_element in zip(query_url, other_url):
+        if query_element > other_element:
+            return -1
+        if query_element < other_element:
+            return 1
+    # If the iteration over the common sections was inconclusive, then
+    # one of them is the subdomain or the other, or they are identical
+    if len(query_url) > len(other_url):
+        return -1
+    return 0
+
+
+def find_pattern_in_index(pattern: List[str], cluster_idx: Path) -> list[Cluster]:
     """
     Finds all clusters that end in a particular TLD in cluster.idx.
 
@@ -65,22 +89,17 @@ def find_tld_in_index(tld: str, cluster_idx: Path) -> list[Cluster]:
     """
     last_cluster = None
     clusters = []
-    logging.debug(f'Searching clusters for the pattern {tld}')
+    logging.debug(f'Searching clusters for the pattern {pattern}')
     for cluster in read_cluster_idx(cluster_idx):
-        ctld = cluster.surt[:cluster.surt.find(',')]
-        if ')' in ctld:
-            ctld = ctld[: ctld.find(')')]
-            logging.debug(f'Problematic parsing of url by common crawl: '
-                          f'{cluster.surt} -- the fix is {ctld}')
-        if ctld < tld:
+        ctld = cluster.surt[:cluster.surt.find(')')]
+        comparison = compare_inverse_list_urls(pattern, ctld.split(','))
+        if comparison == -1:
             last_cluster = cluster
-        elif ctld >= tld:
-            logging.debug(f'current cluster {ctld}')
+        elif comparison >= 0:
             if last_cluster is not None:
                 clusters.append(last_cluster)
                 last_cluster = None
-            if ctld == tld:
-                logging.debug('Patterns match')
+            if comparison == 0:
                 clusters.append(cluster)
             else:
                 break

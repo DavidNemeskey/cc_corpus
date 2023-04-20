@@ -23,7 +23,8 @@ import urllib.request
 from cc_corpus.download import DownloadError, download_index_range
 from cc_corpus.index import (
     BatchWriter, CLUSTER_SIZE,
-    filter_json, find_tld_in_index, process_index_range, ranges_from_clusters
+    filter_json, find_pattern_in_index, process_index_range,
+    ranges_from_clusters
 )
 from cc_corpus.utils import num_digits
 
@@ -81,6 +82,9 @@ def main():
     base_url = f'https://data.commoncrawl.org/cc-index/collections/' \
                f'{args.collection}/indexes/'
 
+    pattern_list = args.pattern.split('.')
+    pattern_list.reverse()
+
     if args.clusters_dir:
         clusters_context = nullcontext(args.clusters_dir)
         logging.info(f'Using clusters directory {args.clusters_dir}.')
@@ -101,9 +105,10 @@ def main():
             urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
 
         # Then, get the files and byte ranges that correspond to the query
-        clusters = find_tld_in_index(args.pattern, cluster_idx)
+        clusters = find_pattern_in_index(pattern_list, cluster_idx)
         logging.info(f'Found {len(clusters)} clusters to download.')
-        tldp = re.compile(f'^{args.pattern}[,)]')
+        pattern_inverted_url = ','.join(pattern_list)
+        tldp = re.compile(f'^{pattern_inverted_url}[,)]')
 
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
