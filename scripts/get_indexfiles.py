@@ -31,8 +31,13 @@ from cc_corpus.utils import num_digits
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--patterns', '-p', nargs='+', required=True,
-                        help='the url pattern to download, e.g. "elte.hu".')
+    pattern_group = parser.add_mutually_exclusive_group(required=True)
+    pattern_group.add_argument('--patterns', '-p', nargs='+',
+                               help='the url pattern to download, '
+                                    'e.g. "elte.hu".')
+    pattern_group.add_argument('--pattern-file', '-pf', type=Path,
+                               help='the file containing the patterns '
+                                    'to download.')
     parser.add_argument('--collection', '-c', required=True,
                         help='the collection to download.')
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
@@ -82,13 +87,22 @@ def main():
     base_url = f'https://data.commoncrawl.org/cc-index/collections/' \
                f'{args.collection}/indexes/'
 
+    if args.patterns:
+        patterns = args.patterns
+    else:
+        patterns = []
+        with open(args.pattern_file, 'rt') as pf:
+            for line in pf:
+                patterns.append(line.strip())
+
     patterns_as_lists = []
-    for pattern in args.patterns:
+    for pattern in patterns:
         pattern_list = pattern.split('.')
         pattern_list.reverse()
         if pattern_list[-1] == '*':
             pattern_list.pop()
         patterns_as_lists.append(pattern_list)
+
     logging.debug(f'The patterns we look for: {patterns_as_lists}')
 
     if args.clusters_dir:
