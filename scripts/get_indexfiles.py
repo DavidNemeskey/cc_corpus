@@ -31,8 +31,8 @@ from cc_corpus.utils import num_digits
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--pattern', '-p', required=True,
-                        help='the url pattern to download, e.g. "*.hu".')
+    parser.add_argument('--patterns', '-p', nargs='+', required=True,
+                        help='the url pattern to download, e.g. "elte.hu".')
     parser.add_argument('--collection', '-c', required=True,
                         help='the collection to download.')
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
@@ -82,8 +82,14 @@ def main():
     base_url = f'https://data.commoncrawl.org/cc-index/collections/' \
                f'{args.collection}/indexes/'
 
-    pattern_list = args.pattern.split('.')
-    pattern_list.reverse()
+    patterns_as_lists = []
+    for pattern in args.patterns:
+        pattern_list = pattern.split('.')
+        pattern_list.reverse()
+        if pattern_list[-1] == '*':
+            pattern_list.pop()
+        patterns_as_lists.append(pattern_list)
+    logging.debug(f'The patterns we look for: {patterns_as_lists}')
 
     if args.clusters_dir:
         clusters_context = nullcontext(args.clusters_dir)
@@ -104,16 +110,29 @@ def main():
             logging.debug(base_url + 'cluster.idx')
             urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
 
-        # Then, get the files and byte ranges that correspond to the query
-        clusters = find_pattern_in_index(pattern_list, cluster_idx)
+        # Then, get the files and byte ranges that correspond to the query:
+        clusters = []
+        for pattern_list in patterns_as_lists:
+            current_clusters = find_pattern_in_index(pattern_list, cluster_idx)
+            clusters += current_clusters
+        clusters = list(set(clusters))  # We remove duplicates
+        clusters.sort(key=lambda cluster: (cluster.file_name, cluster.offset))
         logging.info(f'Found {len(clusters)} clusters to download.')
-        pattern_inverted_url = ','.join(pattern_list)
-        tldp = re.compile(f'^{pattern_inverted_url}[,)]')
+
+        # Assemble a regexp that matches the patterns:
+        regexp_string = '^('
+        for i, pattern_list in enumerate(patterns_as_lists):
+            pattern_inverted_url = ','.join(pattern_list)
+            regexp_string += pattern_inverted_url
+            if i < (len(patterns_as_lists) - 1):
+                regexp_string += '|'
+        regexp_string += ')[,)]'
+        tldp = re.compile(regexp_string)
 
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
             num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
-            f'pattern-{args.pattern}-{args.collection}-'
+            f'pattern-{args.patterns}-{args.collection}-'
         )) as bw:
             for frange in ranges_from_clusters(clusters, args.batch_size):
                 time.sleep(args.delay)
