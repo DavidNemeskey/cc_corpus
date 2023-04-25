@@ -77,12 +77,13 @@ def parse_arguments():
     return args
 
 
-def convert_url_to_list(url: str) -> list[str]:
-    url_as_list = url.split('.')
-    url_as_list.reverse()
-    if url_as_list[-1] == '*':
-        url_as_list.pop()
-    return url_as_list
+def convert_pattern_to_tuple(pattern: str) -> tuple[str]:
+    """Converts a string pattern (domain) to a tuple."""
+    pattern_tuple = pattern.split('.')
+    pattern_tuple.reverse()
+    if pattern_tuple[-1] == '*':
+        pattern_tuple.pop()
+    return tuple(pattern_tuple)
 
 
 def main():
@@ -97,12 +98,12 @@ def main():
                f'{args.collection}/indexes/'
 
     if args.patterns:
-        patterns = args.patterns
+        raw_patterns = args.patterns
     else:
         with openall(args.pattern_file, 'rt') as pf:
-            patterns = [line.strip() for line in pf]
-    patterns_as_lists = [convert_url_to_list(url) for url in patterns]
-    logging.debug(f'The patterns we look for: {patterns_as_lists}')
+            raw_patterns = [line.strip() for line in pf]
+    patterns = [convert_pattern_to_tuple(p) for p in raw_patterns]
+    logging.debug(f'The patterns we look for: {patterns}')
 
     if args.clusters_dir:
         clusters_context = nullcontext(args.clusters_dir)
@@ -124,19 +125,18 @@ def main():
             urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
 
         # Then, get the files and byte ranges that correspond to the query:
-        clusters = collect_clusters_from_index(patterns_as_lists, cluster_idx)
+        clusters = collect_clusters_from_index(patterns, cluster_idx)
         logging.info(f'Found {len(clusters)} clusters to download.')
 
         # Assemble a regexp that matches the patterns:
         regexp_string = '^('
-        regexp_string += '|'.join(','.join(pe) for pe in patterns_as_lists)
+        regexp_string += '|'.join(','.join(pe) for pe in patterns)
         regexp_string += ')[,)]'
         pattern_matcher = re.compile(regexp_string)
 
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
-            num_digits(len(clusters) * CLUSTER_SIZE
-                       // args.lines_per_file + 1),
+            num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
             f'pattern-{patterns[0]}-{args.collection}-'
         )) as bw:
             for frange in ranges_from_clusters(clusters, args.batch_size):
