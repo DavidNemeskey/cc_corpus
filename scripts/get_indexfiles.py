@@ -128,7 +128,7 @@ def main():
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
             num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
-            f'pattern-{patterns[0]}-{args.collection}-'
+            f'pattern-{raw_patterns[0]}-{args.collection}-'
         )) as bw:
             for frange in ranges_from_clusters(clusters, args.batch_size):
                 time.sleep(args.delay)

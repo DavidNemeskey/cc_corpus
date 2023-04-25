@@ -13,7 +13,7 @@ from operator import attrgetter
 from pathlib import Path
 import zlib
 
-from more_itertools import batched
+from more_itertools import batched, peekable
 
 from cc_corpus.utils import openall
 
@@ -41,6 +41,9 @@ class Cluster:
 
     def surt(self):
         return f'{",".join(self.domain)})/{self.path}'
+
+    def end(self):
+        return self.offset + self.length
 
     @classmethod
     def from_line(cls, line):
@@ -186,30 +189,48 @@ def ranges_from_clusters(
                          clusters are returned in a single batch).
     :return: yields lists of :class:`FileRange`s.
     """
-    def range_from_clusters(file_name: str, file_clusters: Iterable[Cluster]):
+    def group_continuous_file_clusters(
+        file_clusters: Iterable[Cluster]
+    ) -> Generator[list[Cluster]]:
+        """
+        Groups continuous clusters that belong to the same index file (not
+        checked). Since an index file may contain clusters corresponding to
+        more than one domains, there is no guarantee that the byte ranges
+        corresponding to these clusters are continuous. This function groups
+        the clusters in continuous chunks so that they can be converted into
+        byte ranges for download.
+        """
+        continuous_clusters = []
+        for cluster in (it := peekable(file_clusters)):
+            if not continuous_clusters:
+                continuous_clusters.append(cluster)
+            else:
+                if cluster.offset != continuous_clusters[-1].end():
+                    yield continuous_clusters
+                    continuous_clusters = []
+                    it.prepend(cluster)
+                else:
+                    continuous_clusters.append(cluster)
+        if continuous_clusters:
+            yield continuous_clusters
+
+    def range_from_clusters(
+        file_name: str, file_clusters: Iterable[Cluster]
+    ) -> FileRange:
         """
         Returns a single range for an :class:`Iterable` of :class:`Cluster`s.
         """
-        start, end = None, None
-        for cluster in file_clusters:
-            if start is None:
-                start = cluster.offset
-                end = start + cluster.length
-            else:
-                if cluster.offset != end:
-                    raise ValueError(f'Discontinuous cluster {cluster.surt()}: '
-                                     f'{cluster.offset=} instead of {end=}!')
-                else:
-                    end += cluster.length
-        return FileRange(file_name, start, end - start)
+        return FileRange(file_name, file_clusters[0].offset,
+                         file_clusters[-1].end() - file_clusters[0].offset)
 
     for file_name, file_clusters in groupby(clusters,
                                             key=attrgetter('file_name')):
-        if max_clusters > 0:
-            for batch in batched(file_clusters, max_clusters):
-                yield range_from_clusters(file_name, batch)
-        else:
-            yield range_from_clusters(file_name, file_clusters)
+        for range_clusters in group_continuous_file_clusters(file_clusters):
+            if max_clusters > 0:
+                for batch in batched(range_clusters, max_clusters):
+                    yield range_from_clusters(file_name, batch)
+            else:
+                yield range_from_clusters(file_name, range_clusters)
 
 
 class BatchWriter:
