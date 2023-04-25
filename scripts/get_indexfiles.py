@@ -57,6 +57,10 @@ def parse_arguments():
                              'renamed to include the collection (see above). '
                              'If not specified, the file is downloaded to a '
                              'temporary directory and is deleted afterwards.')
+    parser.add_argument('--file-prefix', '-f',
+                        help='the output file name prefix. If not specified, '
+                             'it will be based on the name of the pattern '
+                             'file (if specified) or the first domain pattern.')
     parser.add_argument('--delay', '-d', type=float, default=1,
                         help='the number of seconds to wait between requests '
                              'to prevent DDoS\'ing the server.')
@@ -77,6 +81,20 @@ def parse_arguments():
     return args
 
 
+def get_file_prefix(
+    pattern_file: Path, patterns: list[str], file_prefix: str
+) -> str:
+    if file_prefix:
+        return file_prefix
+    elif pattern_file:
+        file_name = pattern_file.name
+        return file_name[
+            :len(file_name) - len(''.join(pattern_file.suffixes))
+        ]
+    else:
+        return f'pattern-{patterns[0]}'.replace('*.', '')
+
+
 def main():
     args = parse_arguments()
 
@@ -93,6 +111,7 @@ def main():
     else:
         with openall(args.pattern_file, 'rt') as pf:
             raw_patterns = [line.strip() for line in pf]
+
     patterns = [SurtDomain.from_string(p) for p in raw_patterns]
     logging.debug(f'The patterns we look for: {patterns}')
 
@@ -125,10 +144,12 @@ def main():
         regexp_string += ')[,)]'
         pattern_matcher = re.compile(regexp_string)
 
+        file_prefix = get_file_prefix(args.pattern_file, raw_patterns,
+                                      args.file_prefix)
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
             num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
-            f'pattern-{raw_patterns[0]}-{args.collection}-'
+            f'{file_prefix}-{args.collection}-'
         )) as bw:
             for frange in ranges_from_clusters(clusters, args.batch_size):
                 time.sleep(args.delay)
