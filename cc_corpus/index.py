@@ -9,7 +9,7 @@ import json
 import logging
 from operator import attrgetter
 from pathlib import Path
-from typing import List, NamedTuple
+from typing import NamedTuple
 import zlib
 
 from more_itertools import batched
@@ -52,31 +52,27 @@ def read_cluster_idx(cluster_idx: Path) -> Generator[Cluster]:
             yield Cluster.from_line(line)
 
 
-def compare_inverse_list_urls(query_url, other_url):
+def compare_inverse_surt_lists(query_url, other_url) -> int:
     """
-    Compares urls, given as inverted lists (e.g. ['hu','elte'] for elte.hu)
-
-    If the two are identical, or if the other url is the subdomain of the query
-    it returns 0
-    If  it is the query url which is the subdomain of the other, or
-    the other url is alphabetically (per domain element) before the query, it
-    returns -1
-    If the other url is alphabetically (per domain element) after the query, it
-    returns 1
+    This is a three-way comparison operator, that operates on urls,  given as
+    inverted lists (e.g. ['hu','elte'] for elte.hu).
+    The basis of the comparison is alphabetical sorting per domain components.
+    It also returns 0 when the other_url is a subdomain of the query_url.
     """
     for query_element, other_element in zip(query_url, other_url):
         if query_element > other_element:
-            return -1
-        if query_element < other_element:
             return 1
+        if query_element < other_element:
+            return -1
     # If the iteration over the common sections was inconclusive, then
-    # one of them is the subdomain or the other, or they are identical
+    # one of them is the subdomain of the other, or they are identical
     if len(query_url) > len(other_url):
-        return -1
+        return 1
     return 0
 
 
-def find_pattern_in_index(pattern: List[str], cluster_idx: Path) -> list[Cluster]:
+def find_pattern_in_index(pattern: list[str],
+                          cluster_idx: Path) -> list[Cluster]:
     """
     Finds all clusters that end in a particular TLD in cluster.idx.
 
@@ -89,13 +85,13 @@ def find_pattern_in_index(pattern: List[str], cluster_idx: Path) -> list[Cluster
     """
     last_cluster = None
     clusters = []
-    logging.debug(f'Searching clusters for the pattern {pattern}')
+    logging.debug(f'Searching clusters for the pattern {pattern}...')
     for cluster in read_cluster_idx(cluster_idx):
-        ctld = cluster.surt[:cluster.surt.find(')')]
-        comparison = compare_inverse_list_urls(pattern, ctld.split(','))
-        if comparison == -1:
+        cl_ptn = cluster.surt[:cluster.surt.find(')')]
+        comparison = compare_inverse_surt_lists(pattern, cl_ptn.split(','))
+        if comparison > 0:
             last_cluster = cluster
-        elif comparison >= 0:
+        elif comparison <= 0:
             if last_cluster is not None:
                 clusters.append(last_cluster)
                 last_cluster = None
@@ -104,6 +100,15 @@ def find_pattern_in_index(pattern: List[str], cluster_idx: Path) -> list[Cluster
             else:
                 break
     return clusters
+
+
+def collect_clusters_from_index(patterns_as_lists: list[list[str]],
+                                cluster_idx: Path):
+    clusters = set()
+    for pattern_list in patterns_as_lists:
+        clusters.update(find_pattern_in_index(pattern_list, cluster_idx))
+    return sorted(clusters, key=lambda cluster: (cluster.file_name,
+                                                 cluster.offset))
 
 
 def ranges_from_clusters(

@@ -23,10 +23,10 @@ import urllib.request
 from cc_corpus.download import DownloadError, download_index_range
 from cc_corpus.index import (
     BatchWriter, CLUSTER_SIZE,
-    filter_json, find_pattern_in_index, process_index_range,
-    ranges_from_clusters
+    filter_json, process_index_range,
+    ranges_from_clusters, collect_clusters_from_index
 )
-from cc_corpus.utils import num_digits
+from cc_corpus.utils import num_digits, openall
 
 
 def parse_arguments():
@@ -68,12 +68,21 @@ def parse_arguments():
                         help='maximum number of attempts to redownload a '
                              'specific page.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
-                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        choices=['debug', 'info', 'warning', 'error',
+                                 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
 
     args.field_list = {field.strip() for field in args.field_list.split(',')}
     return args
+
+
+def convert_url_to_list(url: str) -> list[str]:
+    url_as_list = url.split('.')
+    url_as_list.reverse()
+    if url_as_list[-1] == '*':
+        url_as_list.pop()
+    return url_as_list
 
 
 def main():
@@ -90,19 +99,9 @@ def main():
     if args.patterns:
         patterns = args.patterns
     else:
-        patterns = []
-        with open(args.pattern_file, 'rt') as pf:
-            for line in pf:
-                patterns.append(line.strip())
-
-    patterns_as_lists = []
-    for pattern in patterns:
-        pattern_list = pattern.split('.')
-        pattern_list.reverse()
-        if pattern_list[-1] == '*':
-            pattern_list.pop()
-        patterns_as_lists.append(pattern_list)
-
+        with openall(args.pattern_file, 'rt') as pf:
+            patterns = [line.strip() for line in pf]
+    patterns_as_lists = [convert_url_to_list(url) for url in patterns]
     logging.debug(f'The patterns we look for: {patterns_as_lists}')
 
     if args.clusters_dir:
@@ -125,28 +124,20 @@ def main():
             urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
 
         # Then, get the files and byte ranges that correspond to the query:
-        clusters = []
-        for pattern_list in patterns_as_lists:
-            current_clusters = find_pattern_in_index(pattern_list, cluster_idx)
-            clusters += current_clusters
-        clusters = list(set(clusters))  # We remove duplicates
-        clusters.sort(key=lambda cluster: (cluster.file_name, cluster.offset))
+        clusters = collect_clusters_from_index(patterns_as_lists, cluster_idx)
         logging.info(f'Found {len(clusters)} clusters to download.')
 
         # Assemble a regexp that matches the patterns:
         regexp_string = '^('
-        for i, pattern_list in enumerate(patterns_as_lists):
-            pattern_inverted_url = ','.join(pattern_list)
-            regexp_string += pattern_inverted_url
-            if i < (len(patterns_as_lists) - 1):
-                regexp_string += '|'
+        regexp_string += '|'.join(','.join(pe) for pe in patterns_as_lists)
         regexp_string += ')[,)]'
-        tldp = re.compile(regexp_string)
+        pattern_matcher = re.compile(regexp_string)
 
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
-            num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
-            f'pattern-{args.patterns}-{args.collection}-'
+            num_digits(len(clusters) * CLUSTER_SIZE
+                       // args.lines_per_file + 1),
+            f'pattern-{patterns[0]}-{args.collection}-'
         )) as bw:
             for frange in ranges_from_clusters(clusters, args.batch_size):
                 time.sleep(args.delay)
@@ -158,7 +149,7 @@ def main():
                         args.max_retry
                     )
                     for line in process_index_range(index_range):
-                        if tldp.match(line):
+                        if pattern_matcher.match(line):
                             bw.write(filter_json(line, args.field_list))
                 except DownloadError as de:
                     logging.error(f'Could not download range: {de}.')
