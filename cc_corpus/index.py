@@ -21,7 +21,13 @@ from cc_corpus.utils import openall
 CLUSTER_SIZE = 3000
 
 
-SurtDomain = tuple[str]
+class SurtDomain(tuple[str]):
+    @staticmethod
+    def from_string(domain: str) -> 'SurtDomain':
+        surt_domain = domain.split('.')[::-1]
+        if surt_domain[-1] == '*':
+            surt_domain.pop()
+        return SurtDomain(surt_domain)
 
 
 @dataclass(frozen=True)
@@ -40,15 +46,14 @@ class Cluster:
     def from_line(cls, line):
         surt, file_name, offset, length = line.split('\t')[:4]
         domain, _, path = surt.partition(')/')
-        return Cluster(tuple(domain.split(',')), path,
+        return Cluster(SurtDomain(domain.split(',')), path,
                        file_name, int(offset), int(length))
 
 
 @dataclass
 class FileRange:
     """
-    Named tuple that represents a byte range that should be downloaded from
-    a particular file.
+    Represents a byte range that should be downloaded from a particular file.
     """
     file_name: str
     offset: int
@@ -154,7 +159,7 @@ def find_pattern_in_index(
 
 
 def collect_clusters_from_index(
-    patterns: list[tuple[str]], cluster_idx: Path
+    patterns: list[SurtDomain], cluster_idx: Path
 ) -> set[Cluster]:
     """Collects the index clusters that match the specified patterns."""
     if len(patterns) == 1:
@@ -192,7 +197,7 @@ def ranges_from_clusters(
                 end = start + cluster.length
             else:
                 if cluster.offset != end:
-                    raise ValueError(f'Discontinuous cluster {cluster.surt}: '
+                    raise ValueError(f'Discontinuous cluster {cluster.surt()}: '
                                      f'{cluster.offset=} instead of {end=}!')
                 else:
                     end += cluster.length

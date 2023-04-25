@@ -22,7 +22,7 @@ import urllib.request
 
 from cc_corpus.download import DownloadError, download_index_range
 from cc_corpus.index import (
-    BatchWriter, CLUSTER_SIZE,
+    BatchWriter, CLUSTER_SIZE, SurtDomain,
     filter_json, process_index_range,
     ranges_from_clusters, collect_clusters_from_index
 )
@@ -77,15 +77,6 @@ def parse_arguments():
     return args
 
 
-def convert_pattern_to_tuple(pattern: str) -> tuple[str]:
-    """Converts a string pattern (domain) to a tuple."""
-    pattern_tuple = pattern.split('.')
-    pattern_tuple.reverse()
-    if pattern_tuple[-1] == '*':
-        pattern_tuple.pop()
-    return tuple(pattern_tuple)
-
-
 def main():
     args = parse_arguments()
 
@@ -102,7 +93,7 @@ def main():
     else:
         with openall(args.pattern_file, 'rt') as pf:
             raw_patterns = [line.strip() for line in pf]
-    patterns = [convert_pattern_to_tuple(p) for p in raw_patterns]
+    patterns = [SurtDomain.from_string(p) for p in raw_patterns]
     logging.debug(f'The patterns we look for: {patterns}')
 
     if args.clusters_dir:
