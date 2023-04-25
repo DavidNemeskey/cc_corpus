@@ -105,6 +105,7 @@ setup(name='commoncrawl-downloader',
           # Boilerplate removal
           'justext',
           'lxml',
+          'more_itertools',
           'multiprocessing-logging',
           # MIME detection
           'python-magic',
