@@ -94,6 +94,7 @@ setup(name='commoncrawl-downloader',
           'scripts/find_new_dumps.py',
       ],
       install_requires=[
+          'atoma',
           'beautifulsoup4',
           'boto3',
           'botocore',
@@ -106,7 +107,7 @@ setup(name='commoncrawl-downloader',
           'justext',
           'lxml',
           'more_itertools',
-          'multiprocessing-logging',
+          'multiprocessing-logging>=0.3.4',
           # MIME detection
           'python-magic',
           # Just for URL deduplication
