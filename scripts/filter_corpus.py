@@ -11,8 +11,12 @@ Filters documents in a corpus. Currently four filters are supported:
 """
 
 from argparse import ArgumentParser
+import cld2
 from collections import Counter
+import fasttext
 from functools import partial
+import langid
+import langdetect
 import logging
 from multiprocessing import Pool, Manager
 import os
@@ -22,6 +26,9 @@ from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.utils import openall, otqdm, notempty
+
+language_method = None
+language_model = None
 
 
 def parse_arguments():
@@ -39,6 +46,10 @@ def parse_arguments():
                         default='p',
                         help='the unit of language detection: document or '
                              'paragraph.')
+    parser.add_argument('--language-method', '-lm', default='cld2',
+                        choices=['cld2', 'fasttext', 'langid', 'langdetect'],
+                        help='the method used to identify language.'
+                             'Choose from cld2, fasttext, langid or langdetect.')
     parser.add_argument('--min-len', '-m', type=str,
                         help='the minimum number of characters / words in a '
                              'document. Activates length filtering. Values '
@@ -72,11 +83,11 @@ def parse_arguments():
         parser.error('Invalid value for the minimum length parameter.')
     if not (args.languages or args.min_len or args.keep_urls or args.drop_urls):
         parser.error('At least one filter must be specified.')
-    if args.languages:
-        try:
-            import cld2  # noqa
-        except ImportError:
-            parser.error('cld2 library not available.')
+    # if args.languages:
+    #     try:
+    #         import cld2  # noqa
+    #     except ImportError:
+    #         parser.error('cld2 library not available.')
     return args
 
 
@@ -92,8 +103,19 @@ def each_doc(doc_iter, stats):
 
 
 def check_language(text, languages):
+    global language_method
+    if language_method == 'cld2':
+        return check_language_cld2(text, languages)
+    elif language_method == 'fasttext':
+        return check_language_fasttext(text, languages)
+    elif language_method == 'langdetect':
+        return check_language_langdetect(text, languages)
+    elif language_method == 'langid':
+        return check_language_langid(text, languages)
+
+
+def check_language_cld2(text, languages):
     """Checks if text is written in any of the specified languages."""
-    import cld2
     try:
         _, _, lang = cld2.detect(text)
         return lang[0].language_code in languages
@@ -101,9 +123,27 @@ def check_language(text, languages):
         # cld2 cannot handle some UTF-8 characters that Python can. See
         # https://github.com/mikemccand/chromium-compact-language-detector/issues/22
         # There is a workaround, but I'd rather just call langid in this case
-        import langid
         lang, _ = langid.classify(text)
         return lang in languages
+
+
+def check_language_fasttext(text, languages):
+    """Checks if text is written in any of the specified languages."""
+    result = language_model.predict(text.replace('\n', ' '), k=1)
+    lang = result[0][0].replace('__label__', '')
+    return lang in languages
+
+
+def check_language_langdetect(text, languages):
+    """Checks if text is written in any of the specified languages."""
+    lang = langdetect.detect(text)
+    return lang in languages
+
+
+def check_language_langid(text, languages):
+    """Checks if text is written in any of the specified languages."""
+    lang, _ = langid.classify(text)
+    return lang in languages
 
 
 def filter_languages_doc(doc_iter, languages, stats):
@@ -253,6 +293,14 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
     install_mp_handler()
+
+    # TODO: make the LM choice come from args and do it conditionally
+    global language_method, language_model
+    language_method = args.language_method
+    if language_method == 'fasttext':
+        pretrained_language_model = "/tmp/lid.176.bin"
+        language_model = fasttext.load_model(pretrained_language_model)
+    logging.info(f'Language detection will use {language_method} method.')
 
     os.nice(20)
     if not os.path.isdir(args.output_dir):
