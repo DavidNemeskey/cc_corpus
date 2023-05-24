@@ -27,6 +27,7 @@ from warc import WARCRecord
 from cc_corpus.boilerplate import (
     BoilerplateRemover, JustextRemover, TrafilatureRemover
 )
+from cc_corpus.corpus import Document
 from cc_corpus.content_conversion import convert
 from cc_corpus.utils import consume, otqdm, unquote_inf
 
@@ -86,21 +87,11 @@ class IndexWarcReader:
             for index in index_iter:
                 index_id += 1
                 if unquote_inf(index.url) == unquote_inf(url):
-                    try:
-                        self.process_record(index_id, index, warc_record)
-                    except:  # noqa
-                        logging.exception(f'Exception in file {index_file} '
-                                          f'on line {index_id} ({url}).')
-                        errors += 1
-                        if errors == 3:
-                            raise ValueError(f'Too many errors ({errors}).')
+                    self.process_record(index_id, index, warc_record)
                     break
             else:
                 raise ValueError(f'URL {url} was not found in index')
 
-    def remove_boilerplate(self, text: bytes):
-        """Runs the supplied boilerplate remover."""
-        pass
 
     def process_record(self, index_id: int, index, warc: WARCRecord):
         """Writes the output file."""
@@ -122,28 +113,23 @@ class IndexWarcReader:
             return
 
         # Escape paragraph for parsable XML
-        extracted_text = '\n\n'.join(
-            f'<p>\n{xml.sax.saxutils.escape(paragraph)}\n</p>'
-            for paragraph in paragraphs
-        )
-        if len(extracted_text) == 0:
+        escaped_paragraphs = [xml.sax.saxutils.escape(paragraph) for paragraph in paragraphs]
+        if len(escaped_paragraphs) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
             return
+        current_document = Document(attrs=index._asdict(),
+                                    http_meta={"request": bio.getvalue().decode('utf-8').strip(),
+                                     "response": header.decode('utf-8').strip()},
+                                    paragraphs=escaped_paragraphs)
+        # This extracts the relevant metadata from the http response part into the attrs:
+        current_document.extract_http_metadata()
 
-        print('<doc domain="{0}" index="{1}" url="{2}" warc-file="{3}" '
-              'offset="{4}" length="{5}" response="{6}" mime-type="{7}">\n'
-              '<meta>\n<request>\n{8}\n</request>\n<response>\n{9}\n'
-              '</response>\n</meta>\n{10}\n</doc>\n\n\n'.format(
-                  index.domain, index.index, index.url, index.warc,
-                  index.offset, index.length, index.status, index.mime,
-                  bio.getvalue().decode('utf-8').strip(),
-                  header.decode('utf-8').strip(), extracted_text),
-              file=self.outf)
-
+        print(current_document, file=self.outf)
         if index_id % 1000 == 0:
             logging.info(f'Removed boilerplate from {index.url} ({index_id})')
         logging.debug(f'Removed boilerplate from {index.url} ({index_id})')
+
 
     def index_lines(self, index_file):
         """Enumerates the lines of the index file into IndexTuples."""
