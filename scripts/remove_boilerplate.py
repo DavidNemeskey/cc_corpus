@@ -81,7 +81,6 @@ class IndexWarcReader:
         index_iter = self.index_lines(index_file)
         warc_iter = self.warc_records(index_file)
         index_id = 0
-        errors = 0
         for warc_record in warc_iter:
             url = warc_record['WARC-Target-URI']
             for index in index_iter:
@@ -91,7 +90,6 @@ class IndexWarcReader:
                     break
             else:
                 raise ValueError(f'URL {url} was not found in index')
-
 
     def process_record(self, index_id: int, index, warc: WARCRecord):
         """Writes the output file."""
@@ -113,23 +111,28 @@ class IndexWarcReader:
             return
 
         # Escape paragraph for parsable XML
-        escaped_paragraphs = [xml.sax.saxutils.escape(paragraph) for paragraph in paragraphs]
+        escaped_paragraphs = [xml.sax.saxutils.escape(paragraph) for
+                              paragraph in paragraphs]
         if len(escaped_paragraphs) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
             return
-        current_document = Document(attrs=index._asdict(),
-                                    http_meta={"request": bio.getvalue().decode('utf-8').strip(),
-                                     "response": header.decode('utf-8').strip()},
-                                    paragraphs=escaped_paragraphs)
-        # This extracts the relevant metadata from the http response part into the attrs:
+        current_document = Document(
+            attrs=index._asdict(),
+            http_meta={"request": bio.getvalue().decode('utf-8').strip(),
+                       "response": header.decode('utf-8').strip()},
+            paragraphs=escaped_paragraphs
+        )
+        # This extracts the relevant metadata from the http response part into
+        # the attrs (but keeps them in the http response part as well):
         current_document.extract_http_metadata()
 
-        print(current_document, file=self.outf)
+        # print(current_document, file=self.outf)
+        print(current_document.to_json(), file=self.outf)
+
         if index_id % 1000 == 0:
             logging.info(f'Removed boilerplate from {index.url} ({index_id})')
         logging.debug(f'Removed boilerplate from {index.url} ({index_id})')
-
 
     def index_lines(self, index_file):
         """Enumerates the lines of the index file into IndexTuples."""
@@ -146,7 +149,8 @@ class IndexWarcReader:
         """
         try:
             for warc_file in self.warc_files_for_index(index_file):
-                output_file = op.basename(warc_file).replace('.warc.', '.txt.')
+                # output_file = op.basename(warc_file).replace('.warc.', '.txt.')
+                output_file = op.basename(warc_file).replace('.warc.', '.jsonl.')
                 with gzip.open(op.join(self.output_dir, output_file),
                                'wt', encoding='utf-8') as outf:
                     self.outf = outf

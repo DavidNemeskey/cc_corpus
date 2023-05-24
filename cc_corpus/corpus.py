@@ -82,7 +82,8 @@ class Document:
         buffer = io.StringIO()
         if self.attrs:
             print('<doc ' + ' '.join('{}="{}"'.format(k, v) for k, v
-                                     in self.attrs.items()) + '>', file=buffer)
+                                     in self.attrs.items())
+                  + '>', file=buffer)
         else:
             print('<doc>', file=buffer)
         if self.http_meta:
@@ -97,7 +98,6 @@ class Document:
         print('</doc>', end='', file=buffer)
         return buffer.getvalue()
 
-
     def extract_http_metadata(self):
         if self.http_meta:
             match = re.findall(r"Date: (.*)", self.http_meta['response'],
@@ -108,7 +108,6 @@ class Document:
                                re.IGNORECASE)
             if match:
                 self.attrs["response_content_type"] = match[0].strip()
-
 
     def to_json(self):
         """
