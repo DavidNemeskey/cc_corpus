@@ -81,7 +81,7 @@ def deduplicate_batch_documents(batch_prefix: Path, output_dir: Path,
             with notempty(openall(output_dir / file_base, 'wt')) as outf:
                 for doc_no, doc in enumerate(parse_file(input_file), start=1):
                     if doc.attrs['url'] in url_set:
-                        print(doc, file=outf)
+                        print(doc.to_json(), file=outf)
                         kept += 1
                 total += doc_no
             num_files += 1
