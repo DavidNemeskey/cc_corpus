@@ -14,7 +14,7 @@ def readme():
 
 
 setup(name='commoncrawl-downloader',
-      version='1.12.1',
+      version='1.12.2',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -94,6 +94,8 @@ setup(name='commoncrawl-downloader',
           'scripts/find_new_dumps.py',
       ],
       install_requires=[
+          # For parsing atom/RSS feeds
+          'atoma',
           'beautifulsoup4',
           'boto3',
           'botocore',
@@ -107,6 +109,8 @@ setup(name='commoncrawl-downloader',
           'lxml',
           'more_itertools',
           'multiprocessing-logging',
+          # For parsing .bib files
+          'pybtex',
           # MIME detection
           'python-magic',
           # Just for URL deduplication
