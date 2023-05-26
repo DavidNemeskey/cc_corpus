@@ -83,7 +83,7 @@ def convert_bib(text: bytes) -> Generator[str]:
         try:
             if (abstract := entry.fields.get('abstract')):
                 title = clean_field(entry.fields['title'])
-                yield f'{title}\n\n{clean_field(abstract)}'
+                yield f'<h6>{title}</h6>\n<p>{clean_field(abstract)}</p>'
         except:  # noqa
             logging.exception(f'Error in bib entry {entry}')
 
