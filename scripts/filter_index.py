@@ -67,7 +67,7 @@ def read_fields(ins: Iterator[str]) -> FieldGen:
         try:
             fields = json.loads(line.split(' ', 2)[-1])
             yield (fields['url'], fields['filename'], fields['offset'],
-                   fields['length'], fields['status'],
+                   fields['length'], fields.get('status', 0),
                    fields.get('mime', 'unknown/unknown'))
         except KeyError:
             print(f'ERR {line}', file=sys.stderr)
