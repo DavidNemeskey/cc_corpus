@@ -22,16 +22,22 @@ import urllib.request
 
 from cc_corpus.download import DownloadError, download_index_range
 from cc_corpus.index import (
-    BatchWriter, CLUSTER_SIZE,
-    filter_json, find_tld_in_index, process_index_range, ranges_from_clusters
+    BatchWriter, CLUSTER_SIZE, SurtDomain,
+    filter_json, process_index_range,
+    ranges_from_clusters, collect_clusters_from_index
 )
-from cc_corpus.utils import num_digits
+from cc_corpus.utils import num_digits, openall
 
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--tld', '-t', required=True,
-                        help='the TLD to download, e.g. "hu".')
+    pattern_group = parser.add_mutually_exclusive_group(required=True)
+    pattern_group.add_argument('--patterns', '-p', nargs='+',
+                               help='the url pattern to download, '
+                                    'e.g. "elte.hu".')
+    pattern_group.add_argument('--pattern-file', '-pf', type=Path,
+                               help='the file containing the patterns '
+                                    'to download.')
     parser.add_argument('--collection', '-c', required=True,
                         help='the collection to download.')
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
@@ -51,6 +57,10 @@ def parse_arguments():
                              'renamed to include the collection (see above). '
                              'If not specified, the file is downloaded to a '
                              'temporary directory and is deleted afterwards.')
+    parser.add_argument('--file-prefix', '-f',
+                        help='the output file name prefix. If not specified, '
+                             'it will be based on the name of the pattern '
+                             'file (if specified) or the first domain pattern.')
     parser.add_argument('--delay', '-d', type=float, default=1,
                         help='the number of seconds to wait between requests '
                              'to prevent DDoS\'ing the server.')
@@ -62,12 +72,27 @@ def parse_arguments():
                         help='maximum number of attempts to redownload a '
                              'specific page.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
-                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        choices=['debug', 'info', 'warning', 'error',
+                                 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
 
     args.field_list = {field.strip() for field in args.field_list.split(',')}
     return args
+
+
+def get_file_prefix(
+    pattern_file: Path, patterns: list[str], file_prefix: str
+) -> str:
+    if file_prefix:
+        return file_prefix
+    elif pattern_file:
+        file_name = pattern_file.name
+        return file_name[
+            :len(file_name) - len(''.join(pattern_file.suffixes))
+        ]
+    else:
+        return f'pattern-{patterns[0]}'.replace('*.', '')
 
 
 def main():
@@ -78,8 +103,17 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    base_url = 'https://data.commoncrawl.org/cc-index/collections/' \
+    base_url = f'https://data.commoncrawl.org/cc-index/collections/' \
                f'{args.collection}/indexes/'
+
+    if args.patterns:
+        raw_patterns = args.patterns
+    else:
+        with openall(args.pattern_file, 'rt') as pf:
+            raw_patterns = [line.strip() for line in pf]
+
+    patterns = [SurtDomain.from_string(p) for p in raw_patterns]
+    logging.debug(f'The patterns we look for: {patterns}')
 
     if args.clusters_dir:
         clusters_context = nullcontext(args.clusters_dir)
@@ -97,17 +131,25 @@ def main():
         cluster_idx = Path(clusters_dir) / f'{args.collection}_cluster.idx'
         if not cluster_idx.is_file():
             logging.info(f'Downloading cluster index for {args.collection}...')
+            logging.debug(base_url + 'cluster.idx')
             urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
 
-        # Then, get the files and byte ranges that correspond to the TLD
-        clusters = find_tld_in_index(args.tld, cluster_idx)
+        # Then, get the files and byte ranges that correspond to the query:
+        clusters = collect_clusters_from_index(patterns, cluster_idx)
         logging.info(f'Found {len(clusters)} clusters to download.')
-        tldp = re.compile(f'^{args.tld},')
 
+        # Assemble a regexp that matches the patterns:
+        regexp_string = '^('
+        regexp_string += '|'.join(','.join(pe) for pe in patterns)
+        regexp_string += ')[,)]'
+        pattern_matcher = re.compile(regexp_string)
+
+        file_prefix = get_file_prefix(args.pattern_file, raw_patterns,
+                                      args.file_prefix)
         with closing(BatchWriter(
             args.lines_per_file, args.output_dir,
             num_digits(len(clusters) * CLUSTER_SIZE // args.lines_per_file + 1),
-            f'domain-hu-{args.collection}-'
+            f'{file_prefix}-{args.collection}-'
         )) as bw:
             for frange in ranges_from_clusters(clusters, args.batch_size):
                 time.sleep(args.delay)
@@ -119,7 +161,7 @@ def main():
                         args.max_retry
                     )
                     for line in process_index_range(index_range):
-                        if tldp.match(line):
+                        if pattern_matcher.match(line):
                             bw.write(filter_json(line, args.field_list))
                 except DownloadError as de:
                     logging.error(f'Could not download range: {de}.')
