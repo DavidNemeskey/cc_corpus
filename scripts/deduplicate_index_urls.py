@@ -299,7 +299,7 @@ def main():
         os.makedirs(args.output_dir)
     tasks = otqdm(
         zip(input_files, [op.join(args.output_dir, f) for f in basenames]),
-        'Removing duplicates...', total=len(input_files)
+        f'Removing duplicates from {args.input_dir}...', total=len(input_files)
     )
 
     f = partial(filter_file, uniqs=global_uniqs, url_fn=url_fn)
