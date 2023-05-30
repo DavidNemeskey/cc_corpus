@@ -100,9 +100,7 @@ class Document:
 
     def extract_http_metadata(self):
         if self.http_meta:
-            match = re.findall(r"Date: (.*)", self.http_meta['response'],
-                               re.IGNORECASE)
-            if match:
+            if (match := re.findall(r"Date: (.*)", self.http_meta['response'], re.I)):
                 self.attrs["response_date"] = match[0].strip()
             match = re.findall(r"Content-Type: (.*)", self.http_meta['response'],
                                re.IGNORECASE)
