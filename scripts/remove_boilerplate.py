@@ -29,7 +29,7 @@ from cc_corpus.boilerplate import (
 )
 from cc_corpus.corpus import Document
 from cc_corpus.content_conversion import convert
-from cc_corpus.utils import consume, otqdm, unquote_inf
+from cc_corpus.utils import consume, openall, otqdm, unquote_inf
 
 
 IndexTuple = namedtuple('IndexTuple', ['index', 'domain', 'url', 'warc',
@@ -134,8 +134,8 @@ class IndexWarcReader:
 
     def index_lines(self, index_file):
         """Enumerates the lines of the index file into IndexTuples."""
-        module = gzip if index_file.suffix == '.gz' else io
-        with module.open(index_file, 'rt') as inf:
+        # module = gzip if index_file.suffix == '.gz' else io
+        with openall(index_file, 'rt') as inf:
             for line in inf:
                 yield IndexTuple(index_file.stem, *line.strip().split())
 

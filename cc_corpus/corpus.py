@@ -102,9 +102,7 @@ class Document:
         if self.http_meta:
             if (match := re.findall(r"Date: (.*)", self.http_meta['response'], re.I)):
                 self.attrs["response_date"] = match[0].strip()
-            match = re.findall(r"Content-Type: (.*)", self.http_meta['response'],
-                               re.IGNORECASE)
-            if match:
+            if (match := re.findall(r"Content-Type: (.*)", self.http_meta['response'], re.I)):
                 self.attrs["response_content_type"] = match[0].strip()
 
     def to_json(self):
