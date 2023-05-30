@@ -6,6 +6,7 @@ The functions in this module convert the content in WARC files into regular
 HTML that boilerplate removers can consume based on their content types.
 """
 
+import codecs
 from collections.abc import Generator
 import logging
 import re
@@ -90,6 +91,22 @@ def convert_bib(text: bytes) -> Generator[str]:
 
 bib_pattern = re.compile(b'Content[-_]Disposition.*[.]bib[\'"]?\\r?$',
                          re.IGNORECASE | re.MULTILINE)
+charsetp = re.compile(rb'char(?:acter[-_]?)?set\s*[:=]\s*[\'"]?([^;\'"\r\n]+)',
+                      re.IGNORECASE)
+
+
+def get_charset(header: bytes) -> str:
+    if (m := charsetp.search(header)):
+        charset = m.group(1).strip().lower()
+        try:
+            charset_str = charset.decode('ascii')
+            codecs.lookup(charset_str)
+            return charset_str
+        except UnicodeDecodeError:
+            pass
+        except LookupError:
+            pass
+    return None
 
 
 def convert(record: WARCRecord):
@@ -102,7 +119,10 @@ def convert(record: WARCRecord):
     elif bib_pattern.search(header):
         chunks = convert_bib(text)
     else:
-        chunks = [text]
+        if (charset := get_charset(header)):
+            chunks = [str(BeautifulSoup(text, from_encoding=charset)).encode('utf-8')]
+        else:
+            chunks = [text]
 
     return header, [chunk for chunk in chunks if not is_empty(chunk)]
     # return header, [str(BeautifulSoup(chunk)) for chunk in chunks
