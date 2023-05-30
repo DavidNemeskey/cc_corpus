@@ -25,7 +25,7 @@ import warc
 from warc import WARCRecord
 
 from cc_corpus.boilerplate import (
-    BoilerplateRemover, JustextRemover, TrafilatureRemover
+    BoilerplateRemover, JustextNonRemover, JustextRemover, TrafilatureRemover
 )
 from cc_corpus.corpus import Document
 from cc_corpus.content_conversion import convert
@@ -173,7 +173,7 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the output directory')
     parser.add_argument('--boilerplate-tool', '-b', default='trafilatura',
-                        choices=['justext', 'trafilatura'],
+                        choices=['dummy', 'justext', 'trafilatura'],
                         help='the boilerplate removal algorithm to use '
                              '(default: trafilatura).')
     parser.add_argument('--boilerplate-language', '-l', default='Hungarian',
@@ -217,6 +217,8 @@ def main():
     try:
         if args.boilerplate_tool == 'justext':
             cls = JustextRemover
+        elif args.boilerplate_tool == 'dummy':
+            cls = JustextNonRemover
         else:
             cls = TrafilatureRemover
         remover = cls(args.boilerplate_language)

@@ -34,9 +34,10 @@ arrive at a corpus.
 ### Download the index
 
 The script `get_indexfiles.py` can be used to download the index for a
-specific collection. The example below downloads the index for January 2019:
+specific collection. The example below downloads the index for all pages
+in the `.hu` domain in January 2019:
 ```
-get_indexfiles.py -q *.hu -o 2019/cc_index -l 2019_01.log -m 5 -c CC-MAIN-2019-04
+get_indexfiles.py -q "*.hu" -o 2019/cc_index -l 2019_01.log -m 5 -c CC-MAIN-2019-04
 ```
 
 Note that `get_indexfiles.py` is a replacement for the original
