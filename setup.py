@@ -14,7 +14,7 @@ def readme():
 
 
 setup(name='commoncrawl-downloader',
-      version='1.13.2',
+      version='1.13.3',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -128,7 +128,7 @@ setup(name='commoncrawl-downloader',
           'cld2-cffi==0.1.4', 'langid',
           # WARC 3 library
           # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
-          'warc3-wet',
+          'warc-knot>=0.2.5',
           # Type hints for Python < 3.5
           'typing',
           # A progress bar
