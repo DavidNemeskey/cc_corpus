@@ -18,6 +18,7 @@ import logging
 from multiprocessing import Pool
 import os
 from pathlib import Path
+import re
 import xml.sax.saxutils
 
 from multiprocessing_logging import install_mp_handler
@@ -34,6 +35,7 @@ from cc_corpus.utils import consume, openall, otqdm, unquote_inf
 
 IndexTuple = namedtuple('IndexTuple', ['index', 'domain', 'url', 'warc',
                                        'offset', 'length', 'status', 'mime'])
+whitelist = []
 
 
 class IndexWarcReader:
@@ -53,7 +55,7 @@ class IndexWarcReader:
     / (Python) functions.
     """
     def __init__(self, warc_dir: Path, output_dir: Path,
-                 remover: BoilerplateRemover):
+                 remover: BoilerplateRemover, token_filtering: bool):
         """
         Creates a new IndexWarcReader with the specified index and warc
         directories. These must be compatible, i.e. the WARC directory should
@@ -67,6 +69,7 @@ class IndexWarcReader:
         self.warc_dir = warc_dir
         self.output_dir = output_dir
         self.remover = remover
+        self.token_filtering = token_filtering
         # This is the output stream
         self.outf = None
 
@@ -111,15 +114,21 @@ class IndexWarcReader:
         # Escape paragraph for parsable XML
         escaped_paragraphs = [xml.sax.saxutils.escape(paragraph) for
                               paragraph in paragraphs]
-        if len(escaped_paragraphs) == 0:
+        if self.token_filtering:
+            cleared_paragraphs = [filter_tokens(paragraph)
+                                  for paragraph in escaped_paragraphs]
+        else:
+            cleared_paragraphs = escaped_paragraphs
+        if len(cleared_paragraphs) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
             return
+
         document = Document(
             attrs=index._asdict(),
             http_meta={"request": bio.getvalue().decode('utf-8').strip(),
                        "response": header.decode('utf-8').strip()},
-            paragraphs=escaped_paragraphs
+            paragraphs=cleared_paragraphs
         )
         # This extracts the relevant metadata from the http response part into
         # the attrs (but keeps them in the http response part as well):
@@ -178,6 +187,10 @@ def parse_arguments():
                              '(default: trafilatura).')
     parser.add_argument('--boilerplate-language', '-l', default='Hungarian',
                         help='boilerplate removal language (default: Hungarian)')
+    parser.add_argument('--token-filtering', '-t', type=bool, default=False,
+                        help='should we do token level filtering? (default: False)')
+    parser.add_argument('--token-whitelist', '-tw', type=Path,
+                        help='the file containing whitelisted tokens.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -191,11 +204,36 @@ def parse_arguments():
     return args
 
 
+def good_token(token):
+    # A token is good if:
+    # * It is on the whitelist
+    # * It is a word ending in ...
+    # * It does not have 3 consecutive punctuation marks
+    global whitelist
+    if token in whitelist:
+        return True
+    matcher3dots = re.compile(r'^\w+\.\.\.$')
+    if matcher3dots.match(token):
+        return True
+    matcher3punct = re.compile(r'.*[^\w\s]{3,}')
+    if matcher3punct.match(token):
+        return False
+    else:
+        return True
+
+
+def filter_tokens(paragraph: str):
+    filtered_tokens = [token for token in paragraph.split()
+                       if good_token(token)]
+    return " ".join(filtered_tokens)
+
+
 def process(index_file: Path, warc_dir: Path,
-            output_dir: Path, remover: BoilerplateRemover):
+            output_dir: Path, remover: BoilerplateRemover,
+            token_filtering: bool):
     """Basically just calls :meth:`IndexWarcReader.read`."""
     logging.info(f'Processing {index_file}...')
-    reader = IndexWarcReader(warc_dir, output_dir, remover)
+    reader = IndexWarcReader(warc_dir, output_dir, remover, token_filtering)
     try:
         reader.read(index_file)
     except:  # noqa
@@ -213,6 +251,12 @@ def main():
     )
     logging.getLogger('trafilatura').setLevel(logging.ERROR)
     install_mp_handler()
+
+    if args.token_filtering and args.token_whitelist:
+        global whitelist
+        with open(args.token_whitelist, 'rt') as list_file:
+            for token in list_file:
+                whitelist.append(token.strip())
 
     try:
         if args.boilerplate_tool == 'justext':
@@ -235,7 +279,8 @@ def main():
 
     fn = functools.partial(process, warc_dir=args.warc_dir,
                            output_dir=args.output_dir,
-                           remover=remover)
+                           remover=remover,
+                           token_filtering=args.token_filtering)
 
     with Pool(args.processes) as pool:
         consume(otqdm(pool.imap_unordered(fn, index_files),
