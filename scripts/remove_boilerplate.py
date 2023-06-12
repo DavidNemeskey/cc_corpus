@@ -35,7 +35,9 @@ from cc_corpus.utils import consume, openall, otqdm, unquote_inf
 
 IndexTuple = namedtuple('IndexTuple', ['index', 'domain', 'url', 'warc',
                                        'offset', 'length', 'status', 'mime'])
-whitelist = []
+whitelist = set()
+matcher3dots = re.compile(r'^\w+\.\.\.$')
+matcher3punct = re.compile(r'.*[^\w\s]{3,}')
 
 
 class IndexWarcReader:
@@ -187,8 +189,8 @@ def parse_arguments():
                              '(default: trafilatura).')
     parser.add_argument('--boilerplate-language', '-l', default='Hungarian',
                         help='boilerplate removal language (default: Hungarian)')
-    parser.add_argument('--token-filtering', '-t', type=bool, default=False,
-                        help='should we do token level filtering? (default: False)')
+    parser.add_argument('--token-filtering', '-t', action='store_true',
+                        help='do token level filtering')
     parser.add_argument('--token-whitelist', '-tw', type=Path,
                         help='the file containing whitelisted tokens.')
     parser.add_argument('--processes', '-P', type=int, default=1,
@@ -209,17 +211,13 @@ def good_token(token):
     # * It is on the whitelist
     # * It is a word ending in ...
     # * It does not have 3 consecutive punctuation marks
-    global whitelist
     if token in whitelist:
         return True
-    matcher3dots = re.compile(r'^\w+\.\.\.$')
     if matcher3dots.match(token):
         return True
-    matcher3punct = re.compile(r'.*[^\w\s]{3,}')
     if matcher3punct.match(token):
         return False
-    else:
-        return True
+    return True
 
 
 def filter_tokens(paragraph: str):
@@ -253,10 +251,8 @@ def main():
     install_mp_handler()
 
     if args.token_filtering and args.token_whitelist:
-        global whitelist
         with open(args.token_whitelist, 'rt') as list_file:
-            for token in list_file:
-                whitelist.append(token.strip())
+            whitelist.update(map(str.strip, list_file))
 
     try:
         if args.boilerplate_tool == 'justext':
