@@ -162,7 +162,11 @@ def main():
                     )
                     for line in process_index_range(index_range):
                         if pattern_matcher.match(line):
-                            bw.write(filter_json(line, args.field_list))
+                            try:
+                                bw.write(filter_json(line, args.field_list))
+                            except ValueError:
+                                logging.exception('Could not parse line {line}')
+                                raise
                 except DownloadError as de:
                     logging.error(f'Could not download range: {de}.')
 
