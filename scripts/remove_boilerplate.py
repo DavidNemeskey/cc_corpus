@@ -57,7 +57,8 @@ class IndexWarcReader:
     / (Python) functions.
     """
     def __init__(self, warc_dir: Path, output_dir: Path,
-                 remover: BoilerplateRemover, token_filtering: bool):
+                 remover: BoilerplateRemover, token_filtering: bool,
+                 paragraph_patterns: Path):
         """
         Creates a new IndexWarcReader with the specified index and warc
         directories. These must be compatible, i.e. the WARC directory should
@@ -72,6 +73,7 @@ class IndexWarcReader:
         self.output_dir = output_dir
         self.remover = remover
         self.token_filtering = token_filtering
+        self.parag
         # This is the output stream
         self.outf = None
 
@@ -195,6 +197,9 @@ def parse_arguments():
                         help='do token level filtering')
     parser.add_argument('--token-whitelist', '-tw', type=Path,
                         help='the file containing whitelisted tokens.')
+    parser.add_argument('--paragraph-patterns', '-p', type=Path,
+                        help='a list of patterns that can be used to filter paragraphs '
+                             'remained after boilerplate removal.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -230,10 +235,11 @@ def filter_tokens(paragraph: str):
 
 def process(index_file: Path, warc_dir: Path,
             output_dir: Path, remover: BoilerplateRemover,
-            token_filtering: bool):
+            token_filtering: bool, paragraph_patterns: Path):
     """Basically just calls :meth:`IndexWarcReader.read`."""
     logging.info(f'Processing {index_file}...')
-    reader = IndexWarcReader(warc_dir, output_dir, remover, token_filtering)
+    reader = IndexWarcReader(warc_dir, output_dir, remover, token_filtering,
+                             paragraph_patterns)
     try:
         reader.read(index_file)
     except:  # noqa
@@ -278,7 +284,8 @@ def main():
     fn = functools.partial(process, warc_dir=args.warc_dir,
                            output_dir=args.output_dir,
                            remover=remover,
-                           token_filtering=args.token_filtering)
+                           token_filtering=args.token_filtering,
+                           paragraph_patterns=args.paragraph_patterns)
 
     with Pool(args.processes) as pool:
         consume(otqdm(pool.imap_unordered(fn, index_files),
