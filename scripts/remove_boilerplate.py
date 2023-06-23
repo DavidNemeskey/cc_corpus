@@ -73,9 +73,19 @@ class IndexWarcReader:
         self.output_dir = output_dir
         self.remover = remover
         self.token_filtering = token_filtering
-        self.parag
+        if paragraph_patterns:
+            self.paragraph_pattern = self.read_patterns(paragraph_patterns)
+        else:
+            self.paragraph_pattern = None
         # This is the output stream
         self.outf = None
+
+    @staticmethod
+    def read_patterns(pattern_file: str | Path) -> list[re.Pattern]:
+        """Reads the paragraph patterns."""
+        with open(pattern_file, 'rt') as inf:
+            patterns = [line.rsplit('\t', 1)[0] for line in map(str.strip, inf)]
+        return re.compile('|'.join(f'(?:{p})' for p in patterns), re.I)
 
     def read(self, index_file):
         """
@@ -125,6 +135,9 @@ class IndexWarcReader:
                                   for paragraph in escaped_paragraphs]
         else:
             cleared_paragraphs = escaped_paragraphs
+        if self.paragraph_pattern:
+            cleared_paragraphs = [paragraph for paragraph in cleared_paragraphs
+                                  if self.paragraph_pattern.search(paragraph)]
         if len(cleared_paragraphs) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
