@@ -2,15 +2,23 @@
 (?:weboldal|honlap).*(?:cookie|süti)[- ]*k[ae]t|(?:cookie|süti)[- ]*k[ae]t.*használ
 (?:süti|cookie|javascript).*engedélyez|engedélyez.*(?:süti|cookie|javascript)
 (?:cookie|javascript).*(?:dis|en)abled?|(?:dis|en)abled?.*(?:cookie|javascript)
-(?:feltétlenül)?\s*(?:szükséges|funkcionális|statisztikai|kiegészítő|fontos|harmadik fél|third party|marketing|reklám|célzott|analitikai|munkamenet|teljesítmény(?:figyelő)?)(?:\s*célú)?(?:\s*[(][^)]*[)])?\s*.?(?:süti|cookie)
+(?:feltétlenül)?\s*(?:nélkülözhetetlen|elengedhetetlen|szükséges|funkcionális|statisztikai|elemzések|kiegészítő|kényelmi|fontos|biztonsági|harmadik fél|third party|marketing|reklám|célzott|analitikai|munkamenet|használt|teljesítmény(?:figyelő)?)(?:\s*célú)?(?:\s*[(][^)]*[)])?\s*.?(?:süti|cookie)
 (?:süti|cookie)\S*\s*[-]?beállít
 (?:cookie|süti).*(?:töröl|törlés)|(?:töröl|törlés).*(?:cookie|süti)
 (?:cookie|süti).*(?:személyes adat|nyomon követ|felhasználói élmény|funkció|kosár tartalm|kezelése)|(?:személyes adat|nyomon követ|felhasználói élmény|funkció|kosár tartalm|harmadik féltől|alap[ ]?működést biztosító|felhasználó azonosító).*(?:cookie|süti)
 üzemeltető (?:süti|cookie)
-ez az? (?:web)?oldal (?:süti|cookie)[^ ]* használ
-az? (?:web)?oldal nem tud helyesen működni.*(?:süti|cookie).*nélkül
+ez az? (?:web)?oldal (?:süti|cookie)[^ ]* használ|(?:web)?oldalon.*(?:süti|cookie).*használunk
+az? (?:web)?oldal nem tud helyesen működni.*(?:süti|cookie).*nélkül|a (?:süti|cookie).*szükséges.*oldal.*működés
 ^sütik - adatvédelmi tájékoztató$
-ezeket a süti.*arra használjuk
-ezek(?:et)? a (?:süti|cookie).*(?:arra használjuk|segítenek.* ön |javítsun?k|információ(?:ka)?t gyűjtsün?k)
+ezek(?:et)? a (?:süti|cookie).*(?:arra használjuk|lehetővé teszik számunk|segítenek.* ön |javítsun?k|információ(?:ka)?t gyűjtsün?k)
 (?:süti|cookie).* ön(?:ről|nek|t)?,? | ön(?:ről|nek|t)?,? .*(?:süti|cookie)
 (?:süti|cookie).*(?:hozzájárulás(?:a|át|od)|hozzájárul(?:sz)?|beleegyezés(e|ed|ét)|beleegyez(?:ik|el),?) | (?:hozzájárulás(?:a|át|od)|hozzájárul(?:sz)?|beleegyezés(e|ed|ét)|beleegyez(?:ik|el),?) .*(?:süti|cookie)
+(?:felhasználó|látogató).*(?:süti|cookie)|(?:süti|cookie).*(?:felhasználó|látogató)
+(?:süti|cookie).*(?:javascript|adatvédelem|regisztráció)|(?:javascript|adatvédelem|regisztráció).*(?:süti|cookie)
+(?:süti|cookie).*(?:weboldal(?:unk)?(?:on|at)?|webáruház|webhely|fórum)|(?:weboldal(?:unk)?on|webáruház|webhely|fórum).*(?:süti|cookie)
+^[-a-z0-9_]*cookie[-a-z0-9_]*$
+cookie[^ ]* (?:policy|settings|preferences)|(?:süti|cookie)[^ ]*(?: [^ ]+)? (?:használat|beállítás|szabályzat|információ|harmadik fél)
+^sütik \(cookie-k\)$
+(?:süti|cookie).*(?:tiltás|tiltani|tilthat|érvényessége|érvényességi id)|(?:tiltás|tiltani|tilthat|érvényessége|érvényességi id).*(?:süti|cookie)
+(?:süti|cookie).*(?:youtube|facebook)|(?:youtube|facebook).*(?:süti|cookie)
+(?:süti|cookie).*szolgáltatás[^ ]* (?:használ|működ)|szolgáltatás[^ ]* (?:használ|működ).*(?:süti|cookie)
