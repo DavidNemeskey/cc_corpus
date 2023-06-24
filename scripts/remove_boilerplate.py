@@ -136,8 +136,8 @@ class IndexWarcReader:
         else:
             cleared_paragraphs = escaped_paragraphs
         if self.paragraph_pattern:
-            cleared_paragraphs = [paragraph for paragraph in cleared_paragraphs
-                                  if self.paragraph_pattern.search(paragraph)]
+            cleared_paragraphs = [p for p in cleared_paragraphs
+                                  if not self.paragraph_pattern.search(p)]
         if len(cleared_paragraphs) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
