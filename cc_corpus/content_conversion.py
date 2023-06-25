@@ -101,12 +101,12 @@ def get_content_type(record: WARCRecord, header: bytes) -> str:
     returned as-is. Otherwise, the content type is extracted from the HTTP
     field Content-Type.
     """
-    try:
-        return record["WARC-Identified-Payload-Type"]
-    except KeyError:
-        if (m:= type_pattern.search(header)):
-            return m.group(1).decode('utf-8').strip()
-    return None
+    if 'WARC-Identified-Payload-Type' in record:
+        return record['WARC-Identified-Payload-Type']
+    elif (m:= type_pattern.search(header)):
+        return m.group(1).decode('utf-8').strip()
+    else:
+        return None
 
 
 def convert(record: WARCRecord):
