@@ -88,13 +88,30 @@ def convert_bib(text: bytes) -> Generator[str]:
             logging.exception(f'Error in bib entry {entry}')
 
 
+type_pattern = re.compile(br'Content[-_]Type\s*:\s*([^;]+?)(?:;.*)?\s*$',
+                         re.IGNORECASE | re.MULTILINE)
 bib_pattern = re.compile(b'Content[-_]Disposition.*[.]bib[\'"]?\\r?$',
                          re.IGNORECASE | re.MULTILINE)
 
 
+def get_content_type(record: WARCRecord, header: bytes) -> str:
+    """
+    Extracts the content type from the WARC record (and the included HTTP
+    header). If the WARC header WARC-Identified-Payload-Type is defined, it is
+    returned as-is. Otherwise, the content type is extracted from the HTTP
+    field Content-Type.
+    """
+    try:
+        return record["WARC-Identified-Payload-Type"]
+    except KeyError:
+        if (m:= type_pattern.search(header)):
+            return m.group(1).decode('utf-8').strip()
+    return None
+
+
 def convert(record: WARCRecord):
-    content_type = record["WARC-Identified-Payload-Type"]
     header, text = record.payload.read().split(b'\r\n\r\n', maxsplit=1)
+    content_type = get_content_type(record, header)
     if content_type == 'application/atom+xml':
         chunks = convert_atom(text)
     elif content_type == 'application/rss+xml':
