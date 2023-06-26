@@ -113,11 +113,11 @@ class IndexWarcReader:
         warc.header.write_to(bio)
         # And the HTML header and text as well. jusText can handle bytes
         # header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
-        header, chunks = convert(warc)
         try:
-            paragraphs = chain.from_iterable(
+            header, chunks = convert(warc)
+            paragraphs = list(chain.from_iterable(
                 self.remover.remove(chunk, index.url) for chunk in chunks
-            )
+            ))
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
         except:  # noqa
             # Do not distinguish between the different errors
@@ -302,8 +302,8 @@ def main():
 
     with Pool(args.processes) as pool:
         consume(otqdm(pool.imap_unordered(fn, index_files),
-                      f'Removing boilerplate with {args.boilerplate_tool}...',
-                      total=len(index_files)))
+                      f'Removing boilerplate with {args.boilerplate_tool} '
+                      f'from {args.warc_dir.name}...', total=len(index_files)))
         pool.close()
         pool.join()
 
