@@ -16,6 +16,7 @@ from functools import partial
 import logging
 from multiprocessing import Pool, Manager
 import os
+from pathlib import Path
 import re
 
 from multiprocessing_logging import install_mp_handler
@@ -279,7 +280,8 @@ def main():
         # Note: + / sum() do not keep keys with 0 values here, hence update()
         stats = Counter()
         for sub_stats in otqdm(p.imap_unordered(f, files),
-                               'Filtering corpus...', total=len(files)):
+                               f'Filtering corpus {Path(args.input_dir).name} ...',
+                               total=len(files)):
             stats.update(sub_stats)
         logging.info('Statistics: {}'.format(stats))
         p.close()
