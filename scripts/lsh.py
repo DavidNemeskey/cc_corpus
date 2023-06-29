@@ -200,19 +200,18 @@ def deduplicate_other(main_batch: Path,
         doc_ids = []
         minhashes = []
         for doc_id, minhash, docfile in main_batch_data:
-            if docfile == current_docfile:
-                # We are collecting doc_ids and minhashes per source files.
-                doc_ids.append(doc_id)
-                minhashes.append(minhash)
-            else:
+            if docfile != current_docfile:
                 # We reached the contents of another source .gz file.
                 # write data here
-                if doc_ids:
+                if doc_ids and current_docfile:
                     bw.write_results(current_docfile, {'id': doc_ids,
                                                        'minhash': minhashes})
                 current_docfile = docfile
                 doc_ids = []
                 minhashes = []
+            # We are collecting doc_ids and minhashes per source files.
+            doc_ids.append(doc_id)
+            minhashes.append(minhash)
         # To write the data for the last source file:
         if doc_ids:
             bw.write_results(current_docfile, {'id': doc_ids,
@@ -393,7 +392,7 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    install_mp_handler()
+    # install_mp_handler()
     os.nice(20)
 
     if args.command == "self":

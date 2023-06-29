@@ -39,20 +39,22 @@ class BatchWriter:
 
     def write_results(self, input_file, results):
         """Prints the results of minhashing a data file."""
-        if self.p_written >= self.batch_size:
-            self.new_file()
+        # If there are no records in the file: just skip it!
+        if results['minhash']:
+            if self.p_written >= self.batch_size:
+                self.new_file()
 
-        print('{}\t{}\t{}\t{}'.format(input_file, len(results['minhash']),
-                                      self.mh_offset, self.di_offset),
-              file=self.filef)
-        for mh in results['minhash']:
-            self.mh_offset += self.minhashf.write(pickle.dumps(mh))
-        for id_fields in results['id']:
-            self.di_offset += self.doc_idf.write(
-                '{}\n'.format('\t'.join(str(f) for f in id_fields))
-                .encode('utf-8')
-            )
-        self.p_written += len(results['minhash'])
+            print('{}\t{}\t{}\t{}'.format(input_file, len(results['minhash']),
+                                          self.mh_offset, self.di_offset),
+                  file=self.filef)
+            for mh in results['minhash']:
+                self.mh_offset += self.minhashf.write(pickle.dumps(mh))
+            for id_fields in results['id']:
+                self.di_offset += self.doc_idf.write(
+                    '{}\n'.format('\t'.join(str(f) for f in id_fields))
+                    .encode('utf-8')
+                )
+            self.p_written += len(results['minhash'])
 
     def copy_file(self, input_prefix):
         """
@@ -85,6 +87,7 @@ class BatchWriter:
         the batch counter increases, but should also be called when processing
         ends to close the files of the last batch.
         """
+        logging.debug('Closing...')
         if self.filef is not None:
             self.minhashf.close()
             self.doc_idf.close()
