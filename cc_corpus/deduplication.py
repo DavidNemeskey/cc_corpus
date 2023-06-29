@@ -18,7 +18,7 @@ from datasketch import MinHash, LeanMinHash
 
 class BatchWriter:
     """Writes batches of minhash data."""
-    def __init__(self, batch_size, out_dir, digits=4, first_batch=1):
+    def __init__(self, batch_size, out_dir, digits=1, first_batch=1):
         """
         Parameters:
         - batch_size: the number of documents after which a new batch file is
