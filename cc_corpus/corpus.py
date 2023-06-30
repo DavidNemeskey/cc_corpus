@@ -128,10 +128,9 @@ class Document:
         """
         A short representation of the document: the URL, if available, else the
         first paragraph.
-
-        TODO: this should either be deprecated or rewritten, since the url is now
-         the id attribute, not within the attrs.
         """
+        if self.id:
+            return f'Document(id: {self.id})'
         if self.attrs and 'url' in self.attrs:
             return 'Document(url: {})'.format(self.attrs['url'])
         elif self.http_meta and 'request' in self.http_meta:
@@ -311,11 +310,12 @@ def _parse_jsonl(file: Path):
     with openall(file) as f:
         for line in f:
             json_object = json.loads(line)
-            yield Document(id=json_object['id'],
-                           attrs=json_object['meta'],
-                           http_meta=None,
-                           paragraphs=json_object['text'].split("\n")
-                           )
+            yield Document(
+                id=json_object['id'],
+                attrs=json_object['meta'],
+                http_meta=None,
+                paragraphs=json_object['text'].split("\n")
+            )
 
 
 def parse_docs(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
