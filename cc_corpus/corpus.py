@@ -25,7 +25,9 @@ class ParseError(Exception):
 class Document:
     uri_p = re.compile('^WARC-Target-URI: (.+?)$', re.M)
 
-    def __init__(self, attrs=None, http_meta=None, paragraphs=None):
+    # TODO: the http_meta field should be deprecated.
+    def __init__(self, id=None, attrs=None, http_meta=None, paragraphs=None):
+        self.id = id
         self.attrs = attrs
         self.http_meta = http_meta
         self.paragraphs = paragraphs
@@ -79,6 +81,7 @@ class Document:
 
     def __str__(self):
         """Returns the "corpus format" text representation of the document."""
+        # TODO should we deprecate this method since we are only using jsonl now?
         buffer = io.StringIO()
         if self.attrs:
             print('<doc ' + ' '.join('{}="{}"'.format(k, v) for k, v
@@ -114,7 +117,7 @@ class Document:
         The metadata contained in the request and response fields are discarded.
         The paragraphs of the document, separated by ''\n'' will be the 'text'.
         """
-        restructured_document = {'id': self.attrs.pop('url'),
+        restructured_document = {'id': self.id,
                                  'meta': self.attrs,
                                  'text': self.content()}
         # If we need to structure the text differently, then we will have to work
@@ -126,6 +129,8 @@ class Document:
         A short representation of the document: the URL, if available, else the
         first paragraph.
         """
+        if self.id:
+            return f'Document(id: {self.id})'
         if self.attrs and 'url' in self.attrs:
             return 'Document(url: {})'.format(self.attrs['url'])
         elif self.http_meta and 'request' in self.http_meta:
@@ -299,17 +304,18 @@ def _parse_jsonl(file: Path):
     The JSONL contains less metadata than the original docs.
     Only the tags in the original <doc> tag are kept. This becomes the 'attrs'
     field of the Document object. The request and response content from the
-    original docs, which would be the 'http_meta' field of the Document object
-    are missing.
+    original docs, which would be the 'http_meta' field of the Document object,
+    have been discarded.
     """
     with openall(file) as f:
         for line in f:
             json_object = json.loads(line)
-            attrs = json_object['meta']
-            url = json_object['id']
-            attrs['url'] = url
-            paragraphs = json_object['text'].split("\n")
-            yield Document(attrs, None, paragraphs)
+            yield Document(
+                id=json_object['id'],
+                attrs=json_object['meta'],
+                http_meta=None,
+                paragraphs=json_object['text'].split("\n")
+            )
 
 
 def parse_docs(corpus_stream, attrs=True, meta=True, content=True, **meta_fields):
@@ -321,6 +327,9 @@ def parse_docs(corpus_stream, attrs=True, meta=True, content=True, **meta_fields
     - content: the textual content;
     - meta_fields: can be used to include / exclude specific meta fields. This
                    setting takes precedence over the general meta argument.
+
+    .. deprecated:: 1.14.0
+       The text file corpus format is no longer supported, only JSONL.
     """
     yield from _parse_docs(corpus_stream, SAXParser.parse,
                            attrs, meta, content, **meta_fields)
