@@ -70,9 +70,9 @@ def minhash_ps(input_file, permutations, n):
             try:
                 num_docs += 1
                 num_ps += len(doc.paragraphs)
-                logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
+                logging.debug('Hashing URL {}...'.format(doc.id))
                 for p, text in enumerate(doc.paragraphs, start=1):
-                    results['id'].append((doc.attrs['url'], p))
+                    results['id'].append((doc.id, p))
                     results['minhash'].append(minhasher.minhash(text))
             except:
                 logging.exception(
@@ -95,8 +95,8 @@ def minhash_docs(input_file, permutations, n):
         for doc in parse_file(input_file, meta=False):
             try:
                 num_docs += 1
-                logging.debug('Hashing URL {}...'.format(doc.attrs['url']))
-                results['id'].append((doc.attrs['url'],))
+                logging.debug('Hashing URL {}...'.format(doc.id))
+                results['id'].append((doc.id,))
                 results['minhash'].append(minhasher.minhash(doc.content()))
             except:
                 logging.exception(
