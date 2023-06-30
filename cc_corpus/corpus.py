@@ -304,7 +304,7 @@ def _parse_jsonl(file: Path):
     The JSONL contains less metadata than the original docs.
     Only the tags in the original <doc> tag are kept. This becomes the 'attrs'
     field of the Document object. The request and response content from the
-    original docs, which would be the 'http_meta' field of the Document object
+    original docs, which would be the 'http_meta' field of the Document object,
     have been discarded.
     """
     with openall(file) as f:
