@@ -114,8 +114,10 @@ class IndexWarcReader:
             return
 
         # Escape paragraph for parsable XML
-        escaped_paragraphs = [xml.sax.saxutils.escape(paragraph) for
-                              paragraph in paragraphs]
+        escaped_paragraphs = [
+            ' '.join(xml.sax.saxutils.escape(paragraph).split()) for
+            paragraph in paragraphs
+        ]
         if self.token_filtering:
             cleared_paragraphs = [filter_tokens(paragraph)
                                   for paragraph in escaped_paragraphs]

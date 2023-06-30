@@ -11,6 +11,7 @@ import json
 import logging
 from operator import attrgetter
 from pathlib import Path
+import re
 import zlib
 
 from more_itertools import batched, peekable
@@ -22,10 +23,14 @@ CLUSTER_SIZE = 3000
 
 
 class SurtDomain(tuple[str]):
+    WWWP = re.compile('www[1-9]?')
+
     @staticmethod
     def from_string(domain: str) -> 'SurtDomain':
         surt_domain = domain.split('.')[::-1]
         if surt_domain[-1] == '*':
+            surt_domain.pop()
+        elif SurtDomain.WWWP.fullmatch(surt_domain[-1]):
             surt_domain.pop()
         return SurtDomain(surt_domain)
 
