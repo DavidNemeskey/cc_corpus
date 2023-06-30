@@ -143,12 +143,17 @@ class IndexWarcReader:
                          'after boilerplate removal')
             return
 
+        # We extract the url from the metadata and use it as the id.
+        index_dict = index._asdict()
+        url = index_dict.pop('url')
         document = Document(
-            attrs=index._asdict(),
+            id=url,
+            attrs=index_dict,
             http_meta={"request": bio.getvalue().decode('utf-8').strip(),
                        "response": header.decode('utf-8').strip()},
             paragraphs=cleared_paragraphs
         )
+
         # This extracts the relevant metadata from the http response part into
         # the attrs (but keeps them in the http response part as well):
         document.extract_http_metadata()
