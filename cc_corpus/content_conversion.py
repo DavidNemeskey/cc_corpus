@@ -6,8 +6,14 @@ The functions in this module convert the content in WARC files into regular
 HTML that boilerplate removers can consume based on their content types.
 """
 
+from collections.abc import Generator
+import logging
+import re
+
 import atoma
-# from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
+import pybtex.database
+import pybtex.richtext
 from warc import WARCRecord
 
 from cc_corpus.utils import is_empty
@@ -56,6 +62,36 @@ def convert_rss(text: bytes) -> list[str]:
         return []
 
 
+def clean_field(field: bytes) -> str:
+    """
+    Cleans the HTML tags from the BibTex field (which shouldn't ccontain any
+    to begin with, but some do.
+    """
+    html_cleaned = BeautifulSoup(field, features='lxml').get_text()
+    latex_cleaned = str(pybtex.richtext.Text.from_latex(html_cleaned))
+    return latex_cleaned
+
+
+def convert_bib(text: bytes) -> Generator[str]:
+    """
+    Converts BibTex data to a "section" -- a title-paragraph pair, where the
+    latter comes from the abstract. Entries lacking an abstract are skipped.
+    """
+    db = pybtex.database.parse_bytes(text, 'bibtex')
+
+    for entry in db.entries.values():
+        try:
+            if (abstract := entry.fields.get('abstract')):
+                title = clean_field(entry.fields['title'])
+                yield f'<h6>{title}</h6>\n<p>{clean_field(abstract)}</p>'
+        except:  # noqa
+            logging.exception(f'Error in bib entry {entry}')
+
+
+bib_pattern = re.compile(b'Content[-_]Disposition.*[.]bib[\'"]?\\r?$',
+                         re.IGNORECASE | re.MULTILINE)
+
+
 def convert(record: WARCRecord):
     content_type = record["WARC-Identified-Payload-Type"]
     header, text = record.payload.read().split(b'\r\n\r\n', maxsplit=1)
@@ -63,6 +99,8 @@ def convert(record: WARCRecord):
         chunks = convert_atom(text)
     elif content_type == 'application/rss+xml':
         chunks = convert_rss(text)
+    elif bib_pattern.search(header):
+        chunks = convert_bib(text)
     else:
         chunks = [text]
 

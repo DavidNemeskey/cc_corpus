@@ -213,7 +213,7 @@ def process_file(filename, input_dir, output_dir, languages,
                  language_unit, min_len_str, keep_urls=None, drop_urls=None):
     input_file = os.path.join(input_dir, filename)
     output_file = os.path.join(output_dir, filename)
-    logging.info('Processing file {}...'.format(filename))
+    logging.info(f'Processing file {filename}...')
 
     stats = Counter()
     it = parse_file(input_file, True, True, True)
@@ -238,7 +238,7 @@ def process_file(filename, input_dir, output_dir, languages,
     try:
         with notempty(openall(output_file, 'wt')) as outf:
             for doc in it:
-                print(doc, file=outf)
+                print(doc.to_json(), file=outf)
     except:  # noqa
         logging.exception('Got an error.')
     logging.info('Finished processing file {}...'.format(filename))

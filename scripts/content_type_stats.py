@@ -60,13 +60,13 @@ def process_file(input_file: Path) -> str:
         if doc.attrs['mime-type']:
             type_from_doctag = doc.attrs['mime-type']
         # Get the type from the warc request header:
-        if (match_warcid := matcher_wi.search(doc.meta['request'])):
+        if (match_warcid := matcher_wi.search(doc.http_meta['request'])):
             type_from_warc_id = match_warcid.group(1)
         # Get the type from the response header:
-        if (match_resp := matcher_ct.search(doc.meta['response'])):
+        if (match_resp := matcher_ct.search(doc.http_meta['response'])):
             type_from_response = match_resp.group(1)
         # Get the info about the attached file, if any:
-        match_cd = matcher_cd.search(doc.meta['response'])
+        match_cd = matcher_cd.search(doc.http_meta['response'])
         if match_cd:
             attached_file = match_cd.group(3)
             if '.' in attached_file:

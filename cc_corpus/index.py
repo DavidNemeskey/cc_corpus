@@ -3,16 +3,18 @@
 
 """Functions (and classes) used in processing the index."""
 
-from collections.abc import Generator, Iterable
+from bisect import bisect_left
+from collections.abc import Generator, Iterable, Iterator
+from dataclasses import dataclass
 from itertools import groupby
 import json
 import logging
 from operator import attrgetter
 from pathlib import Path
-from typing import NamedTuple
+import re
 import zlib
 
-from more_itertools import batched
+from more_itertools import batched, peekable
 
 from cc_corpus.utils import openall
 
@@ -20,25 +22,46 @@ from cc_corpus.utils import openall
 CLUSTER_SIZE = 3000
 
 
-class Cluster(NamedTuple):
+class SurtDomain(tuple[str]):
+    WWWP = re.compile('www[1-9]?')
+
+    @staticmethod
+    def from_string(domain: str) -> 'SurtDomain':
+        surt_domain = domain.split('.')[::-1]
+        if surt_domain[-1] == '*':
+            surt_domain.pop()
+        elif SurtDomain.WWWP.fullmatch(surt_domain[-1]):
+            surt_domain.pop()
+        return SurtDomain(surt_domain)
+
+
+@dataclass(frozen=True)
+class Cluster:
     """Represents a cluster in the cluster.idx file."""
-    surt: str
+    domain: SurtDomain
+    path: str
     file_name: str
     offset: int
     length: int
 
+    def surt(self):
+        return f'{",".join(self.domain)})/{self.path}'
+
+    def end(self):
+        return self.offset + self.length
+
     @classmethod
     def from_line(cls, line):
-        fields = line.split('\t')[:4]
-        params = [typ(data) for typ, data in
-                  zip(cls.__annotations__.values(), fields)]
-        return Cluster(*params)
+        surt, file_name, offset, length = line.split('\t')[:4]
+        domain, _, path = surt.partition(')/')
+        return Cluster(SurtDomain(domain.split(',')), path,
+                       file_name, int(offset), int(length))
 
 
-class FileRange(NamedTuple):
+@dataclass
+class FileRange:
     """
-    Named tuple that represents a byte range that should be downloaded from
-    a particular file.
+    Represents a byte range that should be downloaded from a particular file.
     """
     file_name: str
     offset: int
@@ -52,9 +75,31 @@ def read_cluster_idx(cluster_idx: Path) -> Generator[Cluster]:
             yield Cluster.from_line(line)
 
 
-def find_tld_in_index(tld: str, cluster_idx: Path) -> list[Cluster]:
+def compare_surt_domains(query: SurtDomain, other: SurtDomain) -> int:
     """
-    Finds all clusters that end in a particular TLD in cluster.idx.
+    This is a three-way comparison operator, that operates on urls,  given as
+    inverted lists (e.g. ['hu','elte'] for elte.hu).
+    The basis of the comparison is alphabetical sorting per domain components.
+    It also returns 0 when the other_url is a subdomain of the query_url.
+    """
+    for query_element, other_element in zip(query, other):
+        if query_element > other_element:
+            return 1
+        if query_element < other_element:
+            return -1
+    # If the iteration over the common sections was inconclusive, then
+    # one of them is the subdomain of the other, or they are identical
+    if len(query) > len(other):
+        return 1
+    return 0
+
+
+def find_pattern_in_index_iterator(
+    pattern: list[str], cluster_it: Iterator[Cluster]
+) -> list[Cluster]:
+    """
+    Finds all clusters that match a SURT domain pattern in an iterator of
+    cluster.idx :class:`Cluster`s.
 
     .. note::
 
@@ -62,22 +107,78 @@ def find_tld_in_index(tld: str, cluster_idx: Path) -> list[Cluster]:
         the list. This is because the URL in the index file is the first in
         a block of 3,000, so it is possible that the previous cluster already
         has URLs with the TLD in question.
+
+    .. note::
+
+        This function does a linear search in the iterator, and can be slow if
+        the iterator is long (e.g. the whole cluster index file). For a faster
+        version, see :func:`find_pattern_in_index`.
     """
     last_cluster = None
     clusters = []
-    for cluster in read_cluster_idx(cluster_idx):
-        ctld = cluster.surt[:cluster.surt.find(',')]
-        if ctld < tld:
+    logging.debug(f'Searching clusters for the pattern {pattern}...')
+    for cluster in cluster_it:
+        comparison = compare_surt_domains(pattern, cluster.domain)
+        if comparison > 0:
             last_cluster = cluster
-        elif ctld >= tld:
+        elif comparison <= 0:
             if last_cluster is not None:
                 clusters.append(last_cluster)
                 last_cluster = None
-            if ctld == tld:
+            if comparison == 0:
                 clusters.append(cluster)
             else:
                 break
     return clusters
+
+
+def find_pattern_in_index(
+    pattern: list[str], cluster_index: list[Cluster]
+) -> list[Cluster]:
+    """
+    Finds all clusters that match a SURT domain pattern in a list of
+    cluster.idx :class:`Cluster`s.
+
+    .. note::
+
+        The cluster that comes before the first one with _tld_ is included in
+        the list. This is because the URL in the index file is the first in
+        a block of 3,000, so it is possible that the previous cluster already
+        has URLs with the TLD in question.
+
+    .. note::
+
+        This function requires that the whole cluster.idx be loaded into memory
+        (into the _cluster_idx_ argument). This allows the use of binary search
+        for optimal performance; however, if memory usage is a concern, the
+        function :func:`find_pattern_in_index_iterator` should be used instead.
+    """
+    logging.debug(f'Searching clusters for the pattern {pattern}...')
+    idx = bisect_left(cluster_index, pattern, key=attrgetter('domain'))
+    # The domain might start in the middle of the previous cluster
+    if idx != 0:
+        idx = idx - 1
+    clusters = []
+    for cluster in cluster_index[idx:]:
+        if compare_surt_domains(pattern, cluster.domain) < 0:
+            break
+        clusters.append(cluster)
+    return clusters
+
+
+def collect_clusters_from_index(
+    patterns: list[SurtDomain], cluster_idx: Path
+) -> set[Cluster]:
+    """Collects the index clusters that match the specified patterns."""
+    if len(patterns) == 1:
+        return find_pattern_in_index(patterns[0], read_cluster_idx(cluster_idx))
+    else:
+        cluster_index = list(read_cluster_idx(cluster_idx))
+        clusters = set()
+        for pattern in patterns:
+            clusters.update(find_pattern_in_index(pattern, cluster_index))
+        return sorted(clusters, key=lambda cluster: (cluster.file_name,
+                                                     cluster.offset))
 
 
 def ranges_from_clusters(
@@ -85,7 +186,7 @@ def ranges_from_clusters(
 ) -> Generator[list[FileRange]]:
     """
     Creates :class:`FileRange`s from the clusters acquired via
-    :func:`find_tld_in_index`.
+    :func:`find_pattern_in_index` or :func:`find_pattern_in_index_iterator`.
 
     :param clusters: a list of clusters, ordered by SURT and offset.
     :param max_clusters: the maximum number of clusters in a batch. The
@@ -93,30 +194,48 @@ def ranges_from_clusters(
                          clusters are returned in a single batch).
     :return: yields lists of :class:`FileRange`s.
     """
-    def range_from_clusters(file_name: str, file_clusters: Iterable[Cluster]):
+    def group_continuous_file_clusters(
+        file_clusters: Iterable[Cluster]
+    ) -> Generator[list[Cluster]]:
+        """
+        Groups continuous clusters that belong to the same index file (not
+        checked). Since an index file may contain clusters corresponding to
+        more than one domains, there is no guarantee that the byte ranges
+        corresponding to these clusters are continuous. This function groups
+        the clusters in continuous chunks so that they can be converted into
+        byte ranges for download.
+        """
+        continuous_clusters = []
+        for cluster in (it := peekable(file_clusters)):
+            if not continuous_clusters:
+                continuous_clusters.append(cluster)
+            else:
+                if cluster.offset != continuous_clusters[-1].end():
+                    yield continuous_clusters
+                    continuous_clusters = []
+                    it.prepend(cluster)
+                else:
+                    continuous_clusters.append(cluster)
+        if continuous_clusters:
+            yield continuous_clusters
+
+    def range_from_clusters(
+        file_name: str, file_clusters: Iterable[Cluster]
+    ) -> FileRange:
         """
         Returns a single range for an :class:`Iterable` of :class:`Cluster`s.
         """
-        start, end = None, None
-        for cluster in file_clusters:
-            if start is None:
-                start = cluster.offset
-                end = start + cluster.length
-            else:
-                if cluster.offset != end:
-                    raise ValueError(f'Discontinuous cluster {cluster.surt}: '
-                                     f'{cluster.offset=} instead of {end=}!')
-                else:
-                    end += cluster.length
-        return FileRange(file_name, start, end - start)
+        return FileRange(file_name, file_clusters[0].offset,
+                         file_clusters[-1].end() - file_clusters[0].offset)
 
     for file_name, file_clusters in groupby(clusters,
                                             key=attrgetter('file_name')):
-        if max_clusters > 0:
-            for batch in batched(file_clusters, max_clusters):
-                yield range_from_clusters(file_name, batch)
-        else:
-            yield range_from_clusters(file_name, file_clusters)
+        for range_clusters in group_continuous_file_clusters(file_clusters):
+            if max_clusters > 0:
+                for batch in batched(range_clusters, max_clusters):
+                    yield range_from_clusters(file_name, batch)
+            else:
+                yield range_from_clusters(file_name, range_clusters)
 
 
 class BatchWriter:

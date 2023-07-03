@@ -25,9 +25,9 @@ class ParseError(Exception):
 class Document:
     uri_p = re.compile('^WARC-Target-URI: (.+?)$', re.M)
 
-    def __init__(self, attrs=None, meta=None, paragraphs=None):
+    def __init__(self, attrs=None, http_meta=None, paragraphs=None):
         self.attrs = attrs
-        self.meta = meta
+        self.http_meta = http_meta
         self.paragraphs = paragraphs
 
     def content(self):
@@ -82,12 +82,13 @@ class Document:
         buffer = io.StringIO()
         if self.attrs:
             print('<doc ' + ' '.join('{}="{}"'.format(k, v) for k, v
-                                     in self.attrs.items()) + '>', file=buffer)
+                                     in self.attrs.items())
+                  + '>', file=buffer)
         else:
             print('<doc>', file=buffer)
-        if self.meta:
+        if self.http_meta:
             print('<meta>', file=buffer)
-            for k, v in self.meta.items():
+            for k, v in self.http_meta.items():
                 print('<{0}>\n{1}\n</{0}>'.format(k, v), file=buffer)
             print('</meta>', file=buffer)
         if self.paragraphs:
@@ -96,6 +97,13 @@ class Document:
             print('<p>\n{}\n</p>'.format(self.paragraphs[-1]), file=buffer)
         print('</doc>', end='', file=buffer)
         return buffer.getvalue()
+
+    def extract_http_metadata(self):
+        if self.http_meta:
+            if (match := re.findall(r"Date: (.*)", self.http_meta['response'], re.I)):
+                self.attrs["response_date"] = match[0].strip()
+            if (match := re.findall(r"Content-Type: (.*)", self.http_meta['response'], re.I)):
+                self.attrs["response_content_type"] = match[0].strip()
 
     def to_json(self):
         """
@@ -120,8 +128,8 @@ class Document:
         """
         if self.attrs and 'url' in self.attrs:
             return 'Document(url: {})'.format(self.attrs['url'])
-        elif self.meta and 'request' in self.meta:
-            m = Document.uri_p.search(self.meta['request'])
+        elif self.http_meta and 'request' in self.http_meta:
+            m = Document.uri_p.search(self.http_meta['request'])
             if m:
                 return 'Document(url: {})'.format(m.group(1))
         # Could not get the URL
@@ -252,7 +260,7 @@ class CorpusHandler:
         elif 'meta' in self.stack:
             # Finish any meta field
             if self.meta_data is not None:
-                self.doc.meta[tag] = '\n'.join(self.meta_data)
+                self.doc.http_meta[tag] = '\n'.join(self.meta_data)
                 self.meta_data = None
         else:
             raise ParseError('Unexpected tag </{}>'.format(tag))
@@ -291,7 +299,7 @@ def _parse_jsonl(file: Path):
     The JSONL contains less metadata than the original docs.
     Only the tags in the original <doc> tag are kept. This becomes the 'attrs'
     field of the Document object. The request and response content from the
-    original docs, which would be the 'meta' field of the Document object
+    original docs, which would be the 'http_meta' field of the Document object
     are missing.
     """
     with openall(file) as f:

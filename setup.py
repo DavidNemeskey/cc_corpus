@@ -14,7 +14,7 @@ def readme():
 
 
 setup(name='commoncrawl-downloader',
-      version='1.12.1',
+      version='1.13.5',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -45,8 +45,8 @@ setup(name='commoncrawl-downloader',
 
           # Specify the Python versions you support here. In particular, ensure
           # that you indicate whether you support Python 2, Python 3 or both.
-          'Programming Language :: Python :: 3.9',
           'Programming Language :: Python :: 3.10',
+          'Programming Language :: Python :: 3.11',
       ],
       keywords='corpus common crawl hungarian',
       packages=find_packages(exclude=['scripts']),
@@ -95,6 +95,8 @@ setup(name='commoncrawl-downloader',
           'scripts/find_new_dumps.py',
       ],
       install_requires=[
+          # For parsing atom/RSS feeds
+          'atoma',
           'beautifulsoup4',
           'boto3',
           'botocore',
@@ -107,7 +109,9 @@ setup(name='commoncrawl-downloader',
           'justext',
           'lxml',
           'more_itertools',
-          'multiprocessing-logging',
+          'multiprocessing-logging>=0.3.4',
+          # For parsing .bib files
+          'pybtex',
           # MIME detection
           'python-magic',
           # Just for URL deduplication
@@ -125,7 +129,7 @@ setup(name='commoncrawl-downloader',
           'cld2-cffi==0.1.4', 'langid',
           # WARC 3 library
           # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
-          'warc3-wet',
+          'warc-knot>=0.2.5',
           # Type hints for Python < 3.5
           'typing',
           # A progress bar

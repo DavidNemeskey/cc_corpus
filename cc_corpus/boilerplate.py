@@ -44,6 +44,20 @@ class JustextRemover(BoilerplateRemover):
                 if not p.is_boilerplate]
 
 
+class JustextNonRemover(JustextRemover):
+    """
+    A version of :class:`JustextRemover` that uses Justext to parse the HTML
+    into paragraphs but does not remove anything.
+
+    For testing.
+    """
+    def __init__(self, language):
+        super().__init__(language)
+
+    def remove(self, html: bytes, url: str):
+        return [p.text for p in justext.justext(html, self.stopwords)]
+
+
 class TrafilatureRemover(BoilerplateRemover):
     """Wrapper for Trafilature's boilerplate removal function."""
     def remove(self, html: bytes, url: str):
