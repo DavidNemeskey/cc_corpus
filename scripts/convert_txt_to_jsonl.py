@@ -50,16 +50,23 @@ def convert_txt_file_to_jsonl(input_file: Path, output_file: Path):
             , openall('_typewriter_errors.log', 'a') as error_file:
         document = Document(id=Path(input_file).name)
         document.paragraphs = [line.rstrip() for line in inf]
-        
-        matches = list(chain.from_iterable(
-            regex.findall(typewriter_match, p) for p in document.paragraphs)
-        )
+
+        matches = []
+        for i, p in enumerate(document.paragraphs):
+            match = regex.findall(typewriter_match, p)
+            if match:
+                matches += match
+                for m in match:
+                    document.paragraphs[i] = p.replace(m, m.replace(' ', ''))
+        # matches = list(chain.from_iterable(
+        #     regex.findall(typewriter_match, p) for p in document.paragraphs)
+        # )
         if matches:
             error = f'\nDocument: {document.id}, problematic strings:'
             error += ' | '.join(matches)
             error += '\n\nSuggested fix: '
             error += ' | '.join(match.replace(' ', '') for match in matches)
-            print(error)
+            # print(error)
             print(error, file=error_file)
         print(document.to_json(), file=outf)
         logging.debug(f'Completed exporting to {output_file} as JSON')
