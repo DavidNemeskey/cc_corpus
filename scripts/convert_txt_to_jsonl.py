@@ -49,13 +49,8 @@ def convert_txt_file_to_jsonl(input_file: Path, output_file: Path):
             , openall(output_file, 'wt', encoding='utf-8') as outf\
             , openall('_typewriter_errors.log', 'a') as error_file:
         document = Document(id=Path(input_file).name)
-        raw_text = inf.read()
-        document.paragraphs = [p.replace('\n', ' ') for p in raw_text.split('\n\n')]
-        # for paragraph in document.paragraphs:
-        #     matches = regex.findall(typewriter_match, paragraph)
-        #     if matches:
-        #         print(matches)
-
+        document.paragraphs = [line.rstrip() for line in inf]
+        
         matches = list(chain.from_iterable(
             regex.findall(typewriter_match, p) for p in document.paragraphs)
         )
