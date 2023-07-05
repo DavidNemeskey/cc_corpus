@@ -18,8 +18,7 @@ import regex
 from cc_corpus.utils import collect_inputs, consume, openall, otqdm
 from cc_corpus.corpus import Document
 
-typewriter_match = regex.compile(r"(?:\s|^)([[:alpha:]](?:\s[[:alpha:]])+)(?:\s|$|[[:punct:]])")
-
+typewriter_match = regex.compile(r"(?:\s|^)([[:alpha:]]\s[[:alpha:]](?:\s[[:alpha:]])+)(?:\s|$|[[:punct:]])")
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
@@ -58,15 +57,11 @@ def convert_txt_file_to_jsonl(input_file: Path, output_file: Path):
                 matches += match
                 for m in match:
                     document.paragraphs[i] = p.replace(m, m.replace(' ', ''))
-        # matches = list(chain.from_iterable(
-        #     regex.findall(typewriter_match, p) for p in document.paragraphs)
-        # )
         if matches:
             error = f'\nDocument: {document.id}, problematic strings:'
             error += ' | '.join(matches)
             error += '\n\nSuggested fix: '
             error += ' | '.join(match.replace(' ', '') for match in matches)
-            # print(error)
             print(error, file=error_file)
         print(document.to_json(), file=outf)
         logging.debug(f'Completed exporting to {output_file} as JSON')
