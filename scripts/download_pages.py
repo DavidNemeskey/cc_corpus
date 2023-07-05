@@ -67,7 +67,7 @@ def parse_arguments():
                         help='Out file extension (default: warc.gz)')
     parser.add_argument('--padding', '-p', default=2,
                         help='Padding for chunk numbering (default: 2)')
-    parser.add_argument('-t', '--tmp',
+    parser.add_argument('-T', '--tmp',
                         help='The name of the temporary directory. Defaults '
                              'to the system default.')
     parser.add_argument('--processes', '-P', type=int, default=1,
