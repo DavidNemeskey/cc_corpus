@@ -12,8 +12,9 @@ from pathlib import Path
 import pickle
 import re
 import shutil
+from typing import Optional
 
-from datasketch import MinHash, LeanMinHash
+from datasketch import LeanMinHash, MinHash, MinHashLSH
 
 
 class BatchWriter:
@@ -174,10 +175,33 @@ class MinHasher:
     def shinglize(self, text):
         """Creates character n-grams from the text."""
         for i in range(len(text) - self.n + 1):
-            yield text[i:i+self.n]
+            yield text[i:i + self.n]
 
     def minhash(self, text):
         mh = MinHash(num_perm=self.permutations)
         for shingle in self.shinglize(text):
             mh.update(shingle.encode('utf-8'))
         return LeanMinHash(mh)
+
+
+def read_batch_to_lsh(
+    batch: Path, lsh: Optional[MinHashLSH],
+    threshold: Optional[float], permutations: Optional[int]
+) -> MinHashLSH:
+    """
+    Reads a batch into a :class:`MinHashLSH` object. Works in two ways:
+
+    #. If an already existing object is passed in the _lsh_ argument, it will
+       be updated with the contents of the batch. It is assumed that all
+       documents in the batch are unique w.r.t. other documents in the batch
+       **and the keys in the _lsh_ object as well**. In this cae, the rest of
+       the arguments are ignored.
+    #. If _lsh_ is ``None``, a new one is created and returned with the
+       specified threshold and number of permutations.
+    """
+    if lsh is None:
+        lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+    for input_file, results in read_batch(batch):
+        for doc_id, minhash in zip(results['id'], results['minhash']):
+            lsh.insert('\t'.join(doc_id), minhash)
+    return lsh

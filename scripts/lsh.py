@@ -23,7 +23,8 @@ from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.deduplication import (
-    BatchWriter, find_all_batches, read_batch, read_batch_to_memory
+    BatchWriter, find_all_batches, read_batch, read_batch_to_lsh,
+    read_batch_to_memory
 )
 
 done_file = "DONE"
@@ -133,16 +134,6 @@ def deduplicate_self(file_prefix: Path, output_dir: Path,
                  '{} duplicate urls.'.format(
                      file_base, bw.total_written, total_read, duplicate_urls))
     return bw.total_written, total_read
-
-
-def read_batch_to_lsh(
-        batch: Path, threshold: float, permutations: int
-) -> MinHashLSH:
-    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    for input_file, results in read_batch(batch):
-        for doc_id, minhash in zip(results['id'], results['minhash']):
-            lsh.insert('\t'.join(doc_id), minhash)
-    return lsh
 
 
 def check_batch(batch: Path):
