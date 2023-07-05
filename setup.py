@@ -53,6 +53,7 @@ setup(name='commoncrawl-downloader',
       # Install the scripts
       scripts=[
           'scripts/autonomous_cross_deduplicator.py',
+          'scripts/autonomous_cross_deduplicator2.py',
           'scripts/batch_deduplicate_index_urls.py',
           'scripts/content_type_stats.py',
           'scripts/get_indexfiles.py',
