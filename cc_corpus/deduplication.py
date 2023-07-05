@@ -185,8 +185,8 @@ class MinHasher:
 
 
 def read_batch_to_lsh(
-    batch: Path, lsh: Optional[MinHashLSH],
-    threshold: Optional[float], permutations: Optional[int]
+    batch: Path, lsh: Optional[MinHashLSH] = None,
+    threshold: Optional[float] = None, permutations: Optional[int] = None
 ) -> MinHashLSH:
     """
     Reads a batch into a :class:`MinHashLSH` object. Works in two ways:
