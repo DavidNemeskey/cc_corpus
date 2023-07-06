@@ -98,7 +98,7 @@ def main():
         for d in collect_completed_dirs(other_done_dir)
     )
     logging.info('The following additional, already processed directories '
-                 'will be included: '
+                 'will be included: ' +
                  ", ".join(str(d) for d in sorted(other_done_batches)))
 
     lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
