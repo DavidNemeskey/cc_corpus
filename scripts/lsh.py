@@ -152,6 +152,12 @@ def check_and_wait_for_batch(batch: Path):
     logging.debug(f'We waited on batch {batch} and now it\'s done!')
 
 
+def mark_as_done(batch: Path):
+    """Marks the _batch_ directory as done by creating the DONE file in it."""
+    with open(batch / done_file, 'wt') as f:
+        f.write('This file flags this batch done for deduplication.')
+
+
 def deduplicate_other(main_batch: Path,
                       batches_to_subtract: list[Path],
                       output_dir: Path,
@@ -209,9 +215,7 @@ def deduplicate_other(main_batch: Path,
                                                'minhash': minhashes})
 
     if multiproc_coordination:
-        with open(output_dir / done_file, "wt") as f:
-            f.write('This file flags this batch done for multiprocess'
-                    ' deduplication')
+        mark_as_done(output_dir)
 
     logging.info(f'Processed input batch {main_batch}; '
                  f'kept {len(main_batch_data)} out of {initial_len} documents')
