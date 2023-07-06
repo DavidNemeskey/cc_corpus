@@ -28,7 +28,7 @@ def parse_arguments():
                         help='the directory that contains the fully-'
                              'deduplicated subdirectories.')
     parser.add_argument('--done-dir', '-d', type=Path, action='append',
-                        default=[],
+                        dest='done_dirs', default=[],
                         help='a directory that contains fully-deduplicated '
                              'subdirectories unrelated to the current input. '
                              'This could be the URLs downloaded from another '
@@ -38,9 +38,6 @@ def parse_arguments():
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
                         help='the Jaccard similarity threshold (0.9).')
-    parser.add_argument('--temp-dir', '-T', type=Path,
-                        help='the directory used to temporarily store partial '
-                             'results. The default is the system tmp dir.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '
