@@ -16,7 +16,7 @@ from datasketch import MinHashLSH
 
 from cc_corpus.deduplication import BatchWriter, read_batch, read_batch_to_lsh
 from cc_corpus.utils import otqdm
-from lsh import check_batch
+from lsh import check_batch, mark_as_done
 
 
 def parse_arguments():
@@ -81,10 +81,12 @@ def main():
     input_dirs = collect_input_dirs(args.input_dir)
     done_dirs = collect_completed_dirs(args.output_dir)
     dirs_to_read = sorted(input_dirs & done_dirs)
-    logging.info('The following directories have already been processed: '
+    logging.info('The following directories have already been processed: ' +
                  ", ".join(str(d) for d in sorted(dirs_to_read)))
-    dirs_to_go = sorted(input_dirs - done_dirs)
-    logging.info('The following directories will be deduplicated: '
+    if len(dirs_to_go := sorted(input_dirs - done_dirs)) == 0:
+        logging.info('Nothing to deduplicate.')
+        sys.exit(0)
+    logging.info('The following directories will be deduplicated: ' +
                  ", ".join(str(d) for d in sorted(dirs_to_go)))
 
     lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
@@ -100,7 +102,7 @@ def main():
 
         num_docs, num_kept = 0, 0
         with closing(BatchWriter(sys.maxsize, output_batch_dir, 1, 1)) as bw:
-            for in_file, results in read_batch(str(input_batch_dir / '1')):
+            for in_file, results in read_batch(input_batch_dir / '1'):
                 doc_ids, minhashes = [], []
                 for doc_id, minhash in zip(results['id'], results['minhash']):
                     num_docs += 1
@@ -111,6 +113,8 @@ def main():
                         minhashes.append(minhash)
                         num_kept += 1
                 bw.write_results(in_file, {'id': doc_ids, 'minhash': minhashes})
+
+        mark_as_done(output_batch_dir)
         logging.info(f'Processed batch {input_batch_dir}; kept {num_kept} '
                      f'out of {num_docs} documents.')
 
