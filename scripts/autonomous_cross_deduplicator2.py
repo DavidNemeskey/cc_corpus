@@ -27,6 +27,13 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the directory that contains the fully-'
                              'deduplicated subdirectories.')
+    parser.add_argument('--done-dir', '-d', type=Path, action='append',
+                        default=[],
+                        help='a directory that contains fully-deduplicated '
+                             'subdirectories unrelated to the current input. '
+                             'This could be the URLs downloaded from another '
+                             'TLD, a different data source, etc. Can be '
+                             'specified more than once.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
@@ -89,7 +96,20 @@ def main():
     logging.info('The following directories will be deduplicated: ' +
                  ", ".join(str(d) for d in sorted(dirs_to_go)))
 
+    other_done_batches = sorted(
+        other_done_dir / d for other_done_dir in args.done_dirs
+        for d in collect_completed_dirs(other_done_dir)
+    )
+    logging.info('The following additional, already processed directories '
+                 'will be included: '
+                 ", ".join(str(d) for d in sorted(other_done_batches)))
+
     lsh = MinHashLSH(threshold=args.threshold, num_perm=args.permutations)
+
+    for other_done_batch in otqdm(
+        other_done_batches, 'Reading additional deduplicated directories...'
+    ):
+        read_batch_to_lsh(other_done_batch / '1', lsh)
 
     for dir_to_read in otqdm(dirs_to_read,
                              'Reading previously deduplicated directories...'):
