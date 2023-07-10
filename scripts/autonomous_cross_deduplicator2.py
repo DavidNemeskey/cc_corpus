@@ -107,12 +107,15 @@ def main():
         other_done_batches, 'Reading additional deduplicated directories...'
     ):
         read_batch_to_lsh(other_done_batch / '1', lsh)
+        logging.debug(f'Read additional directory {other_done_batch}.')
 
     for dir_to_read in otqdm(dirs_to_read,
                              'Reading previously deduplicated directories...'):
         read_batch_to_lsh(args.output_dir / dir_to_read / '1', lsh)
+        logging.debug(f'Read deduplicated directory {dir_to_read}.')
 
     for dir_to_go in otqdm(dirs_to_go, 'Deduplicating...'):
+        logging.debug(f'Deduplicating {dir_to_go}...')
         input_batch_dir = args.input_dir / dir_to_go
         output_batch_dir = args.output_dir / dir_to_go
         output_batch_dir.mkdir(parents=True, exist_ok=True)
