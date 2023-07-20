@@ -2,8 +2,9 @@ FROM ubuntu:20.04
 
 RUN apt-get update && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
-    wget \
+    build-essential \
     ca-certificates \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/miniconda3/bin:${PATH}"
