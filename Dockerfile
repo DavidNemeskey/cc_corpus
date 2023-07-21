@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 RUN apt-get update && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
@@ -7,22 +7,28 @@ RUN apt-get update && apt-get -y upgrade \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/root/miniconda3/bin:${PATH}"
-ARG PATH="/root/miniconda3/bin:${PATH}"
+ENV HOME /home/cc
+RUN groupadd -r cc && useradd -r -g cc cc
+RUN mkdir ${HOME} && chown cc:cc ${HOME}
+USER cc
+WORKDIR ${HOME}
 
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-    && mkdir /root/.conda \
+ENV PATH="${HOME}/miniconda3/bin:${PATH}"
+ARG PATH="${HOME}/miniconda3/bin:${PATH}"
+
+RUN pwd && whoami && ls -la . && wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    && mkdir ${HOME}/.conda \
     && bash Miniconda3-latest-Linux-x86_64.sh -b \
     && rm -f Miniconda3-latest-Linux-x86_64.sh \
     && echo "Running $(conda --version)" \
     && conda init bash \
-    && . /root/.bashrc \
+    && . ${HOME}/.bashrc \
     && conda update conda \
-    && conda create -n cc_corpus \
-    && conda activate cc_corpus
+    && conda create -n cc_corpus
 
-RUN conda install python=3.9 pip
+Copy --chown=cc:cc . cc_corpus
+RUN . ${HOME}/.bashrc && conda activate cc_corpus && conda install python=3.11 pip \
+    && export CFLAGS="-Wno-narrowing" \
+    && pip install -e cc_corpus
 
-Copy . /
-RUN export CFLAGS="-Wno-narrowing" \
-    && pip install -e .
+CMD ["/bin/bash"]
