@@ -57,7 +57,8 @@ class IndexWarcReader:
     / (Python) functions.
     """
     def __init__(self, warc_dir: Path, output_dir: Path,
-                 remover: BoilerplateRemover, token_filtering: bool):
+                 remover: BoilerplateRemover, token_filtering: bool,
+                 paragraph_patterns: Path):
         """
         Creates a new IndexWarcReader with the specified index and warc
         directories. These must be compatible, i.e. the WARC directory should
@@ -72,8 +73,19 @@ class IndexWarcReader:
         self.output_dir = output_dir
         self.remover = remover
         self.token_filtering = token_filtering
+        if paragraph_patterns:
+            self.paragraph_pattern = self.read_patterns(paragraph_patterns)
+        else:
+            self.paragraph_pattern = None
         # This is the output stream
         self.outf = None
+
+    @staticmethod
+    def read_patterns(pattern_file: str | Path) -> list[re.Pattern]:
+        """Reads the paragraph patterns."""
+        with open(pattern_file, 'rt') as inf:
+            patterns = [line.rsplit('\t', 1)[0] for line in map(str.strip, inf)]
+        return re.compile('|'.join(f'(?:{p})' for p in patterns), re.I)
 
     def read(self, index_file):
         """
@@ -101,11 +113,11 @@ class IndexWarcReader:
         warc.header.write_to(bio)
         # And the HTML header and text as well. jusText can handle bytes
         # header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
-        header, chunks = convert(warc)
         try:
-            paragraphs = chain.from_iterable(
+            header, chunks = convert(warc)
+            paragraphs = list(chain.from_iterable(
                 self.remover.remove(chunk, index.url) for chunk in chunks
-            )
+            ))
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
         except:  # noqa
             # Do not distinguish between the different errors
@@ -123,6 +135,9 @@ class IndexWarcReader:
                                   for paragraph in escaped_paragraphs]
         else:
             cleared_paragraphs = escaped_paragraphs
+        if self.paragraph_pattern:
+            cleared_paragraphs = [p for p in cleared_paragraphs
+                                  if not self.paragraph_pattern.search(p)]
         if len(cleared_paragraphs) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
@@ -200,6 +215,9 @@ def parse_arguments():
                         help='do token level filtering')
     parser.add_argument('--token-whitelist', '-tw', type=Path,
                         help='the file containing whitelisted tokens.')
+    parser.add_argument('--paragraph-patterns', '-p', type=Path,
+                        help='a list of patterns that can be used to filter paragraphs '
+                             'remained after boilerplate removal.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -235,10 +253,11 @@ def filter_tokens(paragraph: str):
 
 def process(index_file: Path, warc_dir: Path,
             output_dir: Path, remover: BoilerplateRemover,
-            token_filtering: bool):
+            token_filtering: bool, paragraph_patterns: Path):
     """Basically just calls :meth:`IndexWarcReader.read`."""
     logging.info(f'Processing {index_file}...')
-    reader = IndexWarcReader(warc_dir, output_dir, remover, token_filtering)
+    reader = IndexWarcReader(warc_dir, output_dir, remover, token_filtering,
+                             paragraph_patterns)
     try:
         reader.read(index_file)
     except:  # noqa
@@ -283,12 +302,13 @@ def main():
     fn = functools.partial(process, warc_dir=args.warc_dir,
                            output_dir=args.output_dir,
                            remover=remover,
-                           token_filtering=args.token_filtering)
+                           token_filtering=args.token_filtering,
+                           paragraph_patterns=args.paragraph_patterns)
 
     with Pool(args.processes) as pool:
         consume(otqdm(pool.imap_unordered(fn, index_files),
-                      f'Removing boilerplate with {args.boilerplate_tool}...',
-                      total=len(index_files)))
+                      f'Removing boilerplate with {args.boilerplate_tool} '
+                      f'from {args.warc_dir.name}...', total=len(index_files)))
         pool.close()
         pool.join()
 

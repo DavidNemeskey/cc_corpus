@@ -16,6 +16,7 @@ from functools import partial
 import logging
 from multiprocessing import Pool, Manager
 import os
+from pathlib import Path
 import re
 
 from multiprocessing_logging import install_mp_handler
@@ -179,7 +180,7 @@ def initialize_url_filters(drop_urls, keep_urls):
 def filter_urls(doc_iter, urls_to_drop, stats):
     doc_no, kept = 0, 0
     for doc_no, doc in enumerate(doc_iter, start=1):
-        if not doc.attrs['url'] in urls_to_drop:
+        if not doc.id in urls_to_drop:
             kept += 1
             yield doc
     if doc_no:
@@ -191,7 +192,7 @@ def filter_urls(doc_iter, urls_to_drop, stats):
 def retain_urls(doc_iter, urls_to_keep, stats):
     doc_no, kept = 0, 0
     for doc_no, doc in enumerate(doc_iter, start=1):
-        if doc.attrs['url'] in urls_to_keep:
+        if doc.id in urls_to_keep:
             kept += 1
             yield doc
     if doc_no:
@@ -279,7 +280,8 @@ def main():
         # Note: + / sum() do not keep keys with 0 values here, hence update()
         stats = Counter()
         for sub_stats in otqdm(p.imap_unordered(f, files),
-                               'Filtering corpus...', total=len(files)):
+                               f'Filtering corpus {Path(args.input_dir).name} ...',
+                               total=len(files)):
             stats.update(sub_stats)
         logging.info('Statistics: {}'.format(stats))
         p.close()

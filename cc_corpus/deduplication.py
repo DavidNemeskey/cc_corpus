@@ -12,13 +12,14 @@ from pathlib import Path
 import pickle
 import re
 import shutil
+from typing import Optional
 
-from datasketch import MinHash, LeanMinHash
+from datasketch import LeanMinHash, MinHash, MinHashLSH
 
 
 class BatchWriter:
     """Writes batches of minhash data."""
-    def __init__(self, batch_size, out_dir, digits=4, first_batch=1):
+    def __init__(self, batch_size, out_dir, digits=1, first_batch=1):
         """
         Parameters:
         - batch_size: the number of documents after which a new batch file is
@@ -39,20 +40,22 @@ class BatchWriter:
 
     def write_results(self, input_file, results):
         """Prints the results of minhashing a data file."""
-        if self.p_written >= self.batch_size:
-            self.new_file()
+        # If there are no records in the file: just skip it!
+        if results['minhash']:
+            if self.p_written >= self.batch_size:
+                self.new_file()
 
-        print('{}\t{}\t{}\t{}'.format(input_file, len(results['minhash']),
-                                      self.mh_offset, self.di_offset),
-              file=self.filef)
-        for mh in results['minhash']:
-            self.mh_offset += self.minhashf.write(pickle.dumps(mh))
-        for id_fields in results['id']:
-            self.di_offset += self.doc_idf.write(
-                '{}\n'.format('\t'.join(str(f) for f in id_fields))
-                .encode('utf-8')
-            )
-        self.p_written += len(results['minhash'])
+            print('{}\t{}\t{}\t{}'.format(input_file, len(results['minhash']),
+                                          self.mh_offset, self.di_offset),
+                  file=self.filef)
+            for mh in results['minhash']:
+                self.mh_offset += self.minhashf.write(pickle.dumps(mh))
+            for id_fields in results['id']:
+                self.di_offset += self.doc_idf.write(
+                    '{}\n'.format('\t'.join(str(f) for f in id_fields))
+                    .encode('utf-8')
+                )
+            self.p_written += len(results['minhash'])
 
     def copy_file(self, input_prefix):
         """
@@ -85,6 +88,7 @@ class BatchWriter:
         the batch counter increases, but should also be called when processing
         ends to close the files of the last batch.
         """
+        logging.debug('Closing...')
         if self.filef is not None:
             self.minhashf.close()
             self.doc_idf.close()
@@ -171,10 +175,33 @@ class MinHasher:
     def shinglize(self, text):
         """Creates character n-grams from the text."""
         for i in range(len(text) - self.n + 1):
-            yield text[i:i+self.n]
+            yield text[i:i + self.n]
 
     def minhash(self, text):
         mh = MinHash(num_perm=self.permutations)
         for shingle in self.shinglize(text):
             mh.update(shingle.encode('utf-8'))
         return LeanMinHash(mh)
+
+
+def read_batch_to_lsh(
+    batch: Path, lsh: Optional[MinHashLSH] = None,
+    threshold: Optional[float] = None, permutations: Optional[int] = None
+) -> MinHashLSH:
+    """
+    Reads a batch into a :class:`MinHashLSH` object. Works in two ways:
+
+    #. If an already existing object is passed in the _lsh_ argument, it will
+       be updated with the contents of the batch. It is assumed that all
+       documents in the batch are unique w.r.t. other documents in the batch
+       **and the keys in the _lsh_ object as well**. In this cae, the rest of
+       the arguments are ignored.
+    #. If _lsh_ is ``None``, a new one is created and returned with the
+       specified threshold and number of permutations.
+    """
+    if lsh is None:
+        lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
+    for input_file, results in read_batch(batch):
+        for doc_id, minhash in zip(results['id'], results['minhash']):
+            lsh.insert('\t'.join(doc_id), minhash)
+    return lsh
