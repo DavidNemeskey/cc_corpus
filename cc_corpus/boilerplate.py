@@ -39,9 +39,18 @@ class JustextRemover(BoilerplateRemover):
         self.stopwords = justext.get_stoplist(language)
         logging.debug(f'Number of stopwords: {len(self.stopwords)}')
 
-    def remove(self, html: bytes, url: str):
-        return [p.text for p in justext.justext(html, self.stopwords)
-                if not p.is_boilerplate]
+    def remove(self, html: bytes, url: str, analyse_only: bool):
+        if analyse_only:
+            text = []
+            flags = []
+            for count, p in enumerate(justext.justext(html, self.stopwords)):
+                text.append(p.text)
+                if p.is_boilerplate:
+                    flags.append(count)
+            return (text, flags)
+        else:
+            return [p.text for p in justext.justext(html, self.stopwords)
+                    if not p.is_boilerplate]
 
 
 class JustextNonRemover(JustextRemover):

@@ -38,7 +38,7 @@ IndexTuple = namedtuple('IndexTuple', ['index', 'domain', 'url', 'warc',
 whitelist = set()
 matcher3dots = re.compile(r'^\w+\.\.\.$')
 matcher3punct = re.compile(r'.*[^\w\s]{3,}')
-
+analyse_only = False
 
 class IndexWarcReader:
     """
@@ -115,9 +115,18 @@ class IndexWarcReader:
         # header, text = warc.payload.read().split(b'\r\n\r\n', maxsplit=1)
         try:
             header, chunks = convert(warc)
-            paragraphs = list(chain.from_iterable(
-                self.remover.remove(chunk, index.url) for chunk in chunks
-            ))
+            if analyse_only:
+                paragraphs = []
+                justext_flags = []
+                for chunk in chunks:
+                    texts, flags = self.remover.remove(chunk, index.url, analyse_only)
+                    paragraphs += texts
+                    justext_flags += flags
+            else:
+                paragraphs = list(chain.from_iterable(
+                    self.remover.remove(chunk, index.url, analyse_only)
+                    for chunk in chunks
+                ))
         # TypeError JusText bug, AssertionError, ValueError JusText bug on comment...
         except:  # noqa
             # Do not distinguish between the different errors
@@ -136,8 +145,13 @@ class IndexWarcReader:
         else:
             cleared_paragraphs = escaped_paragraphs
         if self.paragraph_pattern:
-            cleared_paragraphs = [p for p in cleared_paragraphs
-                                  if not self.paragraph_pattern.search(p)]
+            if analyse_only:
+                regex_flags = [i for i, p in enumerate(cleared_paragraphs)
+                               if self.paragraph_pattern.search(p)]
+                print(regex_flags)
+            else:
+                cleared_paragraphs = [p for p in cleared_paragraphs
+                                      if not self.paragraph_pattern.search(p)]
         if len(cleared_paragraphs) == 0:
             logging.info(f'Nothing\'s left of {index.url} '
                          'after boilerplate removal')
@@ -153,6 +167,10 @@ class IndexWarcReader:
                        "response": header.decode('utf-8').strip()},
             paragraphs=cleared_paragraphs
         )
+        if analyse_only:
+            document.attrs['justext_boilerplate_detected'] = justext_flags
+            if self.paragraph_pattern:
+                document.attrs['regex_boilerplate_detected'] = regex_flags
 
         # This extracts the relevant metadata from the http response part into
         # the attrs (but keeps them in the http response part as well):
@@ -205,6 +223,9 @@ def parse_arguments():
                         help='the directory with the WARC segments')
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the output directory')
+    parser.add_argument('--analyse-only', '-a', action='store_true',
+                        help='Do not remove boilerplate, just tag the '
+                             'suspected paragraphs.')
     parser.add_argument('--boilerplate-tool', '-b', default='trafilatura',
                         choices=['dummy', 'justext', 'trafilatura'],
                         help='the boilerplate removal algorithm to use '
@@ -279,6 +300,9 @@ def main():
     if args.token_filtering and args.token_whitelist:
         with open(args.token_whitelist, 'rt') as list_file:
             whitelist.update(map(str.strip, list_file))
+    if args.analyse_only:
+        global analyse_only
+        analyse_only = True
 
     try:
         if args.boilerplate_tool == 'justext':
