@@ -76,7 +76,8 @@ def main():
         f = partial(extract_attrs_fields, attrs=attributes)
         for lines in pool.map(f, files):
             for attrs in lines:
-                print('\t'.join(attrs), file=out)
+                # print('\t'.join(attrs), file=out)
+                print('\t'.join(map(str, attrs)), file=out)
         pool.close()
         pool.join()
 

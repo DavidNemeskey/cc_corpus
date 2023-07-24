@@ -40,6 +40,7 @@ matcher3dots = re.compile(r'^\w+\.\.\.$')
 matcher3punct = re.compile(r'.*[^\w\s]{3,}')
 analyse_only = False
 
+
 class IndexWarcReader:
     """
     Reads index files and the files with the downloaded WARC segments in
@@ -148,7 +149,6 @@ class IndexWarcReader:
             if analyse_only:
                 regex_flags = [i for i, p in enumerate(cleared_paragraphs)
                                if self.paragraph_pattern.search(p)]
-                print(regex_flags)
             else:
                 cleared_paragraphs = [p for p in cleared_paragraphs
                                       if not self.paragraph_pattern.search(p)]
@@ -168,9 +168,12 @@ class IndexWarcReader:
             paragraphs=cleared_paragraphs
         )
         if analyse_only:
-            document.attrs['justext_boilerplate_detected'] = justext_flags
+            document.attrs['paragraph_count'] = len(paragraphs)
+            document.attrs['justext_boilerplate_count'] = len(justext_flags)
             if self.paragraph_pattern:
-                document.attrs['regex_boilerplate_detected'] = regex_flags
+                document.attrs['regex_boilerplate_count'] = len(regex_flags)
+                intersection = set(regex_flags).intersection((set(justext_flags)))
+                document.attrs['double_boilerplate_count'] = len(intersection)
 
         # This extracts the relevant metadata from the http response part into
         # the attrs (but keeps them in the http response part as well):
