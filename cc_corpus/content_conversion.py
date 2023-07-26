@@ -77,7 +77,11 @@ def convert_bib(text: bytes) -> Generator[str]:
     Converts BibTex data to a "section" -- a title-paragraph pair, where the
     latter comes from the abstract. Entries lacking an abstract are skipped.
     """
-    db = pybtex.database.parse_bytes(text, 'bibtex')
+    try:
+        db = pybtex.database.parse_bytes(text, 'bibtex')
+    except: #noqa
+        logging.exception(f'Error in parsing bib: {text}')
+        return
 
     for entry in db.entries.values():
         try:
