@@ -12,12 +12,13 @@ class StepBase(BaseModel):
     output: Path = None
     further_params: list = []
 
+
 class StepCreate(StepBase):
     pass
+
 
 class Step(StepBase):
     id: int
 
     class Config:
         orm_mode = True
-

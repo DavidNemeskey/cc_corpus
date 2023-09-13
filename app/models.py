@@ -1,8 +1,9 @@
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Column, Integer, String
 from pathlib import Path
 import subprocess
 
 from .database import Base
+
 
 class Step(Base):
     __tablename__ = "steps"
@@ -27,6 +28,3 @@ class Step(Base):
         logfile = LOG_DIR / f"step_{self.id}_{self.script.split('.')[0]}.log"
         with open(logfile, 'w') as log_f:
             subprocess.Popen(arguments, stdout=log_f, stderr=log_f)
-
-
-

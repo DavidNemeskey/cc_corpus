@@ -7,13 +7,11 @@ from . import models, schemas
 from .database import SessionLocal, engine
 
 
-
 # TODO this should be replaced by proper migrations using the Alembic library
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(
-    title = "CC Corpus manager"
-)
+app = FastAPI(title="CC Corpus manager")
+
 
 # DB Dependency
 def get_db():
@@ -24,23 +22,22 @@ def get_db():
         db.close()
 
 
-
-
-
 @app.on_event("startup")
 def seed_db():
     db = SessionLocal()
     num_steps = db.query(models.Step).count()
     if num_steps == 0:
         steps = [
-            {"script": "remove_boilerplate.py",
-             "input": "../test_corpus2/04a_index_sorted",
-             "output": "../test_corpus2/05_boilerplate_removed",
-             "further_params": "-w ../test_corpus2/04_downloaded -b justext",
-             "script_version": "1.14.0",
-             "comment": "",
-             "status": "prelaunch"
-            },
+            {
+                "script": "remove_boilerplate.py",
+                "input": "../test_corpus2/04a_index_sorted",
+                "output": "../test_corpus2/05_boilerplate_removed",
+                "further_params":
+                    "-w ../test_corpus2/04_downloaded -b justext",
+                "script_version": "1.14.0",
+                "comment": "",
+                "status": "prelaunch"
+             },
         ]
         for step in steps:
             db.add(models.Step(**step))
@@ -48,10 +45,12 @@ def seed_db():
     else:
         print(f"We already have {num_steps} records in our DB")
 
+
 @app.get("/")
 def index(db: Session = Depends(get_db)):
     steps = db.query(models.Step).all()
     return {"steps": steps}
+
 
 @app.get("/step/{step_id}")
 def query_step_by_id(step_id: int, db: Session = Depends(get_db)):
@@ -62,28 +61,6 @@ def query_step_by_id(step_id: int, db: Session = Depends(get_db)):
         )
     return db_step
 
-#
-#
-# @app.get("/steps/")
-# def query_steps_by_parameters(script: str | None = None,
-#                               comment: str | None = None,
-#                               status: str | None = None,
-#                               ):
-#     # This helper functions checks whether a record matches the query
-#     def check_step(step: Step) -> bool:
-#         return all(
-#             (
-#                 script is None or step.script == script,
-#                 comment is None or step.comment == comment,
-#                 status is None or step.status == status,
-#             )
-#         )
-#
-#     selection = [step for step in steps.values() if check_step(step)]
-#     return{
-#         "query": {"script": script, "comment": comment},
-#         "selection": selection
-#     }
 
 # TODO status is a protected field, automatically set to PRELAUNCH.
 @app.post("/")
@@ -100,6 +77,7 @@ def add_step(step: schemas.StepCreate,
     db.commit()
     db.refresh(db_step)
     return {"added": db_step}
+
 
 @app.delete("/step/{step_id}")
 def delete_step(step_id: int, db: Session = Depends(get_db)):
@@ -119,7 +97,8 @@ def run_step(step_id: int, db: Session = Depends(get_db)):
         )
     if db_step.status != "prelaunch":
         raise HTTPException(
-            status_code=403, detail=f"Step with {step_id=} is not ready for execution."
+            status_code=403,
+            detail=f"Step with {step_id=} is not ready for execution."
         )
     db_step.run_script()
     db_step.status = "running"
@@ -136,7 +115,9 @@ def report_completed(step_id: int, db: Session = Depends(get_db)):
         )
     if db_step.status != "running":
         raise HTTPException(
-            status_code=403, detail=f"Step with {step_id=} is not running, how can it be completed?"
+            status_code=403,
+            detail=f"Step with {step_id=} is not running, "
+                   f"how can it be completed?"
         )
     db_step.status = "completed"
     db.commit()
