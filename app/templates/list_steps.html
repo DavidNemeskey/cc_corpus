@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CC Corpus pipeline manager</title>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr>
+                <th>Step id</th>
+                <th>script</th>
+                <th>input directory</th>
+                <th>output directory</th>
+                <th>status</th>
+            </tr>
+        </thead>
+        {% for step in steps %}
+            <tr>
+                <td>{{ step.id }}</td>
+                <td>{{ step.script }}</td>
+                <td>{{ step.input }}</td>
+                <td>{{ step.output }}</td>
+                <td>{{ step.status }}</td>
+                <td>
+                    <a href="/step/{{step.id}}">view</a>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+    <a href="/create_step_form/">Create New Step</a>
+</body>
+</html>

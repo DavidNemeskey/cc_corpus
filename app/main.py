@@ -1,5 +1,7 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.exceptions import HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 
@@ -11,6 +13,7 @@ from .database import SessionLocal, engine
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CC Corpus manager")
+templates = Jinja2Templates(directory="app/templates")
 
 
 # DB Dependency
@@ -46,37 +49,67 @@ def seed_db():
         print(f"We already have {num_steps} records in our DB")
 
 
-@app.get("/")
-def index(db: Session = Depends(get_db)):
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request, db: Session = Depends(get_db)):
     steps = db.query(models.Step).all()
-    return {"steps": steps}
+    context = {"request": request, "steps": steps}
+    return templates.TemplateResponse("list_steps.html", context)
+    # return {"steps": steps}
 
 
-@app.get("/step/{step_id}")
-def query_step_by_id(step_id: int, db: Session = Depends(get_db)):
+@app.get("/step/{step_id}", response_class=HTMLResponse)
+def query_step_by_id(step_id: int, request: Request,
+                     db: Session = Depends(get_db)):
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
     if not db_step:
         raise HTTPException(
             status_code=404, detail=f"Step with {step_id=} does not exist."
         )
-    return db_step
+    context = {"request": request, "step": db_step}
+    return templates.TemplateResponse("view_step.html", context)
 
 
-# TODO status is a protected field, automatically set to PRELAUNCH.
-@app.post("/")
-def add_step(step: schemas.StepCreate,
-             db: Session = Depends(get_db)
-             ):
-    db_step = db.query(models.Step).filter(models.Step.id == step.id).first()
-    if db_step:
-        HTTPException(
-            status_code=400, detail=f"Step with {step.id=} already exist."
-        )
+@app.post("/api/create_step/", response_model=schemas.Step)
+def add_step_from_json(step: schemas.StepCreate,
+                       db: Session = Depends(get_db)
+                       ) -> schemas.Step:
     db_step = models.Step(**step.dict())
+    db_step.status = "prelaunch"
     db.add(db_step)
     db.commit()
     db.refresh(db_step)
-    return {"added": db_step}
+    return db_step
+
+
+@app.get("/create_step_form/", response_class=HTMLResponse)
+def create_step_form(request: Request):
+    context = {"request": request}
+    return templates.TemplateResponse("new_step.html", context)
+
+
+@app.post("/create_step/", response_class=HTMLResponse)
+def add_step_from_form(request: Request,
+                       db: Session = Depends(get_db),
+                       stepScript: str = Form(...),
+                       stepInput: str = Form(...),
+                       stepOutput: str = Form(...),
+                       stepFurtherParams: str = Form(...),
+                       stepScriptVersion: str = Form(...),
+                       stepComment: str = Form(...),
+                       ):
+    step = {"script": stepScript,
+            "input": stepInput,
+            "output": stepOutput,
+            "further_params": stepFurtherParams,
+            "script_version": stepScriptVersion,
+            "comment": stepComment}
+    db_step = models.Step(**step)
+    db_step.status = "prelaunch"
+    db.add(db_step)
+    db.commit()
+    db.refresh(db_step)
+    context = {"request": request, "step": db_step}
+    return templates.TemplateResponse("view_step.html", context)
 
 
 @app.delete("/step/{step_id}")
@@ -87,7 +120,6 @@ def delete_step(step_id: int, db: Session = Depends(get_db)):
     return {"deleted": db_step}
 
 
-# TODO using REST for RPC is not the most elegant way to do it.
 @app.post("/run/{step_id}")
 def run_step(step_id: int, db: Session = Depends(get_db)):
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()

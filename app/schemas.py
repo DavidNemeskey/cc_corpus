@@ -1,4 +1,3 @@
-from pathlib import Path
 from pydantic import BaseModel
 
 
@@ -6,11 +5,10 @@ class StepBase(BaseModel):
     script: str
     script_version: str
     comment: str
-    status: str
     # input_data_generated_by: int
-    input: Path = None
-    output: Path = None
-    further_params: list = []
+    input: str
+    output: str
+    further_params: str
 
 
 class StepCreate(StepBase):
@@ -19,6 +17,7 @@ class StepCreate(StepBase):
 
 class Step(StepBase):
     id: int
+    status: str
 
     class Config:
         orm_mode = True
