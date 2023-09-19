@@ -1,6 +1,7 @@
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,9 @@ from .database import SessionLocal, engine
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CC Corpus manager")
+app.mount("/static",
+          StaticFiles(directory="app/static"),
+          name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
