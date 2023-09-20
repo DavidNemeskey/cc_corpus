@@ -3,32 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <title>CC Corpus pipeline manager</title>
-    <link href="{{ url_for('static', path='/css/main.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
 </head>
 <body>
-    <table>
-        <thead>
-            <tr>
-                <th>Step id</th>
-                <th>script</th>
-                <th>input directory</th>
-                <th>output directory</th>
-                <th>status</th>
-            </tr>
-        </thead>
-        {% for step in steps %}
-            <tr>
-                <td>{{ step.id }}</td>
-                <td>{{ step.script }}</td>
-                <td>{{ step.input }}</td>
-                <td>{{ step.output }}</td>
-                <td>{{ step.status }}</td>
-                <td>
-                    <a href="/step/{{step.id}}">view</a>
-                </td>
-            </tr>
-        {% endfor %}
-    </table>
-    <a href="/create_step_form/">Create New Step</a>
+    <div class="well">
+        <table>
+            <thead>
+                <tr>
+                    <th>Step id</th>
+                    <th>script</th>
+                    <th>input directory</th>
+                    <th>output directory</th>
+                    <th>status</th>
+                </tr>
+            </thead>
+            {% for step in steps %}
+                <tr>
+                    <td>{{ step.id }}</td>
+                    <td>{{ step.script }}</td>
+                    <td>{{ step.input }}</td>
+                    <td>{{ step.output }}</td>
+                    <td>{{ step.status }}</td>
+                    <td>
+                        <a href="/step/{{step.id}}">view</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="container">
+        <a href="/create_step_form/" class="btn btn-primary">Create New Step</a>
+    </div>
+
 </body>
 </html>

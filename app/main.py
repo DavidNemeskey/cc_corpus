@@ -1,6 +1,6 @@
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.exceptions import HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -18,7 +18,12 @@ app.mount("/static",
           StaticFiles(directory="app/static"),
           name="static")
 templates = Jinja2Templates(directory="app/templates")
+favicon_path= 'app/static/favicon.ico'
 
+
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    return FileResponse(favicon_path)
 
 # DB Dependency
 def get_db():
