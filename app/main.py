@@ -18,12 +18,13 @@ app.mount("/static",
           StaticFiles(directory="app/static"),
           name="static")
 templates = Jinja2Templates(directory="app/templates")
-favicon_path= 'app/static/favicon.ico'
+favicon_path = 'app/static/favicon.ico'
 
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
     return FileResponse(favicon_path)
+
 
 # DB Dependency
 def get_db():
@@ -136,11 +137,12 @@ def run_step(step_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=404, detail=f"Step with {step_id=} does not exist."
         )
-    if db_step.status != "prelaunch":
-        raise HTTPException(
-            status_code=403,
-            detail=f"Step with {step_id=} is not ready for execution."
-        )
+    # TODO commented this one out to make testing easier:
+    # if db_step.status != "prelaunch":
+    #     raise HTTPException(
+    #         status_code=403,
+    #         detail=f"Step with {step_id=} is not ready for execution."
+    #     )
     db_step.run_script()
     db_step.status = "running"
     db.commit()

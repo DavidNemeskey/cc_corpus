@@ -52,6 +52,7 @@ setup(name='commoncrawl-downloader',
       packages=find_packages(exclude=['scripts']),
       # Install the scripts
       scripts=[
+          'scripts/api_wrapper.py',
           'scripts/autonomous_cross_deduplicator.py',
           'scripts/batch_deduplicate_index_urls.py',
           'scripts/content_type_stats.py',

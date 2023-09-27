@@ -18,12 +18,14 @@ class Step(Base):
     further_params = Column(String)
 
     def run_script(self):
-        arguments = [self.script,
+        arguments = ["api_wrapper.py",
+                     str(self.id),
+                     self.script,
                      "-i", self.input,
                      "-o", self.output,
-                     "--sid", str(self.id),
                      ]
         arguments += self.further_params.split(" ")
+        # TODO: this should not be hardwired:
         LOG_DIR = Path("/mnt/d/coding/test_corpus2/logs")
         logfile = LOG_DIR / f"step_{self.id}_{self.script.split('.')[0]}.log"
         with open(logfile, 'w') as log_f:

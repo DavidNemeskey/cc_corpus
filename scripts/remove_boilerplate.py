@@ -200,8 +200,6 @@ def parse_arguments():
                         help='do token level filtering')
     parser.add_argument('--token-whitelist', '-tw', type=Path,
                         help='the file containing whitelisted tokens.')
-    parser.add_argument('--sid', type=int, default=None,
-                        help='the id of the step this execution is.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1)')
@@ -295,15 +293,6 @@ def main():
         pool.join()
 
     logging.info('Done.')
-
-    # TODO where should it get the correct URL for the manager API?
-    # TODO This should be a generic method and moved to a module.
-    logging.debug(f"For callback: {args.sid=}")
-    if args.sid != None:
-        import requests
-        url = f"http://127.0.0.1:8000/completed/{args.sid}"
-        x = requests.post(url)
-        logging.debug(x.text)
 
 
 if __name__ == '__main__':
