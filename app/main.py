@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 
-from . import models, schemas
+from . import crud, models, schemas
 from .database import SessionLocal, engine
 
 
@@ -61,7 +61,7 @@ def seed_db():
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
-    steps = db.query(models.Step).all()
+    steps = crud.get_steps(db)
     context = {"request": request, "steps": steps}
     return templates.TemplateResponse("list_steps.html", context)
     # return {"steps": steps}
@@ -70,7 +70,7 @@ def index(request: Request, db: Session = Depends(get_db)):
 @app.get("/step/{step_id}", response_class=HTMLResponse)
 def query_step_by_id(step_id: int, request: Request,
                      db: Session = Depends(get_db)):
-    db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
+    db_step = crud.get_step_by_id(db, step_id)
     if not db_step:
         raise HTTPException(
             status_code=404, detail=f"Step with {step_id=} does not exist."
@@ -83,12 +83,7 @@ def query_step_by_id(step_id: int, request: Request,
 def add_step_from_json(step: schemas.StepCreate,
                        db: Session = Depends(get_db)
                        ) -> schemas.Step:
-    db_step = models.Step(**step.dict())
-    db_step.status = "prelaunch"
-    db.add(db_step)
-    db.commit()
-    db.refresh(db_step)
-    return db_step
+    return crud.create_step(db, step)
 
 
 @app.get("/create_step_form/", response_class=HTMLResponse)
@@ -107,31 +102,27 @@ def add_step_from_form(request: Request,
                        stepScriptVersion: str = Form(...),
                        stepComment: str = Form(...),
                        ):
-    step = {"script": stepScript,
-            "input": stepInput,
-            "output": stepOutput,
-            "further_params": stepFurtherParams,
-            "script_version": stepScriptVersion,
-            "comment": stepComment}
-    db_step = models.Step(**step)
-    db_step.status = "prelaunch"
-    db.add(db_step)
-    db.commit()
-    db.refresh(db_step)
+    step = schemas.StepCreate(
+        script=stepScript,
+        input=stepInput,
+        output=stepOutput,
+        further_params=stepFurtherParams,
+        script_version=stepScriptVersion,
+        comment=stepComment)
+    db_step = crud.create_step(db, step)
     context = {"request": request, "step": db_step}
     return templates.TemplateResponse("view_step.html", context)
 
 
 @app.delete("/step/{step_id}")
 def delete_step(step_id: int, db: Session = Depends(get_db)):
-    # TODO check what is step.status. Only if prelaunch should be deleted!
-    db_step = db.query(models.Step).filter(models.Step.id == step_id).delete()
-    db.commit()
-    return {"deleted": db_step}
+    # TODO check what is step.status. Only if prelaunch should be deleted?
+    crud.delete_step_by_id(db, step_id)
 
 
 @app.post("/run/{step_id}")
 def run_step(step_id: int, db: Session = Depends(get_db)):
+    # TODO should this be here or in the crud.py?
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
     if not db_step:
         raise HTTPException(
@@ -151,6 +142,7 @@ def run_step(step_id: int, db: Session = Depends(get_db)):
 
 @app.post("/completed/{step_id}")
 def report_completed(step_id: int, db: Session = Depends(get_db)):
+    # TODO should this be here or in the crud.py?
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
     if not db_step:
         raise HTTPException(
