@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 
-from . import crud, models, schemas
+from . import crud, models, seed_db, schemas
 from .database import SessionLocal, engine
 
 
@@ -35,26 +35,14 @@ def get_db():
         db.close()
 
 
+# TODO this is for development purposes. Will we need seeding for production?
 @app.on_event("startup")
-def seed_db():
+def dev_seed():
+    """Seeds the DB if it is empty."""
     db = SessionLocal()
     num_steps = db.query(models.Step).count()
     if num_steps == 0:
-        steps = [
-            {
-                "script": "remove_boilerplate.py",
-                "input": "../test_corpus2/04a_index_sorted",
-                "output": "../test_corpus2/05_boilerplate_removed",
-                "further_params":
-                    "-w ../test_corpus2/04_downloaded -b justext",
-                "script_version": "1.14.0",
-                "comment": "",
-                "status": "prelaunch"
-             },
-        ]
-        for step in steps:
-            db.add(models.Step(**step))
-        db.commit()
+        seed_db.seed_steps(db)
     else:
         print(f"We already have {num_steps} records in our DB")
 
