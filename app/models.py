@@ -1,7 +1,16 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Defines the model classes.
+These implements the SQLAlchemy ORM and also the model-logic level methods.
+"""
+
 from sqlalchemy import Column, Integer, String
 from pathlib import Path
 import subprocess
 
+from .config import config
 from .database import Base
 
 
@@ -18,6 +27,15 @@ class Step(Base):
     further_params = Column(String)
 
     def run_script(self):
+        """
+        Starts the actual execution of the script defined by this step.
+
+        Passes the name of this script and all its runtime parameters to the
+        api_wrapper script and starts that as a separate process.
+        This is a "fire and forget" launch. It is the responsibility of the
+        api_wrapper.py to wait for the completion of the actual task and make
+        a callback to the API.
+        """
         arguments = ["api_wrapper.py",
                      str(self.id),
                      self.script,
@@ -25,8 +43,7 @@ class Step(Base):
                      "-o", self.output,
                      ]
         arguments += self.further_params.split(" ")
-        # TODO: this should not be hardwired:
-        LOG_DIR = Path("/mnt/d/coding/test_corpus2/logs")
-        logfile = LOG_DIR / f"step_{self.id}_{self.script.split('.')[0]}.log"
+        log_dir = Path(config["folders"]["logs"])
+        logfile = log_dir / f"step_{self.id}_{self.script.split('.')[0]}.log"
         with open(logfile, 'w') as log_f:
             subprocess.Popen(arguments, stdout=log_f, stderr=log_f)

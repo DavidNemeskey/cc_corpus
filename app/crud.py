@@ -1,5 +1,11 @@
-from sqlalchemy.orm import Session
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
+"""
+A CRUD layer for basic interactions with the DB.
+"""
+
+from sqlalchemy.orm import Session
 from . import models, schemas
 
 

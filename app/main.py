@@ -26,8 +26,8 @@ async def favicon():
     return FileResponse(favicon_path)
 
 
-# DB Dependency
 def get_db():
+    """Supplies the DB session to methods via dependency."""
     db = SessionLocal()
     try:
         yield db
