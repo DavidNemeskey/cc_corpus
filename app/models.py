@@ -18,7 +18,8 @@ class Step(Base):
     __tablename__ = "steps"
 
     id = Column(Integer, primary_key=True, index=True)
-    script = Column(String)
+    step_name = Column(String)
+    script_file = Column(String)
     script_version = Column(String)
     comment = Column(String)
     status = Column(String)
@@ -38,12 +39,12 @@ class Step(Base):
         """
         arguments = ["api_wrapper.py",
                      str(self.id),
-                     self.script,
+                     self.script_file,
                      "-i", self.input,
                      "-o", self.output,
                      ]
         arguments += self.further_params.split(" ")
         log_dir = Path(config["folders"]["logs"])
-        logfile = log_dir / f"step_{self.id}_{self.script.split('.')[0]}.log"
+        logfile = log_dir / f"step_{self.id}_{self.script_file.split('.')[0]}.log"
         with open(logfile, 'w') as log_f:
             subprocess.Popen(arguments, stdout=log_f, stderr=log_f)

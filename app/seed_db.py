@@ -14,7 +14,8 @@ from . import models
 def seed_steps(db: Session):
     steps = [
         {
-            "script": "remove_boilerplate.py",
+            "step_name": "remove_boilerplate",
+            "script_file": "remove_boilerplate.py",
             "input": "../test_corpus2/04a_index_sorted",
             "output": "../test_corpus2/05_boilerplate_removed",
             "further_params":

@@ -80,22 +80,16 @@ def create_step_form(request: Request):
     return templates.TemplateResponse("new_step.html", context)
 
 
+# TODO I could not make the comment field optional, so a default value of
+#   " " is given in the template. This is quite a monkeypatch.
 @app.post("/create_step/", response_class=HTMLResponse)
 def add_step_from_form(request: Request,
                        db: Session = Depends(get_db),
-                       stepScript: str = Form(...),
-                       stepInput: str = Form(...),
-                       stepOutput: str = Form(...),
-                       stepFurtherParams: str = Form(...),
-                       stepScriptVersion: str = Form(...),
+                       stepName: str = Form(...),
                        stepComment: str = Form(...),
                        ):
     step = schemas.StepCreate(
-        script=stepScript,
-        input=stepInput,
-        output=stepOutput,
-        further_params=stepFurtherParams,
-        script_version=stepScriptVersion,
+        step_name=stepName,
         comment=stepComment)
     db_step = crud.create_step(db, step)
     context = {"request": request, "step": db_step}

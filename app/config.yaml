@@ -1,3 +1,43 @@
 ---
-  folders:
-    logs: "/mnt/d/coding/test_corpus2/logs"
+    folders:
+        working_dir: "/mnt/d/coding/test_corpus2/"
+        logs: "/mnt/d/coding/test_corpus2/logs"
+    version_number: "1.14.0"
+    scripts:
+        get_indexfiles:
+            script_file: "get_indexfiles.py"
+            hardwired_params: ""
+        filter_index:
+            script_file: "filter_index.py"
+            hardwired_params: ""
+        deduplicat_index_urls:
+            script_file: "deduplicat_index_urls.py"
+            hardwired_params: ""
+        download_pages:
+            script_file: "download_pages.py"
+            hardwired_params: ""
+        remove_boilerplate:
+            script_file: "remove_boilerplate.py"
+            hardwired_params: ""
+            input: "04a_index_sorted"
+            output: "05_boilerplate_removed"
+            secondary_input: True
+            secondary_input_param: "-w"
+            secondary_input_dir: "04_downloaded"
+            b: "justext"
+        filter_corpus:
+            script_file: "filter_corpus.py"
+            hardwired_params: ""
+        minhash:
+            script_file: "minhash.py"
+            hardwired_params: ""
+        deduplicate_self:
+            script_file: "lsh.py"
+            hardwired_params: "self"
+        deduplicate_cumulative:
+            script_file: "lsh.py"
+            hardwired_params: "cumulative"
+        apply_deduplication:
+            script_file: "dedup_filter.py"
+            hardwired_params: ""
+

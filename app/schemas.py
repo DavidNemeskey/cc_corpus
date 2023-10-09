@@ -14,13 +14,9 @@ from pydantic import BaseModel
 
 
 class StepBase(BaseModel):
-    script: str
-    script_version: str
-    comment: str
+    step_name: str
+    comment: str = None
     # input_data_generated_by: int
-    input: str
-    output: str
-    further_params: str
 
 
 class StepCreate(StepBase):
@@ -29,6 +25,11 @@ class StepCreate(StepBase):
 
 class Step(StepBase):
     id: int
+    script_file: str
+    script_version: str
+    input: str
+    output: str
+    further_params: str
     status: str
 
     class Config:

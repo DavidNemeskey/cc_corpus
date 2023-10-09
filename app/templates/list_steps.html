@@ -11,7 +11,7 @@
             <thead>
                 <tr>
                     <th>Step id</th>
-                    <th>script</th>
+                    <th>Step name</th>
                     <th>input directory</th>
                     <th>output directory</th>
                     <th>status</th>
@@ -21,7 +21,7 @@
             {% for step in steps %}
                 <tr>
                     <td>{{ step.id }}</td>
-                    <td>{{ step.script }}</td>
+                    <td>{{ step.step_name }}</td>
                     <td>{{ step.input }}</td>
                     <td>{{ step.output }}</td>
                     <td>{{ step.status }}</td>
