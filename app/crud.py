@@ -29,8 +29,11 @@ def create_step(db: Session,
     settings = config["scripts"][db_step.step_name]
     settings.update(optional_settings)
     # TODO upgrade this when cc dumps and language codes are introduced:
-    dir_head = config["folders"]["working_dir"]
-    further_params = ""
+    dir_head = config['folders']['working_dir']
+    further_params = "-L " + config['runtime_configurations']['log_level']
+
+    if not settings.get('no_p_param'):
+        further_params += ' -P ' + str(config['runtime_configurations']['processes'])
 
     # Let's go over and process the parameters:
     for key, value in settings.items():
@@ -41,7 +44,7 @@ def create_step(db: Session,
         elif key == 'output':
             db_step.output = dir_head + value
         elif key == 'hardwired_params':
-            further_params += " " + value
+            further_params += ' ' + value
         elif key == 'secondary_input':
             if value:
                 further_params += " " + settings.get('secondary_input_param')

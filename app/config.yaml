@@ -3,6 +3,9 @@
         working_dir: "/mnt/d/coding/test_corpus2/"
         logs: "/mnt/d/coding/test_corpus2/logs"
     version_number: "1.14.0"
+    runtime_configurations:
+        processes: 4
+        log_level: 'info'
     scripts:
         get_indexfiles:
             script_file: "get_indexfiles.py"
