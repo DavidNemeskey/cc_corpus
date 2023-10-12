@@ -67,13 +67,7 @@ def query_step_by_id(step_id: int, request: Request,
     return templates.TemplateResponse("view_step.html", context)
 
 
-@app.post("/api/create_step/", response_model=schemas.Step)
-def add_step_from_json(step: schemas.StepCreate,
-                       db: Session = Depends(get_db)
-                       ) -> schemas.Step:
-    return crud.create_step(db, step)
-
-
+# This is a GET route which displays the form to create a new step
 @app.get("/create_step_form/", response_class=HTMLResponse)
 def create_step_form(request: Request):
     context = {"request": request}
@@ -86,14 +80,73 @@ def create_step_form(request: Request):
 def add_step_from_form(request: Request,
                        db: Session = Depends(get_db),
                        stepName: str = Form(...),
-                       stepComment: str = Form(...),
+                       comment: str = Form(...),
                        ):
     step = schemas.StepCreate(
         step_name=stepName,
-        comment=stepComment)
+        comment=comment)
     db_step = crud.create_step(db, step)
     context = {"request": request, "step": db_step}
     return templates.TemplateResponse("view_step.html", context)
+
+
+@app.post("/api/create_step/", response_model=schemas.Step)
+def add_step_from_json(step: schemas.StepCreate,
+                       db: Session = Depends(get_db)
+                       ) -> schemas.Step:
+    return crud.create_step(db, step)
+
+
+# This is a GET route which displays the form to edit a step
+@app.get("/edit_step/{step_id}", response_class=HTMLResponse)
+def edit_step(step_id: int,
+              request: Request,
+              db: Session = Depends(get_db)
+              ):
+    db_step = crud.get_step_by_id(db, step_id)
+    if not db_step:
+        raise HTTPException(
+            status_code=404, detail=f"Step with {step_id=} does not exist."
+        )
+    print(db_step.further_params)
+    context = {"request": request, "step": db_step}
+    print(context["step"].further_params)
+    return templates.TemplateResponse("edit_step.html", context)
+
+
+@app.post("/update_step/", response_class=HTMLResponse)
+def update_step_from_form(request: Request,
+                          db: Session = Depends(get_db),
+                          stepId: int = Form(...),
+                          stepName: str = Form(...),
+                          scriptFile: str = Form(...),
+                          input: str = Form(...),
+                          output: str = Form(...),
+                          furtherParams: str = Form(...),
+                          scriptVersion: str = Form(...),
+                          comment: str = Form(...),
+                          status: str = Form(...),
+                          ):
+    step = schemas.StepUpdate(
+        id=stepId,
+        step_name=stepName,
+        script_file=scriptFile,
+        input=input,
+        output=output,
+        further_params=furtherParams,
+        script_version=scriptVersion,
+        comment=comment,
+        status=status,
+    )
+    crud.update_step(db, step)
+    db_step = crud.get_step_by_id(db, step.id)
+    context = {"request": request, "step": db_step}
+    return templates.TemplateResponse("view_step.html", context)
+
+
+@app.put("/step")
+def update_step(step: schemas.StepUpdate, db: Session = Depends(get_db)):
+    crud.update_step(db, step)
 
 
 @app.delete("/step/{step_id}")

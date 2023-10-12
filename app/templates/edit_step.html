@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CC Corpus pipeline manager</title>
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="card card-body">
+        <form action="/update_step/" method="post">
+
+            <input type="hidden" name="stepId", value={{ step.id }}>
+
+            <div>
+                <label for="stepName">Step name</label>
+                <input type="text" class="form-control" name="stepName", value={{ step.step_name }}>
+            </div>
+
+            <div>
+                <label for="scriptFile">Script file</label>
+                <input type="text" class="form-control" name="scriptFile", value={{ step.script_file }}>
+            </div>
+
+            <div>
+                <label for="input">Input directory</label>
+                <input type="text" class="form-control" name="input", value={{ step.input }}>
+            </div>
+
+            <div>
+                <label for="output">Output directory</label>
+                <input type="text" class="form-control" name="output", value={{ step.output }}>
+            </div>
+
+            <div>
+                <label for="furtherParams">Further command-line parameters</label>
+                <input type="text" class="form-control" name="furtherParams", value={{ step.further_params }}>
+            </div>
+
+            <div>
+                <label for="scriptVersion">Version of the script codebase</label>
+                <input type="text" class="form-control" name="scriptVersion", value={{ step.script_version }}>
+            </div>
+
+            <div>
+                <label for="comment">Comment</label>
+                <input type="text" class="form-control" name="comment", value={{ step.comment }}>
+            </div>
+
+            <div>
+                <label for="status">Runtime status of the step</label>
+                <input type="text" class="form-control" name="status", value={{ step.status }}>
+            </div>
+
+            <input type="submit" class="btn btn-primary">
+
+
+        </form>
+
+    </div>
+</body>

@@ -24,6 +24,7 @@ def create_step(db: Session,
                 ):
     db_step = models.Step(**step.dict())
     db_step.status = 'prelaunch'
+    db_step.script_version = config["version_number"]
 
     # Fill up the parameters based on the given input or default to config.yaml
     settings = config["scripts"][db_step.step_name]
@@ -60,6 +61,20 @@ def create_step(db: Session,
     db.commit()
     db.refresh(db_step)
     return db_step
+
+
+def update_step(db: Session, step: schemas.StepUpdate):
+    # get existing data from the DB:
+    db_step = db.query(models.Step).filter(models.Step.id == step.id).one_or_none()
+    if db_step is None:
+        return None
+
+    for key, value in vars(step).items():
+        setattr(db_step, key, value) if value else None
+
+    db.commit()
+    db.refresh(db_step)
+    return(db_step)
 
 
 def delete_step_by_id(db: Session, step_id: int):

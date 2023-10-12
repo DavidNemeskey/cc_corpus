@@ -6,7 +6,7 @@
     <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
 </head>
 <body>
-    <div>
+    <div class="card card-body">
         <form action="/create_step/" method="post">
 
             <div>
@@ -15,8 +15,8 @@
             </div>
 
             <div>
-                <label for="stepComment">comment</label>
-                <input type="text" class="form-control" name="stepComment", value=" ">
+                <label for="comment">comment</label>
+                <input type="text" class="form-control" name="comment", value=" ">
             </div>
 
             <input type="submit" class="btn btn-primary">

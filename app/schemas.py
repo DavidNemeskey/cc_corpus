@@ -11,12 +11,28 @@ ORM models (which are defined in models.py).
 """
 
 from pydantic import BaseModel
+from typing import Optional
 
 
 class StepBase(BaseModel):
     step_name: str
     comment: str = None
     # input_data_generated_by: int
+
+
+class StepUpdate(BaseModel):
+    id: Optional[int]
+    step_name: Optional[str]
+    comment: Optional[str]
+    script_file: Optional[str]
+    script_version: Optional[str]
+    input: Optional[str]
+    output: Optional[str]
+    further_params: Optional[str]
+    status: Optional[str]
+
+    class Config:
+        orm_mode = True
 
 
 class StepCreate(StepBase):
