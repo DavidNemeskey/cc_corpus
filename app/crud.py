@@ -33,7 +33,9 @@ def create_step(db: Session,
     dir_head = config['folders']['working_dir']
     further_params = "-L " + config['runtime_configurations']['log_level']
 
-    if not settings.get('no_p_param'):
+    # Some steps can run on only one process and thus have no processes param.
+    # These steps are marked by 'no_p_param: True' in the config.yaml.
+    if not settings.pop('no_p_param', False):
         further_params += ' -P ' + str(config['runtime_configurations']['processes'])
 
     # Let's go over and process the parameters:
@@ -46,15 +48,16 @@ def create_step(db: Session,
             db_step.output = dir_head + value
         elif key == 'hardwired_params':
             further_params += ' ' + value
-        elif key == 'secondary_input':
-            if value:
-                further_params += " " + settings.get('secondary_input_param')
-                further_params += " " + dir_head + settings.get('secondary_input_dir')
-        elif key == 'secondary_input_param' or key == 'secondary_input_dir':
-            # We process these when running into the secondary_input key
-            continue
         else:
-            further_params += " -" + key + " " + value
+            print("====================")
+            print(value)
+            # Most parameters have a simple value:
+            if isinstance(value, str):
+                further_params += " -" + key + " " + value
+            # If the parameter requires special treatment, then it is a dict.
+            elif value['is_path']:
+                # If it is a path we must append it to the project root dir.
+                further_params += " -" + key + " " + dir_head + value[key]
 
     db_step.further_params = further_params
     db.add(db_step)

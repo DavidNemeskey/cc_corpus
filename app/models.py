@@ -40,10 +40,13 @@ class Step(Base):
         arguments = ["api_wrapper.py",
                      str(self.id),
                      self.script_file,
-                     "-i", self.input,
                      "-o", self.output,
                      ]
-        arguments += self.further_params.split(" ")
+        if self.input:
+            arguments.append("-i")
+            arguments.append(self.input)
+        arguments += self.further_params.split()
+        print(f"Executing script: {arguments}")
         log_dir = Path(config["folders"]["logs"])
         logfile = log_dir / f"step_{self.id}_{self.script_file.split('.')[0]}.log"
         with open(logfile, 'w') as log_f:

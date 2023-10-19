@@ -17,7 +17,7 @@ def main():
     step_id = sys.argv[1]
     print(f"Launching script: {sys.argv[1:]}", flush=True)
     subprocess.run(sys.argv[2:])
-    print(f"Successfullly executed the script {sys.argv[2]}")
+    print(f"Successfully executed the script {sys.argv[2]}")
     # TODO this url shoud not be hardwired:
     url = f"http://127.0.0.1:8000/completed/{step_id}"
     requests.post(url)

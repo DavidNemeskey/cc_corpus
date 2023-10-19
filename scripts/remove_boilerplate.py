@@ -184,9 +184,9 @@ def parse_arguments():
     parser = ArgumentParser(
         description='Removes boilerplate from WARC segments and converts '
                     'them to the corpus\'s semi-XML format.')
-    parser.add_argument('--index-dir', '-i', type=Path, required=True,
+    parser.add_argument('--index-dir', type=Path, required=True,
                         help='the index directory')
-    parser.add_argument('--warc-dir', '-w', type=Path, required=True,
+    parser.add_argument('--warc-dir', '-i', type=Path, required=True,
                         help='the directory with the WARC segments')
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the output directory')

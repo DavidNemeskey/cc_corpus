@@ -37,7 +37,18 @@
     </div>
 
     <div class="container">
-        <a href="/edit_step/{{step.id}}" class="btn btn-primary">Edit Step</a>
+        <div class="row">
+            <div class="col-sm">
+                <a href="/edit_step/{{step.id}}" class="btn btn-primary">Edit Step</a>
+            </div>
+            <div class="col-sm">
+                <form action="/run/{{step.id}}" method="post">
+                    <input type="submit" value="Run Step" class="btn btn-primary">
+                </form>
+            </div>
+        </div>
+
+
     </div>
 
 </body>

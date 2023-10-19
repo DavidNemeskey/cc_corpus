@@ -28,6 +28,9 @@
                     <td>
                         <a href="/step/{{step.id}}">view</a>
                         <a href="/edit_step/{{step.id}}">edit</a>
+                        <form action="/run/{{step.id}}" method="post">
+                            <input type="submit" value="run step" class="btn btn-outline-primary btn-sm">
+                        </form>
                     </td>
                 </tr>
             {% endfor %}

@@ -42,18 +42,18 @@ from cc_corpus.utils import notempty, num_digits, openall, otqdm
 def parse_arguments():
     parser = ArgumentParser(
         description='CDX Index Batch Document Downloader')
-    parser.add_argument('input_pattern',
+    parser.add_argument('--input_pattern', '-i',
                         help='Input glob pattern, e.g. "index/*.gz". Must '
                              'be quoted to avoid shell replacement.')
-    parser.add_argument('index_output_dir', type=Path,
+    parser.add_argument('--index_output_dir', type=Path,
                         help='The directory to which the new, sorted index '
                              'files are written.')
-    parser.add_argument('data_output_dir', type=Path,
+    parser.add_argument('--data_output_dir', '-o', type=Path,
                         help='The directory to which the downloaded pages are '
                              'written. The numbering will be consistent with '
                              'the files in index_output_dir, which is '
                              'required by remove_boilerplate.py.')
-    parser.add_argument('error_file', type=Path,
+    parser.add_argument('--error_file', type=Path,
                         help='The file to which the index lines that '
                              'could not be downloaded are written.')
     parser.add_argument('--out-filename', '-of', default='common_crawl',

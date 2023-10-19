@@ -10,37 +10,72 @@
         get_indexfiles:
             script_file: "get_indexfiles.py"
             hardwired_params: ""
+            no_p_param: True
+            output: "01_index"
+            p: "hu"
+            c: "CC-MAIN-2023-14"
         filter_index:
             script_file: "filter_index.py"
             hardwired_params: ""
-        deduplicat_index_urls:
-            script_file: "deduplicat_index_urls.py"
+            input: "01_index"
+            output: "02_index_filtered"
+            -allowed-mimes: "allowed_mimes.txt"
+        deduplicate_index_urls:
+            script_file: "deduplicate_index_urls.py"
             hardwired_params: ""
+            input: "02_index_filtered"
+            output: "03_index_dedup"
+            no_p_param: True
         download_pages:
             script_file: "download_pages.py"
             hardwired_params: ""
+            input: "03_index_dedup"
+            output: "04_download"
+            -index_output_dir:
+                is_path: True
+                -index_output_dir: "04a_index_sorted"
+            -error_file:
+                is_path: True
+                -error_file: "04b_download_errors"
         remove_boilerplate:
             script_file: "remove_boilerplate.py"
             hardwired_params: ""
             input: "04a_index_sorted"
             output: "05_boilerplate_removed"
-            secondary_input: True
-            secondary_input_param: "-w"
-            secondary_input_dir: "04_downloaded"
+            -w:
+                is_path: True
+                -w: "04_downloaded"
             b: "justext"
         filter_corpus:
             script_file: "filter_corpus.py"
             hardwired_params: ""
+            input: "05_boilerplate_removed"
+            output: "06_filtered"
+            u: "doc"
+            l: "hu"
         minhash:
             script_file: "minhash.py"
             hardwired_params: ""
+            input: "06_filtered"
+            output: "07a_minhash"
+            u: "doc"
         deduplicate_self:
             script_file: "lsh.py"
             hardwired_params: "self"
+            input: "07a_minhash"
+            output: "07b_minhash_self"
         deduplicate_cumulative:
             script_file: "lsh.py"
             hardwired_params: "cumulative"
+            input: "07b_minhash_self"
+            output: "07c_minhash_full"
+            c:
+                is_path: True
+                c: "07c_minhash_full"
         apply_deduplication:
             script_file: "dedup_filter.py"
             hardwired_params: ""
-
+            output: "07d_dedup"
+            m:
+                is_path: True
+                m: "07c_minhash_full"

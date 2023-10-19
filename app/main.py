@@ -108,9 +108,7 @@ def edit_step(step_id: int,
         raise HTTPException(
             status_code=404, detail=f"Step with {step_id=} does not exist."
         )
-    print(db_step.further_params)
     context = {"request": request, "step": db_step}
-    print(context["step"].further_params)
     return templates.TemplateResponse("edit_step.html", context)
 
 
@@ -151,12 +149,14 @@ def update_step(step: schemas.StepUpdate, db: Session = Depends(get_db)):
 
 @app.delete("/step/{step_id}")
 def delete_step(step_id: int, db: Session = Depends(get_db)):
-    # TODO check what is step.status. Only if prelaunch should be deleted?
     crud.delete_step_by_id(db, step_id)
 
 
-@app.post("/run/{step_id}")
-def run_step(step_id: int, db: Session = Depends(get_db)):
+@app.post("/run/{step_id}", response_class=HTMLResponse)
+def run_step(step_id: int,
+             request: Request,
+             db: Session = Depends(get_db)
+             ):
     # TODO should this be here or in the crud.py?
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
     if not db_step:
@@ -172,7 +172,8 @@ def run_step(step_id: int, db: Session = Depends(get_db)):
     db_step.run_script()
     db_step.status = "running"
     db.commit()
-    return {"started": db_step}
+    context = {"request": request, "step": db_step}
+    return templates.TemplateResponse("view_step.html", context)
 
 
 @app.post("/completed/{step_id}")
