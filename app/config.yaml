@@ -6,7 +6,7 @@
     runtime_configurations:
         processes: 4
         log_level: 'info'
-    cc_batch: '2013_06'
+    cc_batch: '2023_06'
     scripts:
         get_indexfiles:
             script_file: "get_indexfiles.py"
@@ -15,6 +15,7 @@
             output: "01_index"
             p: "elte.hu"
             c: "CC-MAIN-2023-06"
+            d: "30"
         filter_index:
             script_file: "filter_index.py"
             hardwired_params: ""
