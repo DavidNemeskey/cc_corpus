@@ -1,11 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>CC Corpus pipeline manager</title>
-    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
-</head>
-<body>
+{% extends "base.html" %}
+{% block content %}
     <div class="card card-body">
         <h2>Step id</h2>
         <div>{{ step.id }}</div>
@@ -50,5 +44,4 @@
 
 
     </div>
-
-</body>
+{% endblock %}
