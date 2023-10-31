@@ -1,19 +1,20 @@
 ---
     folders:
-        working_dir: "/mnt/d/coding/test_corpus2/"
-        logs: "/mnt/d/coding/test_corpus2/logs"
+        working_dir: "/mnt/d/coding/test_corpus3/"
+        logs: "/mnt/d/coding/test_corpus3/logs"
     version_number: "1.14.0"
     runtime_configurations:
         processes: 4
         log_level: 'info'
+    cc_batch: '2013_06'
     scripts:
         get_indexfiles:
             script_file: "get_indexfiles.py"
             hardwired_params: ""
             no_p_param: True
             output: "01_index"
-            p: "hu"
-            c: "CC-MAIN-2023-14"
+            p: "elte.hu"
+            c: "CC-MAIN-2023-06"
         filter_index:
             script_file: "filter_index.py"
             hardwired_params: ""

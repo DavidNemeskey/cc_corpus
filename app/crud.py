@@ -27,10 +27,12 @@ def create_step(db: Session,
     db_step.script_version = config["version_number"]
 
     # Fill up the parameters based on the given input or default to config.yaml
+    # TODO how should we handle when non-script-specific settings are overwritten?
     settings = config["scripts"][db_step.step_name]
     settings.update(optional_settings)
     # TODO upgrade this when cc dumps and language codes are introduced:
     dir_head = config['folders']['working_dir']
+    dir_tail = '/' + config['cc_batch']
     further_params = "-L " + config['runtime_configurations']['log_level']
 
     # Some steps can run on only one process and thus have no processes param.
@@ -43,9 +45,9 @@ def create_step(db: Session,
         if key == 'script_file':
             db_step.script_file = value
         elif key == 'input':
-            db_step.input = dir_head + value
+            db_step.input = dir_head + value + dir_tail
         elif key == 'output':
-            db_step.output = dir_head + value
+            db_step.output = dir_head + value + dir_tail
         elif key == 'hardwired_params':
             further_params += ' ' + value
         else:
@@ -57,7 +59,7 @@ def create_step(db: Session,
             # If the parameter requires special treatment, then it is a dict.
             elif value['is_path']:
                 # If it is a path we must append it to the project root dir.
-                further_params += " -" + key + " " + dir_head + value[key]
+                further_params += " -" + key + " " + dir_head + value[key] + dir_tail
 
     db_step.further_params = further_params
     db.add(db_step)

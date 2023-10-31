@@ -17,6 +17,7 @@ from the downloaded index. In particular,
 from argparse import ArgumentParser
 from functools import partial
 import json
+import logging
 import mimetypes
 from multiprocessing import Pool
 import os
@@ -53,6 +54,9 @@ def parse_arguments():
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1).')
+    parser.add_argument('--log-level', '-L', type=str, default='info',
+                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        help='the logging level.')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
@@ -157,6 +161,11 @@ def filter_file(file_name: str, input_dir: str, output_dir: str,
 
 def main():
     args = parse_arguments()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
+    )
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
