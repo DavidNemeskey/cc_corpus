@@ -3,10 +3,15 @@
     <div class="card card-body">
         <form action="/create_step/" method="post">
 
-            <div>
-                <label for="stepName">script</label>
-                <input type="text" class="form-control" name="stepName">
-            </div>
+<!--            <div>-->
+<!--                <label for="stepName">script</label>-->
+<!--                <input type="text" class="form-control" name="stepName">-->
+<!--            </div>-->
+            <select name="stepName">
+                {% for step_type in step_types %}
+                    <option value="{{ step_type }}">{{ step_type}}</option>
+                {% endfor %}
+            </select>
 
             <div>
                 <label for="comment">comment</label>

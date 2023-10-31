@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 
 from . import crud, models, seed_db, schemas
+from .config import config
 from .database import SessionLocal, engine
 
 
@@ -70,7 +71,8 @@ def query_step_by_id(step_id: int, request: Request,
 # This is a GET route which displays the form to create a new step
 @app.get("/create_step_form/", response_class=HTMLResponse)
 def create_step_form(request: Request):
-    context = {"request": request}
+    step_types = list(config["scripts"].keys())
+    context = {"request": request, "step_types": step_types}
     return templates.TemplateResponse("new_step.html", context)
 
 
