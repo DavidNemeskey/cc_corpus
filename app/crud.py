@@ -51,8 +51,6 @@ def create_step(db: Session,
         elif key == 'hardwired_params':
             further_params += ' ' + value
         else:
-            print("====================")
-            print(value)
             # Most parameters have a simple value:
             if isinstance(value, str):
                 further_params += " -" + key + " " + value
@@ -73,10 +71,8 @@ def update_step(db: Session, step: schemas.StepUpdate):
     db_step = db.query(models.Step).filter(models.Step.id == step.id).one_or_none()
     if db_step is None:
         return None
-
     for key, value in vars(step).items():
-        setattr(db_step, key, value) if value else None
-
+        setattr(db_step, key, value)
     db.commit()
     db.refresh(db_step)
     return(db_step)

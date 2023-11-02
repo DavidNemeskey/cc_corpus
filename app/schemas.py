@@ -16,7 +16,7 @@ from typing import Optional
 
 class StepBase(BaseModel):
     step_name: str
-    comment: str = None
+    comment: Optional[str]
     # input_data_generated_by: int
 
 

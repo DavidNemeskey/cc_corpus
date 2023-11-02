@@ -17,7 +17,8 @@
 
             <div>
                 <label for="input">Input directory</label>
-                <input type="text" class="form-control" name="input", value="{{ step.input }}">
+                <input type="text" class="form-control" name="input",
+                       value="{% if step.input is not none %}{{ step.input }}{% endif %}">
             </div>
 
             <div>
@@ -27,7 +28,8 @@
 
             <div>
                 <label for="furtherParams">Further command-line parameters</label>
-                <input type="text" class="form-control" name="furtherParams", value="{{ step.further_params }}">
+                <input type="text" class="form-control" name="furtherParams",
+                       value="{% if step.further_params is not none %}{{ step.further_params }}{% endif %}">
             </div>
 
             <div>
@@ -37,7 +39,8 @@
 
             <div>
                 <label for="comment">Comment</label>
-                <input type="text" class="form-control" name="comment", value="{{ step.comment }}">
+                <input type="text" class="form-control" name="comment",
+                       value="{% if step.comment is not none %}{{ step.comment }}{% endif %}">
             </div>
 
             <div>
