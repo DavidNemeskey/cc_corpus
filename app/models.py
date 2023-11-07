@@ -43,7 +43,6 @@ class Step(Base):
                      "-o", self.output,
                      ]
         if self.input:
-            print("---------------This is input!-------------")
             arguments.append("-i")
             arguments.append(self.input)
         arguments += self.further_params.split()

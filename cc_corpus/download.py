@@ -80,7 +80,7 @@ def download_warc_ranges(
         warc_file_name: str,
         offsets_and_lengths: list[tuple[int, int]],
         retry_left: int,
-        delay: int = 1,
+        delay: int = 10,
 ) -> list[bytes]:
     """
     Downloads byte ranges from a WARC file. A thin wrapper over
@@ -98,7 +98,7 @@ def download_index_range(
         offset: int,
         length: int,
         retry_left: int,
-        delay: int = 1,
+        delay: int = 10,
 ) -> bytes:
     """
     Downloads a single byte range from an index file.
