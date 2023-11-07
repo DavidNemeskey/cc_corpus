@@ -57,7 +57,11 @@ def create_step(db: Session,
             # If the parameter requires special treatment, then it is a dict.
             elif value['is_path']:
                 # If it is a path we must append it to the project root dir.
-                further_params += " -" + key + " " + dir_head + value[key] + dir_tail
+                # and may have to append the current batch to it.
+                if value.get('no_batch_in_path'):
+                    further_params += " -" + key + " " + dir_head + value[key]
+                else:
+                    further_params += " -" + key + " " + dir_head + value[key] + dir_tail
 
     db_step.further_params = further_params
     db.add(db_step)

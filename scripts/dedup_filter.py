@@ -33,7 +33,7 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the directory to which the filtered corpus '
                              'files are written.')
-    parser.add_argument('--input-dir', '-i',type=Path,
+    parser.add_argument('--input-dir', '-i', type=Path,
                         help='the directory that contains the corpus files to '
                              'filter. Since the minhash files store the names '
                              'of the input files, this argument is only '
@@ -80,7 +80,7 @@ def deduplicate_batch_documents(batch_prefix: Path, output_dir: Path,
         if input_file.is_file():
             with notempty(openall(output_dir / file_base, 'wt')) as outf:
                 for doc_no, doc in enumerate(parse_file(input_file), start=1):
-                    if doc.attrs['url'] in url_set:
+                    if doc.id in url_set:
                         print(doc.to_json(), file=outf)
                         kept += 1
                 total += doc_no

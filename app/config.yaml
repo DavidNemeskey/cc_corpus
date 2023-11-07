@@ -42,11 +42,11 @@
         remove_boilerplate:
             script_file: "remove_boilerplate.py"
             hardwired_params: ""
-            input: "04a_index_sorted"
+            input: "04_downloaded"
             output: "05_boilerplate_removed"
-            -w:
+            -index-dir:
                 is_path: True
-                -w: "04_downloaded"
+                -index-dir: "04a_index_sorted"
             b: "justext"
         filter_corpus:
             script_file: "filter_corpus.py"
@@ -73,10 +73,12 @@
             output: "07c_minhash_full"
             c:
                 is_path: True
+                no_batch_in_path: True
                 c: "07c_minhash_full"
         apply_deduplication:
             script_file: "dedup_filter.py"
             hardwired_params: ""
+            input: ""
             output: "07d_dedup"
             m:
                 is_path: True
