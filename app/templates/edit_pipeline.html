@@ -17,13 +17,13 @@
             <div>
                 <label for="params">Parameters</label>
                 <input type="text" class="form-control" name="params",
-                       value="{% if pipeline.params is not none %}{{ pipeline.params }}{% endif %}">
+                       value='{% if pipeline.params is not none %}{{ pipeline.params | tojson }}{% endif %}'>
             </div>
 
             <div>
                 <label for="steps">Steps</label>
                 <input type="text" class="form-control" name="steps",
-                       value="{% if pipeline.steps is not none %}{{ pipeline.steps }}{% endif %}">
+                       value='{% if pipeline.steps is not none %}{{ pipeline.steps }}{% endif %}'>
             </div>
 
 

@@ -1,10 +1,10 @@
-import ast
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from json import loads
 from sqlalchemy.orm import Session
 
 
@@ -281,12 +281,13 @@ async def update_pipeline_from_form(request: Request,
     form_data = await request.form()
     form_data = jsonable_encoder(form_data)
     print(form_data)
+    print(form_data["params"].__class__)
     if form_data["params"]:
-        form_data["params"] = ast.literal_eval(form_data["params"])
+        form_data["params"] = loads(form_data["params"])
     else:
         form_data["params"] = None
     if form_data["steps"]:
-        form_data["steps"] = ast.literal_eval(form_data["steps"])
+        form_data["steps"] = loads(form_data["steps"])
     else:
         form_data["steps"] = None
     print(form_data)

@@ -5,10 +5,10 @@
         <div>{{ pipeline.id }}</div>
 
         <h2>Params</h2>
-        <div>{{ pipeline.params }}</div>
+        <div>{{ pipeline.params | tojson }}</div>
 
         <h2>Steps</h2>
-        <div>{{ pipeline.steps }}</div>
+        <div>{{ pipeline.steps | tojson }}</div>
 
 
         <h2>comment</h2>
