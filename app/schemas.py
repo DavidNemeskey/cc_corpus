@@ -11,13 +11,12 @@ ORM models (which are defined in models.py).
 """
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Dict, List, Optional
 
 
 class StepBase(BaseModel):
     step_name: str
     comment: Optional[str]
-    # input_data_generated_by: int
 
 
 class StepUpdate(BaseModel):
@@ -47,6 +46,39 @@ class Step(StepBase):
     output: str
     further_params: str
     status: str
+
+    class Config:
+        orm_mode = True
+
+
+class PipelineBase(BaseModel):
+    comment: Optional[str]
+    template: str
+
+    class Config:
+        orm_mode = True
+
+
+class PipelineCreate(PipelineBase):
+    params: Dict
+
+
+class PipelineUpdate(BaseModel):
+    id: Optional[int]
+    comment: Optional[str]
+    params: Optional[Dict]
+    status: Optional[str]
+    steps: Optional[List]
+    template: Optional[str]
+
+    class Config:
+        orm_mode = True
+
+
+class Pipeline(StepBase):
+    id: int
+    params: Dict
+    steps: Dict
 
     class Config:
         orm_mode = True

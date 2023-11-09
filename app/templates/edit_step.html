@@ -45,10 +45,18 @@
 
             <div>
                 <label for="status">Runtime status of the step</label>
-                <input type="text" class="form-control" name="status", value="{{ step.status }}">
+                <select name="status">
+                {% for status in status_options %}
+                    <option value="{{ status }}" {% if status == step.status %}selected="selected"{% endif%}>
+                        {{ status}}
+                    </option>
+                {% endfor %}
+            </select>
+
             </div>
 
-            <input type="submit" class="btn btn-primary" value="Edit step">
+
+            <input type="submit" class="btn btn-primary" value="Save changes">
 
 
         </form>

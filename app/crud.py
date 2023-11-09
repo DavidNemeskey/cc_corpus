@@ -85,3 +85,31 @@ def update_step(db: Session, step: schemas.StepUpdate):
 def delete_step_by_id(db: Session, step_id: int):
     db.query(models.Step).filter(models.Step.id == step_id).delete()
     db.commit()
+
+
+def get_pipelines(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Pipeline).offset(skip).limit(limit).all()
+
+
+def get_pipeline_by_id(db: Session, pipeline_id: int):
+    return db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
+
+
+def create_pipeline(db: Session, pipeline: schemas.PipelineCreate):
+    db_pipeline = models.Pipeline(**pipeline.dict())
+    db.add(db_pipeline)
+    db.commit()
+    db.refresh(db_pipeline)
+    return db_pipeline
+
+
+def update_pipeline(db: Session, pipeline: schemas.PipelineUpdate):
+    # get existing data from the DB:
+    db_pipeline = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline.id).one_or_none()
+    if db_pipeline is None:
+        return None
+    for key, value in vars(pipeline).items():
+        setattr(db_pipeline, key, value)
+    db.commit()
+    db.refresh(db_pipeline)
+    return(db_pipeline)

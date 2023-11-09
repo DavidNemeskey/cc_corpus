@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="card card-body">
+        <form action="/create_pipeline/" method="post">
+
+<!--            <div>-->
+<!--                <label for="stepName">script</label>-->
+<!--                <input type="text" class="form-control" name="stepName">-->
+<!--            </div>-->
+
+            <input type="hidden" name="template", value={{ pipeline_type }}>
+
+            {% for param in params %}
+                <div>
+                    <label for="{{ param }}">{{ param }}</label>
+                    <input type="text" class="form-control" name="{{ param }}", value="">
+                </div>
+            {% endfor %}
+
+            <div>
+                <label for="comment">comment</label>
+                <input type="text" class="form-control" name="comment", value="">
+            </div>
+
+            <input type="submit" class="btn btn-primary">
+
+
+        </form>
+
+    </div>
+{% endblock %}

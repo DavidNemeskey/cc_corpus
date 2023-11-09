@@ -1,4 +1,6 @@
+import ast
 from fastapi import Depends, FastAPI, Form, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -108,7 +110,10 @@ def edit_step(step_id: int,
         raise HTTPException(
             status_code=404, detail=f"Step with {step_id=} does not exist."
         )
-    context = {"request": request, "step": db_step}
+    context = {"request": request,
+               "step": db_step,
+               "status_options": models.STEP_STATUSES
+               }
     return templates.TemplateResponse("edit_step.html", context)
 
 
@@ -193,3 +198,101 @@ def report_completed(step_id: int, db: Session = Depends(get_db)):
     db_step.status = "completed"
     db.commit()
     return {"completed": db_step}
+
+
+@app.get("/pipelines/", response_class=HTMLResponse)
+def list_pipelines(request: Request, db: Session = Depends(get_db)):
+    pipelines = crud.get_pipelines(db)
+    pipeline_types = list(config["pipelines"].keys())
+    context = {"request": request,
+               "pipelines": pipelines,
+               "pipeline_types": pipeline_types}
+    return templates.TemplateResponse("list_pipelines.html", context)
+
+
+@app.get("/pipeline/{pipeline_id}", response_class=HTMLResponse)
+def query_pipeline_by_id(pipeline_id: int,
+                         request: Request,
+                         db: Session = Depends(get_db)
+                         ):
+    db_pipeline = crud.get_pipeline_by_id(db, pipeline_id)
+    if not db_pipeline:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Pipeline with {pipeline_id=} does not exist."
+        )
+    context = {"request": request, "pipeline": db_pipeline}
+    return templates.TemplateResponse("view_pipeline.html", context)
+
+
+# This is a GET route which displays the form
+# to create a new pipeline of a given type
+@app.get("/create_pipeline_form/{pipeline_type}", response_class=HTMLResponse)
+def create_pipeline_form(pipeline_type: str, request: Request):
+    params = config["pipelines"][pipeline_type]["params"]
+    context = {"request": request,
+               "params": params,
+               "pipeline_type": pipeline_type
+               }
+    return templates.TemplateResponse("new_pipeline.html", context)
+
+
+@app.post("/create_pipeline/", response_class=HTMLResponse)
+async def add_pipeline_from_form(request: Request,
+                                 db: Session = Depends(get_db),
+                                 ):
+    form_data = await request.form()
+    form_data = jsonable_encoder(form_data)
+    pipeline = schemas.PipelineCreate(
+        template=form_data.pop("template"),
+        comment=form_data.pop("comment"),
+        params=form_data,
+    )
+    db_pipeline = crud.create_pipeline(db, pipeline)
+    context = {"request": request, "pipeline": db_pipeline}
+    return templates.TemplateResponse("view_pipeline.html", context)
+
+
+# This is a GET route which displays the form to edit a step
+@app.get("/edit_pipeline/{pipeline_id}", response_class=HTMLResponse)
+def edit_pipeline(pipeline_id: int,
+                  request: Request,
+                  db: Session = Depends(get_db)
+                  ):
+    db_pipeline = crud.get_pipeline_by_id(db, pipeline_id)
+    if not db_pipeline:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Pipeline with {pipeline_id=} does not exist."
+        )
+    context = {"request": request,
+               "pipeline": db_pipeline,
+               "status_options": models.PIPELINE_STATUSES,
+               "templates": list(config["pipelines"].keys()),
+               }
+    return templates.TemplateResponse("edit_pipeline.html", context)
+
+
+@app.post("/update_pipeline/", response_class=HTMLResponse)
+async def update_pipeline_from_form(request: Request,
+                                    db: Session = Depends(get_db),
+                                    ):
+    print("=============ROUTE===============")
+    form_data = await request.form()
+    form_data = jsonable_encoder(form_data)
+    print(form_data)
+    if form_data["params"]:
+        form_data["params"] = ast.literal_eval(form_data["params"])
+    else:
+        form_data["params"] = None
+    if form_data["steps"]:
+        form_data["steps"] = ast.literal_eval(form_data["steps"])
+    else:
+        form_data["steps"] = None
+    print(form_data)
+    pipeline = schemas.PipelineUpdate(**form_data)
+    print(pipeline)
+    crud.update_pipeline(db, pipeline)
+    db_pipeline = crud.get_pipeline_by_id(db, pipeline.id)
+    context = {"request": request, "pipeline": db_pipeline}
+    return templates.TemplateResponse("view_pipeline.html", context)

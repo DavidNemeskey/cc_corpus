@@ -83,3 +83,12 @@
             m:
                 is_path: True
                 m: "07c_minhash_full"
+    pipelines:
+        test3:
+            params:
+                - cc_batch
+                - url_pattern
+            steps:
+                - get_indexfiles
+                - filter_index
+                - deduplicate_index_urls

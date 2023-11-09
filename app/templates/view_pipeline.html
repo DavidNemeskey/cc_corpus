@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="card card-body">
+        <h2>Pipeline id</h2>
+        <div>{{ pipeline.id }}</div>
+
+        <h2>Params</h2>
+        <div>{{ pipeline.params }}</div>
+
+        <h2>Steps</h2>
+        <div>{{ pipeline.steps }}</div>
+
+
+        <h2>comment</h2>
+        <div>{{ pipeline.comment }} </div>
+
+        <h2>status</h2>
+        <div>{{ pipeline.status }}</div>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-sm">
+                <a href="/edit_pipeline/{{pipeline.id}}" class="btn btn-primary">Edit pipeline</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}

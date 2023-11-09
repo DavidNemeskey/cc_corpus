@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="card card-body">
+        <form action="/update_pipeline/" method="post">
+
+            <input type="hidden" name="id", value={{ pipeline.id }}>
+
+            <div>
+                <label for="template">Pipeline template</label>
+                <select name="template">
+                {% for template in templates %}
+                    <option value="{{ template }}">{{ template }}</option>
+                {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label for="params">Parameters</label>
+                <input type="text" class="form-control" name="params",
+                       value="{% if pipeline.params is not none %}{{ pipeline.params }}{% endif %}">
+            </div>
+
+            <div>
+                <label for="steps">Steps</label>
+                <input type="text" class="form-control" name="steps",
+                       value="{% if pipeline.steps is not none %}{{ pipeline.steps }}{% endif %}">
+            </div>
+
+
+            <div>
+                <label for="comment">Comment</label>
+                <input type="text" class="form-control" name="comment",
+                       value="{% if pipeline.comment is not none %}{{ pipeline.comment }}{% endif %}">
+            </div>
+
+            <div>
+                <label for="status">Status of the pipeline</label>
+                <select name="status">
+                {% for status in status_options %}
+                    <option value="{{ status }}" {% if status == pipeline.status%}selected="selected"{% endif%}>
+                        {{ status}}
+                    </option>
+                {% endfor %}
+                </select>
+            </div>
+
+
+            <input type="submit" class="btn btn-primary" value="Save changes">
+
+
+        </form>
+
+    </div>
+{% endblock %}

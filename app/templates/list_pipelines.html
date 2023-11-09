@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="card card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Pipeline id</th>
+                    <th>Comment</th>
+                    <th>Template</th>
+                    <th>status</th>
+                    <th>actions</th>
+                </tr>
+            </thead>
+            {% for pipeline in pipelines %}
+                <tr>
+                    <td>{{ pipeline.id }}</td>
+                    <td>{{ pipeline.comment }}</td>
+                    <td>{{ pipeline.template }}</td>
+                    <td>{{ pipeline.status }}</td>
+                    <td>
+                        <a href="/pipeline/{{pipeline.id}}">view</a>
+                        <a href="/edit_pipeline/{{pipeline.id}}">edit</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="container">
+        {% for pipeline_type in pipeline_types %}
+            <a href="/create_pipeline_form/{{pipeline_type}}" class="btn btn-primary">Create New {{ pipeline_type }} Pipeline</a>
+        {% endfor %}
+    </div>
+
+{% endblock %}

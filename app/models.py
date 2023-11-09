@@ -7,11 +7,20 @@ These implements the SQLAlchemy ORM and also the model-logic level methods.
 """
 
 from sqlalchemy import Column, Integer, String
+
+# from sqlalchemy.dialects.postgresql import JSON  # For PostgreSQL
+# from sqlalchemy.dialects.mysql import JSON  # For MySQL
+from sqlalchemy import JSON  # For SQLite
+
 from pathlib import Path
 import subprocess
 
 from .config import config
 from .database import Base
+
+
+STEP_STATUSES = ["prelaunch", "running", "completed"]
+PIPELINE_STATUSES = ["seeded", "spawned"]
 
 
 class Step(Base):
@@ -51,3 +60,14 @@ class Step(Base):
         logfile = log_dir / f"step_{self.id}_{self.script_file.split('.')[0]}.log"
         with open(logfile, 'w') as log_f:
             subprocess.Popen(arguments, stdout=log_f, stderr=log_f)
+
+
+class Pipeline(Base):
+    __tablename__ = "pipelines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    comment = Column(String)
+    status = Column(String)
+    template = Column(String)
+    params = Column(JSON)
+    steps = Column(JSON)
