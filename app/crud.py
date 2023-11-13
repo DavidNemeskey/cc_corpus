@@ -5,6 +5,7 @@
 A CRUD layer for basic interactions with the DB.
 """
 
+from pydantic.utils import deep_update
 from sqlalchemy.orm import Session
 from .config import config
 from . import models, schemas
@@ -26,22 +27,29 @@ def create_step(db: Session,
     db_step.status = 'prelaunch'
     db_step.script_version = config["version_number"]
 
+    print("============CRUD==============")
+    print(config)
+    print("----")
+    print(optional_settings)
+    print("----")
+
     # Fill up the parameters based on the given input or default to config.yaml
-    # TODO how should we handle when non-script-specific settings are overwritten?
-    settings = config["scripts"][db_step.step_name]
-    settings.update(optional_settings)
-    # TODO upgrade this when cc dumps and language codes are introduced:
-    dir_head = config['folders']['working_dir']
-    dir_tail = '/' + config['cc_batch']
-    further_params = "-L " + config['runtime_configurations']['log_level']
+    # We need to update a nested dict with another.
+    settings = deep_update(config, optional_settings)
+    print(settings)
+    print("----")
+
+    dir_head = settings['folders']['working_dir']
+    dir_tail = '/' + settings['cc_batch']
+    further_params = "-L " + settings['runtime_configurations']['log_level']
 
     # Some steps can run on only one process and thus have no processes param.
     # These steps are marked by 'no_p_param: True' in the config.yaml.
-    if not settings.pop('no_p_param', False):
+    if not settings["scripts"][db_step.step_name].pop('no_p_param', False):
         further_params += ' -P ' + str(config['runtime_configurations']['processes'])
 
     # Let's go over and process the parameters:
-    for key, value in settings.items():
+    for key, value in settings["scripts"][db_step.step_name].items():
         if key == 'script_file':
             db_step.script_file = value
         elif key == 'input':

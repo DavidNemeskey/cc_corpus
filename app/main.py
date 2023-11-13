@@ -297,3 +297,39 @@ async def update_pipeline_from_form(request: Request,
     db_pipeline = crud.get_pipeline_by_id(db, pipeline.id)
     context = {"request": request, "pipeline": db_pipeline}
     return templates.TemplateResponse("view_pipeline.html", context)
+
+
+@app.post("/spawn/{pipeline_id}", response_class=HTMLResponse)
+def spawn_pipeline(pipeline_id: int,
+                   request: Request,
+                   db: Session = Depends(get_db)
+                   ):
+    db_pipeline = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
+    print("=======SPAWNER==========")
+    print(db_pipeline)
+    step_types = config["pipelines"][db_pipeline.template]["steps"]
+    print(step_types)
+
+    config_mod = {}
+    for key, value in db_pipeline.params.items():
+        if key == "cc_batch":
+            config_mod[key] = value
+        # TODO I am not happy with this hardwiring...
+        if key == "url_pattern":
+            config_mod.setdefault("scripts", {}).setdefault("get_indexfiles", {})["p"] = value
+    print("The config modifier:")
+    print(config_mod)
+    step_ids = []
+    for step_type in step_types:
+        step_name = step_type
+        step = schemas.StepCreate(step_name=step_name,
+                                  comment=f"Spawned by Pipeline {pipeline_id}")
+        db_step = crud.create_step(db, step, config_mod)
+        print(db_step.id)
+        step_ids.append(db_step.id)
+    db_pipeline.steps = jsonable_encoder(step_ids)
+    print(db_pipeline.steps)
+    db_pipeline.status = "spawned"
+    db.commit()
+    context = {"request": request, "pipeline": db_pipeline}
+    return templates.TemplateResponse("view_pipeline.html", context)

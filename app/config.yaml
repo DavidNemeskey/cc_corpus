@@ -25,9 +25,9 @@
         deduplicate_index_urls:
             script_file: "deduplicate_index_urls.py"
             hardwired_params: ""
+            no_p_param: True
             input: "02_index_filtered"
             output: "03_index_dedup"
-            no_p_param: True
         download_pages:
             script_file: "download_pages.py"
             hardwired_params: ""

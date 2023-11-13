@@ -8,7 +8,11 @@
         <div>{{ pipeline.params | tojson }}</div>
 
         <h2>Steps</h2>
-        <div>{{ pipeline.steps | tojson }}</div>
+        {% if pipeline.steps is not none %}
+            {% for step in pipeline.steps %}
+                <a href="/step/{{step}}">{{ step }}</a>
+            {% endfor %}
+        {% endif %}
 
 
         <h2>comment</h2>
@@ -23,6 +27,13 @@
             <div class="col-sm">
                 <a href="/edit_pipeline/{{pipeline.id}}" class="btn btn-primary">Edit pipeline</a>
             </div>
+            {% if pipeline.status == 'seeded' %}
+                <div class="col-sm">
+                    <form action="/spawn/{{pipeline.id}}" method="post">
+                        <input type="submit" value="Spawn steps" class="btn btn-primary">
+                    </form>
+                </div>
+            {% endif %}
         </div>
     </div>
 {% endblock %}
