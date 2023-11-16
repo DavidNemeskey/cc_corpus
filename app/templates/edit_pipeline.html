@@ -26,6 +26,18 @@
                        value='{% if pipeline.steps is not none %}{{ pipeline.steps }}{% endif %}'>
             </div>
 
+            <div>
+                <label for="prereq_pipe">Prerequisite's pipeline id</label>
+                <input type="number" class="form-control" name="prereq_pipe",
+                       value="{% if pipeline.prereq_pipe is not none %}{{ pipeline.prereq_pipe }}{% endif %}">
+            </div>
+
+            <div>
+                <label for="prereq_step">Prerequisite's step no</label>
+                <input type="number" class="form-control" name="prereq_step",
+                       value="{% if pipeline.prereq_step is not none %}{{ pipeline.prereq_step }}{% endif %}">
+            </div>
+
 
             <div>
                 <label for="comment">Comment</label>

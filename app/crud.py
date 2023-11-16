@@ -5,6 +5,7 @@
 A CRUD layer for basic interactions with the DB.
 """
 
+from fastapi.encoders import jsonable_encoder
 from pydantic.utils import deep_update
 from sqlalchemy.orm import Session
 from .config import config
@@ -121,3 +122,24 @@ def update_pipeline(db: Session, pipeline: schemas.PipelineUpdate):
     db.commit()
     db.refresh(db_pipeline)
     return(db_pipeline)
+
+
+def spawn_pipeline(db: Session, pipeline_id: int):
+    db_pipeline = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
+
+    # Spawn the steps belonging to this pipeline:
+    config_mod = db_pipeline.params_to_config()
+    step_types = config["pipelines"][db_pipeline.template]["steps"]
+    step_ids = []
+    for step_type in step_types:
+        step_name = step_type
+        step = schemas.StepCreate(step_name=step_name,
+                                  comment=f"Spawned by Pipeline {pipeline_id}")
+        db_step = create_step(db, step, config_mod)
+        step_ids.append(db_step.id)
+
+    # Save the ids of the newly spawned steps in the pipeline object:
+    db_pipeline.steps = jsonable_encoder(step_ids)
+    db_pipeline.status = "spawned"
+    db.commit()
+    return db_pipeline

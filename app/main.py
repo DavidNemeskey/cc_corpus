@@ -243,9 +243,13 @@ async def add_pipeline_from_form(request: Request,
                                  ):
     form_data = await request.form()
     form_data = jsonable_encoder(form_data)
+    prereq_pipe = form_data.pop("prereq_pipe")
+    prereq_step = form_data.pop("prereq_step")
     pipeline = schemas.PipelineCreate(
         template=form_data.pop("template"),
         comment=form_data.pop("comment"),
+        prereq_pipe=int(prereq_pipe) if prereq_pipe != "" else None,
+        prereq_step=int(prereq_step) if prereq_step != "" else None,
         params=form_data,
     )
     db_pipeline = crud.create_pipeline(db, pipeline)
@@ -277,11 +281,10 @@ def edit_pipeline(pipeline_id: int,
 async def update_pipeline_from_form(request: Request,
                                     db: Session = Depends(get_db),
                                     ):
-    print("=============ROUTE===============")
     form_data = await request.form()
     form_data = jsonable_encoder(form_data)
-    print(form_data)
-    print(form_data["params"].__class__)
+
+    # Convert nested Dicts and replace empty strings with Nones:
     if form_data["params"]:
         form_data["params"] = loads(form_data["params"])
     else:
@@ -290,9 +293,12 @@ async def update_pipeline_from_form(request: Request,
         form_data["steps"] = loads(form_data["steps"])
     else:
         form_data["steps"] = None
-    print(form_data)
+    if not form_data["prereq_pipe"]:
+        form_data["prereq_pipe"] = None
+    if not form_data["prereq_step"]:
+        form_data["prereq_step"] = None
+
     pipeline = schemas.PipelineUpdate(**form_data)
-    print(pipeline)
     crud.update_pipeline(db, pipeline)
     db_pipeline = crud.get_pipeline_by_id(db, pipeline.id)
     context = {"request": request, "pipeline": db_pipeline}
@@ -304,32 +310,6 @@ def spawn_pipeline(pipeline_id: int,
                    request: Request,
                    db: Session = Depends(get_db)
                    ):
-    db_pipeline = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
-    print("=======SPAWNER==========")
-    print(db_pipeline)
-    step_types = config["pipelines"][db_pipeline.template]["steps"]
-    print(step_types)
-
-    config_mod = {}
-    for key, value in db_pipeline.params.items():
-        if key == "cc_batch":
-            config_mod[key] = value
-        # TODO I am not happy with this hardwiring...
-        if key == "url_pattern":
-            config_mod.setdefault("scripts", {}).setdefault("get_indexfiles", {})["p"] = value
-    print("The config modifier:")
-    print(config_mod)
-    step_ids = []
-    for step_type in step_types:
-        step_name = step_type
-        step = schemas.StepCreate(step_name=step_name,
-                                  comment=f"Spawned by Pipeline {pipeline_id}")
-        db_step = crud.create_step(db, step, config_mod)
-        print(db_step.id)
-        step_ids.append(db_step.id)
-    db_pipeline.steps = jsonable_encoder(step_ids)
-    print(db_pipeline.steps)
-    db_pipeline.status = "spawned"
-    db.commit()
+    db_pipeline = crud.spawn_pipeline(db, pipeline_id)
     context = {"request": request, "pipeline": db_pipeline}
     return templates.TemplateResponse("view_pipeline.html", context)

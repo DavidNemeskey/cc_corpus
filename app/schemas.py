@@ -61,12 +61,16 @@ class PipelineBase(BaseModel):
 
 class PipelineCreate(PipelineBase):
     params: Dict
+    prereq_pipe: Optional[int]
+    prereq_step: Optional[int]
 
 
 class PipelineUpdate(BaseModel):
     id: Optional[int]
     comment: Optional[str]
     params: Optional[Dict]
+    prereq_pipe: Optional[int]
+    prereq_step: Optional[int]
     status: Optional[str]
     steps: Optional[List]
     template: Optional[str]
@@ -75,7 +79,7 @@ class PipelineUpdate(BaseModel):
         orm_mode = True
 
 
-class Pipeline(StepBase):
+class Pipeline(PipelineBase):
     id: int
     params: Dict
     steps: Dict
