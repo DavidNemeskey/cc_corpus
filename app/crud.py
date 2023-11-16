@@ -106,6 +106,7 @@ def get_pipeline_by_id(db: Session, pipeline_id: int):
 
 def create_pipeline(db: Session, pipeline: schemas.PipelineCreate):
     db_pipeline = models.Pipeline(**pipeline.dict())
+    db_pipeline.status = "seeded"
     db.add(db_pipeline)
     db.commit()
     db.refresh(db_pipeline)

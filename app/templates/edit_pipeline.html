@@ -9,7 +9,11 @@
                 <label for="template">Pipeline template</label>
                 <select name="template">
                 {% for template in templates %}
-                    <option value="{{ template }}">{{ template }}</option>
+                    <option value="{{ template }}"
+                        {% if template == pipeline.template%} selected="selected"
+                        {% endif%}>
+                        {{ template }}
+                    </option>
                 {% endfor %}
                 </select>
             </div>
@@ -49,7 +53,9 @@
                 <label for="status">Status of the pipeline</label>
                 <select name="status">
                 {% for status in status_options %}
-                    <option value="{{ status }}" {% if status == pipeline.status%}selected="selected"{% endif%}>
+                    <option value="{{ status }}"
+                        {% if status == pipeline.status%} selected="selected"
+                        {% endif%}>
                         {{ status}}
                     </option>
                 {% endfor %}

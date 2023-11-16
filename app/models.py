@@ -79,6 +79,8 @@ class Pipeline(Base):
         for key, value in self.params.items():
             if key == "cc_batch":
                 config[key] = value
+            if key == "language":
+                config.setdefault("scripts", {}).setdefault("filter_corpus", {})["l"] = value
             if key == "url_pattern":
                 config.setdefault("scripts", {}).setdefault("get_indexfiles", {})["p"] = value
         return config

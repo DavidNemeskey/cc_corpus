@@ -277,6 +277,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     os.nice(20)  # Play nice
 
+    args.index_dir.mkdir(parents=True, exist_ok=True)
     index_files = sorted(args.index_dir.iterdir())
     logging.debug(f'{index_files=}')
 
