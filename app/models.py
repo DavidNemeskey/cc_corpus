@@ -20,7 +20,7 @@ from .database import Base
 
 
 STEP_STATUSES = ["prelaunch", "running", "completed"]
-PIPELINE_STATUSES = ["seeded", "spawned"]
+PIPELINE_STATUSES = ["seeded", "spawned", "autorun", "completed"]
 
 
 class Step(Base):

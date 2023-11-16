@@ -8,6 +8,8 @@ A CRUD layer for basic interactions with the DB.
 from fastapi.encoders import jsonable_encoder
 from pydantic.utils import deep_update
 from sqlalchemy.orm import Session
+import time
+
 from .config import config
 from . import models, schemas
 
@@ -47,7 +49,8 @@ def create_step(db: Session,
     # Some steps can run on only one process and thus have no processes param.
     # These steps are marked by 'no_p_param: True' in the config.yaml.
     if not settings["scripts"][db_step.step_name].pop('no_p_param', False):
-        further_params += ' -P ' + str(config['runtime_configurations']['processes'])
+        further_params += ' -P ' \
+                          + str(config['runtime_configurations']['processes'])
 
     # Let's go over and process the parameters:
     for key, value in settings["scripts"][db_step.step_name].items():
@@ -70,7 +73,8 @@ def create_step(db: Session,
                 if value.get('no_batch_in_path'):
                     further_params += " -" + key + " " + dir_head + value[key]
                 else:
-                    further_params += " -" + key + " " + dir_head + value[key] + dir_tail
+                    further_params += " -" + key \
+                                      + " " + dir_head + value[key] + dir_tail
 
     db_step.further_params = further_params
     db.add(db_step)
@@ -81,7 +85,8 @@ def create_step(db: Session,
 
 def update_step(db: Session, step: schemas.StepUpdate):
     # get existing data from the DB:
-    db_step = db.query(models.Step).filter(models.Step.id == step.id).one_or_none()
+    db_step = db.query(models.Step).\
+        filter(models.Step.id == step.id).one_or_none()
     if db_step is None:
         return None
     for key, value in vars(step).items():
@@ -100,8 +105,38 @@ def get_pipelines(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Pipeline).offset(skip).limit(limit).all()
 
 
+def get_pipelines_by_status(db: Session, status: str):
+    pipelines = db.query(models.Pipeline).\
+        filter(models.Pipeline.status == status).all()
+    return pipelines
+
+
+def is_pipe_ready(db: Session, pipeline_id):
+    pipe = db.query(models.Pipeline).\
+        filter(models.Pipeline.id == pipeline_id).first()
+    if pipe.status != "autorun":
+        return False
+    # If there are no (well-defined) prerequisites, then pipe is ready:
+    if pipe.prereq_pipe is None:
+        return True
+    if pipe.prereq_step is None:
+        return True
+    prereq_pipe = db.query(models.Pipeline).\
+        filter(models.Pipeline.id == pipe.prereq_pipe).first()
+    # If the prereq pipe has not spawned its steps then it is not ready:
+    if len(prereq_pipe.steps) < pipe.prereq_step:
+        return False
+    prereq_step = prereq_pipe.steps[pipe.prereq_step - 1]
+    db_step = get_step_by_id(db, prereq_step)
+    if db_step.status == "completed":
+        return True
+    else:
+        return False
+
+
 def get_pipeline_by_id(db: Session, pipeline_id: int):
-    return db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
+    return db.query(models.Pipeline).\
+        filter(models.Pipeline.id == pipeline_id).first()
 
 
 def create_pipeline(db: Session, pipeline: schemas.PipelineCreate):
@@ -115,7 +150,8 @@ def create_pipeline(db: Session, pipeline: schemas.PipelineCreate):
 
 def update_pipeline(db: Session, pipeline: schemas.PipelineUpdate):
     # get existing data from the DB:
-    db_pipeline = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline.id).one_or_none()
+    db_pipeline = db.query(models.Pipeline).\
+        filter(models.Pipeline.id == pipeline.id).one_or_none()
     if db_pipeline is None:
         return None
     for key, value in vars(pipeline).items():
@@ -126,7 +162,8 @@ def update_pipeline(db: Session, pipeline: schemas.PipelineUpdate):
 
 
 def spawn_pipeline(db: Session, pipeline_id: int):
-    db_pipeline = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
+    db_pipeline = db.query(models.Pipeline).\
+        filter(models.Pipeline.id == pipeline_id).first()
 
     # Spawn the steps belonging to this pipeline:
     config_mod = db_pipeline.params_to_config()
@@ -144,3 +181,44 @@ def spawn_pipeline(db: Session, pipeline_id: int):
     db_pipeline.status = "spawned"
     db.commit()
     return db_pipeline
+
+
+def get_steps_of_pipeline(db: Session, pipeline_id: int):
+    db_pipeline = db.query(models.Pipeline).\
+        filter(models.Pipeline.id == pipeline_id).first()
+    steps = []
+    for step_id in db_pipeline.steps:
+        steps.append(get_step_by_id(db, step_id))
+    return steps
+
+
+def autorun_pipelines(db: Session):
+    pipes = get_pipelines_by_status(db, status="autorun")
+    for pipe in pipes:
+        print(f"Attempting to progress pipeline #{pipe.id}")
+        if is_pipe_ready(db, pipe.id):
+            steps = get_steps_of_pipeline(db, pipe.id)
+            for step in steps:
+                if step.status == "completed":
+                    print(f"--Step #{step.id} was already completed")
+                    pass
+                elif step.status == "running":
+                    print(f"--Step #{step.id} was already started")
+                    # We have to wait until it finishes
+                    while step.status == "running":
+                        print(f"--Waiting for #{step.id} to complete.")
+                        time.sleep(10)
+                        db.refresh(step)
+                else:
+                    # We have to run this step:
+                    step.run_script()
+                    step.status = "running"
+                    db.commit()
+                    print(f"--Started the execution of step #{step.id}")
+                    # We have to wait until it finishes:
+                    while step.status == "running":
+                        print(f"--Waiting for #{step.id} to complete.")
+                        time.sleep(10)
+                        db.refresh(step)
+            print(f"Pipeline #{pipe.id} was completed.")
+    print(f"Autorunner finished.")
