@@ -393,7 +393,8 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    install_mp_handler()
+    # This caused random deadlocks:
+    # install_mp_handler()
     os.nice(20)
 
     if args.command == "self":
