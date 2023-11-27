@@ -204,6 +204,25 @@ async def report_completed(step_id: int, db: Session = Depends(get_db)):
     return {"completed": db_step}
 
 
+@app.post("/failed/{step_id}")
+async def report_failure(step_id: int, db: Session = Depends(get_db)):
+    # TODO should this be here or in the crud.py?
+    db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
+    if not db_step:
+        raise HTTPException(
+            status_code=404, detail=f"Step with {step_id=} does not exist."
+        )
+    if db_step.status != "running":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Step with {step_id=} is not running, "
+                   f"how can it fail?"
+        )
+    db_step.status = "failed"
+    db.commit()
+    return {"completed": db_step}
+
+
 @app.get("/pipelines/", response_class=HTMLResponse)
 async def list_pipelines(request: Request, db: Session = Depends(get_db)):
     pipelines = crud.get_pipelines(db)

@@ -198,17 +198,27 @@ def autorun_pipelines(db: Session):
         print(f"Attempting to progress pipeline #{pipe.id}")
         if is_pipe_ready(db, pipe.id):
             steps = get_steps_of_pipeline(db, pipe.id)
+            encountered_failure = False
             for step in steps:
                 if step.status == "completed":
-                    print(f"--Step #{step.id} was already completed")
+                    print(f"--Step #{step.id} was already completed.")
                     pass
                 elif step.status == "running":
-                    print(f"--Step #{step.id} was already started")
+                    print(f"--Step #{step.id} was already started.")
                     # We have to wait until it finishes
                     while step.status == "running":
                         print(f"--Waiting for #{step.id} to complete.")
                         time.sleep(10)
                         db.refresh(step)
+                    if step.status == "failed":
+                        print(f"--Step #{step.id} failed.")
+                        encountered_failure = True
+                        break
+                elif step.status == "failed":
+                    # We cannot progress with this pipeline:
+                    print(f"--Step #{step.id} failed.")
+                    encountered_failure = True
+                    break
                 else:
                     # We have to run this step:
                     step.run_script()
@@ -220,5 +230,14 @@ def autorun_pipelines(db: Session):
                         print(f"--Waiting for #{step.id} to complete.")
                         time.sleep(10)
                         db.refresh(step)
-            print(f"Pipeline #{pipe.id} was completed.")
+                    if step.status == "failed":
+                        print(f"--Step #{step.id} failed.")
+                        encountered_failure = True
+                        break
+            if encountered_failure:
+                print(f"Pipeline #{pipe.id} has a failed task.")
+            else:
+                pipe.status = "completed"
+                db.commit()
+                print(f"Pipeline #{pipe.id} was completed.")
     print(f"Autorunner finished.")

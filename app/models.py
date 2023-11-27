@@ -19,7 +19,7 @@ from .config import config
 from .database import Base
 
 
-STEP_STATUSES = ["prelaunch", "running", "completed"]
+STEP_STATUSES = ["prelaunch", "running", "completed", "failed"]
 PIPELINE_STATUSES = ["seeded", "spawned", "autorun", "completed"]
 
 
@@ -46,7 +46,12 @@ class Step(Base):
         api_wrapper.py to wait for the completion of the actual task and make
         a callback to the API.
         """
+        log_dir = Path(config["folders"]["logs"])
+        task_logfile = log_dir / f"step_{self.id}_{self.script_file.split('.')[0]}.log"
+        manager_logfile = log_dir / "task_manager.log"
+
         arguments = ["api_wrapper.py",
+                     manager_logfile,
                      str(self.id),
                      self.script_file,
                      "-o", self.output,
@@ -56,9 +61,8 @@ class Step(Base):
             arguments.append(self.input)
         arguments += self.further_params.split()
         print(f"Executing script: {arguments}")
-        log_dir = Path(config["folders"]["logs"])
-        logfile = log_dir / f"step_{self.id}_{self.script_file.split('.')[0]}.log"
-        with open(logfile, 'w') as log_f:
+
+        with open(task_logfile, 'w') as log_f:
             subprocess.Popen(arguments, stdout=log_f, stderr=log_f)
 
 
