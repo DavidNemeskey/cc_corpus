@@ -75,12 +75,12 @@ def deduplicate_batch_documents(batch_prefix: Path, output_dir: Path,
     num_files = 0
     for input_file, results in read_batch(batch_prefix):
         file_base = Path(input_file).name
-        url_set = set('_'.join(doc_id) for doc_id in results['id'])
+        id_set = set('_'.join(doc_id) for doc_id in results['id'])
         input_file = input_dir / file_base if input_dir else Path(input_file)
         if input_file.is_file():
             with notempty(openall(output_dir / file_base, 'wt')) as outf:
                 for doc_no, doc in enumerate(parse_file(input_file), start=1):
-                    if doc.id in url_set:
+                    if doc.id in id_set:
                         print(doc.to_json(), file=outf)
                         kept += 1
                 total += doc_no

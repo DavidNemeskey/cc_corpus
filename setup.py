@@ -54,6 +54,7 @@ setup(name='commoncrawl-downloader',
       scripts=[
           'scripts/api_wrapper.py',
           'scripts/autonomous_cross_deduplicator.py',
+          'scripts/autonomous_cross_deduplicator2.py',
           'scripts/batch_deduplicate_index_urls.py',
           'scripts/content_type_stats.py',
           'scripts/get_indexfiles.py',

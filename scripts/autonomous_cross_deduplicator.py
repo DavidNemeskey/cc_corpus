@@ -34,13 +34,13 @@ def parse_arguments():
                              'batches, otherwise it will stall forever.')
     parser.add_argument('--upto-dir', '-u',
                         help='the latest batch to work on.')
-    parser.add_argument('--temp-dir', '-T', type=Path,
-                        help='the directory used to temporarily store partial '
-                             'results. The default is the system tmp dir.')
     parser.add_argument('--permutations', '-p', type=int, default=256,
                         help='the number of permutations per paragraph (256).')
     parser.add_argument('--threshold', '-t', type=float, default=0.9,
                         help='the Jaccard similarity threshold (0.9).')
+    parser.add_argument('--temp-dir', '-T', type=Path,
+                        help='the directory used to temporarily store partial '
+                             'results. The default is the system tmp dir.')
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1). Note that in order '

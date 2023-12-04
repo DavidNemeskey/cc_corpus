@@ -28,6 +28,9 @@ def parse_arguments():
     size_group.add_argument('--keep-sizes', '-k', action='store_true',
                             help='do not merge or split files; i.e. only '
                                  'copies files to the output directory.')
+    parser.add_argument('--prefix', '-p',
+                        help='the file name prefix that comes before the '
+                             'digits; optional.')
     parser.add_argument('--digits', '-Z', type=int, default=4,
                         help='the number of digits in the output files\' names.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
@@ -53,7 +56,10 @@ def main():
 
     batch_size = args.documents if not args.keep_sizes else sys.maxsize
     num_docs = 0
-    with closing(BatchWriter(batch_size, args.output_dir, args.digits)) as bw:
+    name_prefix = f'{args.prefix}_' if args.prefix else ''
+    with closing(
+        BatchWriter(batch_size, args.output_dir, args.digits, name_prefix)
+    ) as bw:
         for input_file in otqdm(input_files, 'Renumbering files...'):
             if not args.keep_sizes:
                 logging.debug('Reading file {}...'.format(input_file))

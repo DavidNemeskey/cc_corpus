@@ -23,7 +23,8 @@ from datasketch import MinHashLSH
 from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.deduplication import (
-    BatchWriter, find_all_batches, read_batch, read_batch_to_memory
+    BatchWriter, find_all_batches, read_batch, read_batch_to_lsh,
+    read_batch_to_memory
 )
 
 done_file = "DONE"
@@ -135,16 +136,6 @@ def deduplicate_self(file_prefix: Path, output_dir: Path,
     return bw.total_written, total_read
 
 
-def read_batch_to_lsh(
-        batch: Path, threshold: float, permutations: int
-) -> MinHashLSH:
-    lsh = MinHashLSH(threshold=threshold, num_perm=permutations)
-    for input_file, results in read_batch(batch):
-        for doc_id, minhash in zip(results['id'], results['minhash']):
-            lsh.insert('\t'.join(doc_id), minhash)
-    return lsh
-
-
 def check_batch(batch: Path):
     """Checks if there is a DONE file in the given batch."""
     return (batch / done_file).is_file()
@@ -159,6 +150,12 @@ def check_and_wait_for_batch(batch: Path):
     while not check_batch(batch):
         sleep(5)
     logging.debug(f'We waited on batch {batch} and now it\'s done!')
+
+
+def mark_as_done(batch: Path):
+    """Marks the _batch_ directory as done by creating the DONE file in it."""
+    with open(batch / done_file, 'wt') as f:
+        f.write('This file flags this batch done for deduplication.')
 
 
 def deduplicate_other(main_batch: Path,
@@ -200,28 +197,25 @@ def deduplicate_other(main_batch: Path,
         doc_ids = []
         minhashes = []
         for doc_id, minhash, docfile in main_batch_data:
-            if docfile == current_docfile:
-                # We are collecting doc_ids and minhashes per source files.
-                doc_ids.append(doc_id)
-                minhashes.append(minhash)
-            else:
+            if docfile != current_docfile:
                 # We reached the contents of another source .gz file.
                 # write data here
-                if doc_ids:
+                if doc_ids and current_docfile:
                     bw.write_results(current_docfile, {'id': doc_ids,
                                                        'minhash': minhashes})
                 current_docfile = docfile
                 doc_ids = []
                 minhashes = []
+            # We are collecting doc_ids and minhashes per source files.
+            doc_ids.append(doc_id)
+            minhashes.append(minhash)
         # To write the data for the last source file:
         if doc_ids:
             bw.write_results(current_docfile, {'id': doc_ids,
                                                'minhash': minhashes})
 
     if multiproc_coordination:
-        with open(output_dir / done_file, "wt") as f:
-            f.write('This file flags this batch done for multiprocess'
-                    ' deduplication')
+        mark_as_done(output_dir)
 
     logging.info(f'Processed input batch {main_batch}; '
                  f'kept {len(main_batch_data)} out of {initial_len} documents')

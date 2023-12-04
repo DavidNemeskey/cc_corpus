@@ -49,7 +49,7 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
-    parser.add_argument('--digits', '-Z', type=int, default=4,
+    parser.add_argument('--digits', '-Z', type=int, default=1,
                         help='the number of digits in the batch files\' names.')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
