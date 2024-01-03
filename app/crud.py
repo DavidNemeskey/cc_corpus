@@ -6,11 +6,10 @@ A CRUD layer for basic interactions with the DB.
 """
 
 from fastapi.encoders import jsonable_encoder
-from pydantic.utils import deep_update
 from sqlalchemy.orm import Session
 import time
 
-from .config import config
+from .config import config, load_and_substitute_config, CONFIG_FILE
 from . import models, schemas
 
 
@@ -26,21 +25,16 @@ def create_step(db: Session,
                 step: schemas.StepCreate,
                 optional_settings={}
                 ):
+    # If we have optional settings, we load the config and substitute those.
+    if optional_settings:
+        settings = load_and_substitute_config(CONFIG_FILE, optional_settings)
+    else:
+        # Otherwise we just use the default config:
+        settings = config
+
     db_step = models.Step(**step.dict())
     db_step.status = 'prelaunch'
-    db_step.script_version = config["version_number"]
-
-    print("============CRUD==============")
-    print(config)
-    print("----")
-    print(optional_settings)
-    print("----")
-
-    # Fill up the parameters based on the given input or default to config.yaml
-    # We need to update a nested dict with another.
-    settings = deep_update(config, optional_settings)
-    print(settings)
-    print("----")
+    db_step.script_version = settings["version_number"]
 
     dir_head = settings['folders']['working_dir']
     dir_tail = '/' + settings['cc_batch']
@@ -166,7 +160,7 @@ def spawn_pipeline(db: Session, pipeline_id: int):
         filter(models.Pipeline.id == pipeline_id).first()
 
     # Spawn the steps belonging to this pipeline:
-    config_mod = db_pipeline.params_to_config()
+    config_mod = db_pipeline.params
     step_types = config["pipelines"][db_pipeline.template]["steps"]
     step_ids = []
     for step_type in step_types:
@@ -240,4 +234,4 @@ def autorun_pipelines(db: Session):
                 pipe.status = "completed"
                 db.commit()
                 print(f"Pipeline #{pipe.id} was completed.")
-    print(f"Autorunner finished.")
+    print("Autorunner finished.")

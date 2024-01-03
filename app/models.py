@@ -77,14 +77,3 @@ class Pipeline(Base):
     steps = Column(JSON)
     prereq_pipe = Column(Integer)
     prereq_step = Column(Integer)
-
-    def params_to_config(self):
-        config = {}
-        for key, value in self.params.items():
-            if key == "cc_batch":
-                config[key] = value
-            if key == "language":
-                config.setdefault("scripts", {}).setdefault("filter_corpus", {})["l"] = value
-            if key == "url_pattern":
-                config.setdefault("scripts", {}).setdefault("get_indexfiles", {})["p"] = value
-        return config

@@ -6,15 +6,19 @@
     runtime_configurations:
         processes: 4
         log_level: 'info'
-    cc_batch: '2023_06'
+    cc_batch: '${cc_batch}'
+    default_yaml_variables:
+        cc_batch: "2023-06"
+        language: "hu"
+        url_pattern: "elte.hu"
     scripts:
         get_indexfiles:
             script_file: "get_indexfiles.py"
             hardwired_params: ""
             no_p_param: True
             output: "01_index"
-            p: "elte.hu"
-            c: "CC-MAIN-2023-06"
+            p: "${url_pattern}"
+            c: "CC-MAIN-${cc_batch}"
             d: "30"
         filter_index:
             script_file: "filter_index.py"
@@ -55,7 +59,7 @@
             input: "05_boilerplate_removed"
             output: "06_filtered"
             u: "doc"
-            l: "hu"
+            l: "${language}"
         minhash:
             script_file: "minhash.py"
             hardwired_params: ""
@@ -95,6 +99,7 @@
                 - download_pages
         post_download:
             params:
+                - cc_batch
                 - language
             steps:
                 - remove_boilerplate
