@@ -15,11 +15,13 @@ from typing import Dict, List, Optional
 
 
 class StepBase(BaseModel):
+    """Base model for Steps with the bare minimum fields."""
     step_name: str
     comment: Optional[str]
 
 
 class StepUpdate(BaseModel):
+    """The model for updating a Step."""
     id: Optional[int]
     step_name: Optional[str]
     comment: Optional[str]
@@ -35,10 +37,12 @@ class StepUpdate(BaseModel):
 
 
 class StepCreate(StepBase):
+    """The model for creating a Step, derived from StepBase."""
     pass
 
 
 class Step(StepBase):
+    """The fields used when a Step object is rendered as a response."""
     id: int
     script_file: str
     script_version: str
@@ -52,6 +56,7 @@ class Step(StepBase):
 
 
 class PipelineBase(BaseModel):
+    """Base model for Pipelines with the bare minimum fields."""
     comment: Optional[str]
     template: str
 
@@ -60,12 +65,14 @@ class PipelineBase(BaseModel):
 
 
 class PipelineCreate(PipelineBase):
+    """The model for creating a Pipeline."""
     params: Dict
     prereq_pipe: Optional[int]
     prereq_step: Optional[int]
 
 
 class PipelineUpdate(BaseModel):
+    """The model for updating a Pipeline."""
     id: Optional[int]
     comment: Optional[str]
     params: Optional[Dict]
@@ -80,6 +87,10 @@ class PipelineUpdate(BaseModel):
 
 
 class Pipeline(PipelineBase):
+    """
+    The fields used when a Pipeline object is rendered as a response.
+    Not in use currently.
+    """
     id: int
     params: Dict
     steps: Dict

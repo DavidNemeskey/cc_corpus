@@ -12,6 +12,10 @@ from . import models
 
 
 def seed_steps(db: Session):
+    """
+    Seeds the DB.
+    Currently, with nothing.
+    """
     steps = [
         # {
         #     "step_name": "remove_boilerplate",

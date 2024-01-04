@@ -1,7 +1,15 @@
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, Request
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+The main script for running the FastAPI app. Also contains all the controllers.
+"""
+
+
+from fastapi import BackgroundTasks, Depends, FastAPI, Form, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from json import loads
@@ -52,6 +60,7 @@ def dev_seed():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
+    """Controller for rendering the list of steps."""
     steps = crud.get_steps(db)
     context = {"request": request, "steps": steps}
     return templates.TemplateResponse("list_steps.html", context)
@@ -63,6 +72,7 @@ async def query_step_by_id(step_id: int,
                            request: Request,
                            db: Session = Depends(get_db)
                            ):
+    """Controller for rendering a single step."""
     db_step = crud.get_step_by_id(db, step_id)
     if not db_step:
         raise HTTPException(
@@ -72,9 +82,9 @@ async def query_step_by_id(step_id: int,
     return templates.TemplateResponse("view_step.html", context)
 
 
-# This is a GET route which displays the form to create a new step
 @app.get("/create_step_form/", response_class=HTMLResponse)
 async def create_step_form(request: Request):
+    """Controller to render the create new step form."""
     step_types = list(config["scripts"].keys())
     context = {"request": request, "step_types": step_types}
     return templates.TemplateResponse("new_step.html", context)
@@ -86,6 +96,7 @@ async def add_step_from_form(request: Request,
                              stepName: str = Form(...),
                              comment: str = Form(default=None),
                              ):
+    """Controller to process the response from create new step form."""
     step = schemas.StepCreate(
         step_name=stepName,
         comment=comment)
@@ -98,15 +109,16 @@ async def add_step_from_form(request: Request,
 async def add_step_from_json(step: schemas.StepCreate,
                              db: Session = Depends(get_db)
                              ) -> schemas.Step:
+    """Controller to process creating a new step from an API call."""
     return crud.create_step(db, step)
 
 
-# This is a GET route which displays the form to edit a step
 @app.get("/edit_step/{step_id}", response_class=HTMLResponse)
 async def edit_step(step_id: int,
                     request: Request,
                     db: Session = Depends(get_db)
                     ):
+    """Controller to render the edit step form."""
     db_step = crud.get_step_by_id(db, step_id)
     if not db_step:
         raise HTTPException(
@@ -132,6 +144,7 @@ async def update_step_from_form(request: Request,
                                 comment: str = Form(default=None),
                                 status: str = Form(...),
                                 ):
+    """Controller to process the response from the edit step form."""
     step = schemas.StepUpdate(
         id=stepId,
         step_name=stepName,
@@ -153,11 +166,13 @@ async def update_step_from_form(request: Request,
 async def update_step(step: schemas.StepUpdate,
                       db: Session = Depends(get_db)
                       ):
+    """Controller to process updating a step from an API call."""
     crud.update_step(db, step)
 
 
 @app.delete("/step/{step_id}")
 async def delete_step(step_id: int, db: Session = Depends(get_db)):
+    """Controller to delete a step from an API call."""
     crud.delete_step_by_id(db, step_id)
 
 
@@ -166,19 +181,23 @@ async def run_step(step_id: int,
                    request: Request,
                    db: Session = Depends(get_db)
                    ):
-    # TODO should this be here or in the crud.py?
+    """
+    Controller to execute a step.
+    The step must be in the "prelaunch" status.
+    Status will be changed to "running"
+    """
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
     if not db_step:
         raise HTTPException(
             status_code=404, detail=f"Step with {step_id=} does not exist."
         )
-    # TODO commented this one out to make testing easier:
-    # if db_step.status != "prelaunch":
-    #     raise HTTPException(
-    #         status_code=403,
-    #         detail=f"Step with {step_id=} is not ready for execution."
-    #     )
+    if db_step.status != "prelaunch":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Step with {step_id=} is not ready for execution."
+        )
     db_step.run_script()
+    # TODO should this DB update be done here or in the run_script method?
     db_step.status = "running"
     db.commit()
     context = {"request": request, "step": db_step}
@@ -187,7 +206,10 @@ async def run_step(step_id: int,
 
 @app.post("/completed/{step_id}")
 async def report_completed(step_id: int, db: Session = Depends(get_db)):
-    # TODO should this be here or in the crud.py?
+    """
+    Controller for API call to mark the completion of the execution of a step.
+    It changes its status from "running" to "completed".
+    """
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
     if not db_step:
         raise HTTPException(
@@ -199,6 +221,7 @@ async def report_completed(step_id: int, db: Session = Depends(get_db)):
             detail=f"Step with {step_id=} is not running, "
                    f"how can it be completed?"
         )
+    # TODO should this be here or in a crud.py method?
     db_step.status = "completed"
     db.commit()
     return {"completed": db_step}
@@ -206,6 +229,11 @@ async def report_completed(step_id: int, db: Session = Depends(get_db)):
 
 @app.post("/failed/{step_id}")
 async def report_failure(step_id: int, db: Session = Depends(get_db)):
+    """
+    Controller for API call to signal the failure of the execution of a step.
+    It changes its status from "running" to "failed".
+    """
+
     # TODO should this be here or in the crud.py?
     db_step = db.query(models.Step).filter(models.Step.id == step_id).first()
     if not db_step:
@@ -225,6 +253,7 @@ async def report_failure(step_id: int, db: Session = Depends(get_db)):
 
 @app.get("/pipelines/", response_class=HTMLResponse)
 async def list_pipelines(request: Request, db: Session = Depends(get_db)):
+    """Controller for rendering the list of pipelines."""
     pipelines = crud.get_pipelines(db)
     pipeline_types = list(config["pipelines"].keys())
     context = {"request": request,
@@ -238,6 +267,7 @@ async def query_pipeline_by_id(pipeline_id: int,
                                request: Request,
                                db: Session = Depends(get_db)
                                ):
+    """Controller for rendering a single pipeline."""
     db_pipeline = crud.get_pipeline_by_id(db, pipeline_id)
     if not db_pipeline:
         raise HTTPException(
@@ -248,10 +278,9 @@ async def query_pipeline_by_id(pipeline_id: int,
     return templates.TemplateResponse("view_pipeline.html", context)
 
 
-# This is a GET route which displays the form
-# to create a new pipeline of a given type
 @app.get("/create_pipeline_form/{pipeline_type}", response_class=HTMLResponse)
 async def create_pipeline_form(pipeline_type: str, request: Request):
+    """Controller to render the create new pipeline form of a given type."""
     params = config["pipelines"][pipeline_type]["params"]
     context = {"request": request,
                "params": params,
@@ -264,6 +293,7 @@ async def create_pipeline_form(pipeline_type: str, request: Request):
 async def add_pipeline_from_form(request: Request,
                                  db: Session = Depends(get_db),
                                  ):
+    """Controller to process the response from create new pipeline form."""
     form_data = await request.form()
     form_data = jsonable_encoder(form_data)
     prereq_pipe = form_data.pop("prereq_pipe")
@@ -280,12 +310,12 @@ async def add_pipeline_from_form(request: Request,
     return templates.TemplateResponse("view_pipeline.html", context)
 
 
-# This is a GET route which displays the form to edit a step
 @app.get("/edit_pipeline/{pipeline_id}", response_class=HTMLResponse)
 async def edit_pipeline(pipeline_id: int,
                         request: Request,
                         db: Session = Depends(get_db)
                         ):
+    """Controller to render the edit pipeline form."""
     db_pipeline = crud.get_pipeline_by_id(db, pipeline_id)
     if not db_pipeline:
         raise HTTPException(
@@ -304,6 +334,7 @@ async def edit_pipeline(pipeline_id: int,
 async def update_pipeline_from_form(request: Request,
                                     db: Session = Depends(get_db),
                                     ):
+    """Controller to process the response from the edit pipeline form."""
     form_data = await request.form()
     form_data = jsonable_encoder(form_data)
 
@@ -333,6 +364,7 @@ async def spawn_pipeline(pipeline_id: int,
                          request: Request,
                          db: Session = Depends(get_db)
                          ):
+    """Controller for spawning the steps corresponding to a pipeline."""
     db_pipeline = crud.spawn_pipeline(db, pipeline_id)
     context = {"request": request, "pipeline": db_pipeline}
     return templates.TemplateResponse("view_pipeline.html", context)
@@ -343,5 +375,6 @@ async def autorun(request: Request,
                   background_tasks: BackgroundTasks,
                   db: Session = Depends(get_db),
                   ):
+    """Controller to start the autorunner functionality."""
     background_tasks.add_task(crud.autorun_pipelines, db)
-    # return {"message": "Started autorunner"}
+    return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)

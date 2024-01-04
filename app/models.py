@@ -24,6 +24,7 @@ PIPELINE_STATUSES = ["seeded", "spawned", "autorun", "completed"]
 
 
 class Step(Base):
+    """The ORM class for Step objects."""
     __tablename__ = "steps"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -67,6 +68,7 @@ class Step(Base):
 
 
 class Pipeline(Base):
+    """The ORM class for Pipeline objects."""
     __tablename__ = "pipelines"
 
     id = Column(Integer, primary_key=True, index=True)

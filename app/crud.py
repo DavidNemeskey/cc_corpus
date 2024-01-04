@@ -14,10 +14,12 @@ from . import models, schemas
 
 
 def get_steps(db: Session, skip: int = 0, limit: int = 100):
+    """Gets steps from the DB."""
     return db.query(models.Step).offset(skip).limit(limit).all()
 
 
 def get_step_by_id(db: Session, step_id: int):
+    """Gets a single step by ID from the DB."""
     return db.query(models.Step).filter(models.Step.id == step_id).first()
 
 
@@ -25,6 +27,12 @@ def create_step(db: Session,
                 step: schemas.StepCreate,
                 optional_settings={}
                 ):
+    """
+    Creates a step in the DB with a lot of data processing.
+
+    Combines the optional_settings supplied in parameter with the config .yaml.
+    It combines these parameters into properly formatted values for fields.
+    """
     # If we have optional settings, we load the config and substitute those.
     if optional_settings:
         settings = load_and_substitute_config(CONFIG_FILE, optional_settings)
@@ -78,11 +86,16 @@ def create_step(db: Session,
 
 
 def update_step(db: Session, step: schemas.StepUpdate):
+    """
+    Updates a Step in the DB
+    Fields that are missing from the update object are left unchanged.
+    """
     # get existing data from the DB:
     db_step = db.query(models.Step).\
         filter(models.Step.id == step.id).one_or_none()
     if db_step is None:
         return None
+    # Do the updates:
     for key, value in vars(step).items():
         setattr(db_step, key, value)
     db.commit()
@@ -91,21 +104,30 @@ def update_step(db: Session, step: schemas.StepUpdate):
 
 
 def delete_step_by_id(db: Session, step_id: int):
+    """Deletes a STEP from the DB."""
     db.query(models.Step).filter(models.Step.id == step_id).delete()
     db.commit()
 
 
 def get_pipelines(db: Session, skip: int = 0, limit: int = 100):
+    """Fetches Pipeline objects from the DB."""
     return db.query(models.Pipeline).offset(skip).limit(limit).all()
 
 
 def get_pipelines_by_status(db: Session, status: str):
+    """Fetches Pipeline objects from the DB filtered by status."""
     pipelines = db.query(models.Pipeline).\
         filter(models.Pipeline.status == status).all()
     return pipelines
 
 
 def is_pipe_ready(db: Session, pipeline_id):
+    """
+    Checks if a pipeline is ready for autorunner functionallity.
+    It returns True if:
+    - It is  set to "autorun" status.
+    - Its prerequisites are completed.
+    """
     pipe = db.query(models.Pipeline).\
         filter(models.Pipeline.id == pipeline_id).first()
     if pipe.status != "autorun":
@@ -129,11 +151,13 @@ def is_pipe_ready(db: Session, pipeline_id):
 
 
 def get_pipeline_by_id(db: Session, pipeline_id: int):
+    """Fetches a Pipeline object from the DB by ID."""
     return db.query(models.Pipeline).\
         filter(models.Pipeline.id == pipeline_id).first()
 
 
 def create_pipeline(db: Session, pipeline: schemas.PipelineCreate):
+    """Saves a Pipeline object as a new record."""
     db_pipeline = models.Pipeline(**pipeline.dict())
     db_pipeline.status = "seeded"
     db.add(db_pipeline)
@@ -143,11 +167,16 @@ def create_pipeline(db: Session, pipeline: schemas.PipelineCreate):
 
 
 def update_pipeline(db: Session, pipeline: schemas.PipelineUpdate):
+    """
+    Updates a Pipeline in the DB
+    Fields that are missing from the update object are left unchanged.
+    """
     # get existing data from the DB:
     db_pipeline = db.query(models.Pipeline).\
         filter(models.Pipeline.id == pipeline.id).one_or_none()
     if db_pipeline is None:
         return None
+    # Do the updates:
     for key, value in vars(pipeline).items():
         setattr(db_pipeline, key, value)
     db.commit()
@@ -156,6 +185,16 @@ def update_pipeline(db: Session, pipeline: schemas.PipelineUpdate):
 
 
 def spawn_pipeline(db: Session, pipeline_id: int):
+    """
+    Spawns the steps corresponding to the pipeline.
+
+    The config.yaml describes what steps should be created for which type of
+    pipeline.
+    Their fields are also determined based on the config.yaml and the
+    parameters of their mother Pipeline object.
+    The ids of its Steps are stored in the steps field of the Pipeline.
+    The Pipeline object's status is changed to "spawned".
+    """
     db_pipeline = db.query(models.Pipeline).\
         filter(models.Pipeline.id == pipeline_id).first()
 
@@ -177,6 +216,7 @@ def spawn_pipeline(db: Session, pipeline_id: int):
 
 
 def get_steps_of_pipeline(db: Session, pipeline_id: int):
+    """Fetches the Steps corresponding to the Pipeline."""
     db_pipeline = db.query(models.Pipeline).\
         filter(models.Pipeline.id == pipeline_id).first()
     steps = []
@@ -186,6 +226,25 @@ def get_steps_of_pipeline(db: Session, pipeline_id: int):
 
 
 def autorun_pipelines(db: Session):
+    """
+    Runs the next step according to the autorun logic.
+
+    - Only Pipelines with the status "autorun" are considered.
+    - Pipelines are then ordered by their ids.
+    - Once a candidate Pipeline has been selected we examine its Steps:
+    -- We skip steps which are "completed".
+    -- If we find a step already "running" then the autorunner process waits
+    for its completion. If it succeeds it is skipped. If it fails then the
+    Pipeline itself is skipped for now.
+    -- If we find a step marked as "failed" we skip this Pipeline.
+    -- If we get to a "prelaunch" status step, we execute that and wait
+    for its resolution (success or failure) and handle it accordingly.
+    -- If we are either done with the Steps of a given Pipeline or found a
+    failed one, we proceed to the next Pipeline.
+
+    If the last Step of a Pipeline is completed, then we change the Pipeline!s
+    status from "autorun" to "completed".
+    """
     pipes = get_pipelines_by_status(db, status="autorun")
     for pipe in pipes:
         print(f"Attempting to progress pipeline #{pipe.id}")
