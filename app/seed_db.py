@@ -13,17 +13,17 @@ from . import models
 
 def seed_steps(db: Session):
     steps = [
-        {
-            "step_name": "remove_boilerplate",
-            "script_file": "remove_boilerplate.py",
-            "input": "../test_corpus2/04a_index_sorted",
-            "output": "../test_corpus2/05_boilerplate_removed",
-            "further_params":
-                "-w ../test_corpus2/04_downloaded -b justext",
-            "script_version": "1.14.0",
-            "comment": "",
-            "status": "prelaunch"
-        },
+        # {
+        #     "step_name": "remove_boilerplate",
+        #     "script_file": "remove_boilerplate.py",
+        #     "input": "../test_corpus2/04a_index_sorted",
+        #     "output": "../test_corpus2/05_boilerplate_removed",
+        #     "further_params":
+        #         "-w ../test_corpus2/04_downloaded -b justext",
+        #     "script_version": "1.14.0",
+        #     "comment": "",
+        #     "status": "prelaunch"
+        # },
     ]
     for step in steps:
         db.add(models.Step(**step))
