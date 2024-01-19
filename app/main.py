@@ -20,8 +20,11 @@ from . import crud, models, seed_db, schemas
 from .config import config
 from .database import SessionLocal, engine
 
-
-# TODO this should be replaced by proper migrations using the Alembic library
+# Sets up the tables in the DB according to the schemas defined by models.py
+#
+# If we change the schemas frequently or have various versions of our code
+# deployed, it should be replaced by proper migrations using for example the
+# Alembic library
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CC Corpus manager")
@@ -46,16 +49,17 @@ def get_db():
         db.close()
 
 
-# TODO this is for development purposes. Will we need seeding for production?
+# This is for development purposes. If we need seeding in a production
+# environment, we have to reconsider the trigger condition for seeding.
 @app.on_event("startup")
 def dev_seed():
-    """Seeds the DB if it is empty."""
+    """Seeds the DB if there are no step records in it."""
     db = SessionLocal()
     num_steps = db.query(models.Step).count()
     if num_steps == 0:
         seed_db.seed_steps(db)
     else:
-        print(f"We already have {num_steps} records in our DB")
+        print(f"There are {num_steps} step records in our DB")
 
 
 @app.get("/", response_class=HTMLResponse)

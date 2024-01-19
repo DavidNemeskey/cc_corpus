@@ -38,7 +38,7 @@ def load_config_with_defaults(config_file):
     Loads the config from a YAML file using the default variables.
     The default variables are themselves contained in that YAML.
     """
-    raw_config = load_config_file(CONFIG_FILE)
+    raw_config = load_config_file(config_file)
     default_variables = raw_config["default_yaml_variables"]
     config = load_and_substitute_config(config_file, default_variables)
     return config

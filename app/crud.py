@@ -4,6 +4,7 @@
 """
 A CRUD layer for basic interactions with the DB.
 """
+import logging
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
@@ -25,8 +26,7 @@ def get_step_by_id(db: Session, step_id: int):
 
 def create_step(db: Session,
                 step: schemas.StepCreate,
-                optional_settings={}
-                ):
+                optional_settings={}):
     """
     Creates a step in the DB with a lot of data processing.
 
@@ -81,18 +81,18 @@ def create_step(db: Session,
     db_step.further_params = further_params
     db.add(db_step)
     db.commit()
-    db.refresh(db_step)
     return db_step
 
 
 def update_step(db: Session, step: schemas.StepUpdate):
     """
-    Updates a Step in the DB
+    Updates a Step in the DB.
+
     Fields that are missing from the update object are left unchanged.
     """
     # get existing data from the DB:
-    db_step = db.query(models.Step).\
-        filter(models.Step.id == step.id).one_or_none()
+    db_step = db.query(models.Step).filter(
+        models.Step.id == step.id).one_or_none()
     if db_step is None:
         return None
     # Do the updates:
@@ -128,8 +128,7 @@ def is_pipe_ready(db: Session, pipeline_id):
     - It is  set to "autorun" status.
     - Its prerequisites are completed.
     """
-    pipe = db.query(models.Pipeline).\
-        filter(models.Pipeline.id == pipeline_id).first()
+    pipe = get_pipeline_by_id(db, pipeline_id)
     if pipe.status != "autorun":
         return False
     # If there are no (well-defined) prerequisites, then pipe is ready:
@@ -137,8 +136,7 @@ def is_pipe_ready(db: Session, pipeline_id):
         return True
     if pipe.prereq_step is None:
         return True
-    prereq_pipe = db.query(models.Pipeline).\
-        filter(models.Pipeline.id == pipe.prereq_pipe).first()
+    prereq_pipe = get_pipeline_by_id(db, pipe.prereq_pipe)
     # If the prereq pipe has not spawned its steps then it is not ready:
     if len(prereq_pipe.steps) < pipe.prereq_step:
         return False
@@ -153,7 +151,7 @@ def is_pipe_ready(db: Session, pipeline_id):
 def get_pipeline_by_id(db: Session, pipeline_id: int):
     """Fetches a Pipeline object from the DB by ID."""
     return db.query(models.Pipeline).\
-        filter(models.Pipeline.id == pipeline_id).first()
+        filter(models.Pipeline.id == pipeline_id).one_or_none()
 
 
 def create_pipeline(db: Session, pipeline: schemas.PipelineCreate):
@@ -172,8 +170,7 @@ def update_pipeline(db: Session, pipeline: schemas.PipelineUpdate):
     Fields that are missing from the update object are left unchanged.
     """
     # get existing data from the DB:
-    db_pipeline = db.query(models.Pipeline).\
-        filter(models.Pipeline.id == pipeline.id).one_or_none()
+    db_pipeline = get_pipeline_by_id(db, pipeline.id)
     if db_pipeline is None:
         return None
     # Do the updates:
@@ -195,8 +192,7 @@ def spawn_pipeline(db: Session, pipeline_id: int):
     The ids of its Steps are stored in the steps field of the Pipeline.
     The Pipeline object's status is changed to "spawned".
     """
-    db_pipeline = db.query(models.Pipeline).\
-        filter(models.Pipeline.id == pipeline_id).first()
+    db_pipeline = get_pipeline_by_id(db, pipeline_id)
 
     # Spawn the steps belonging to this pipeline:
     step_types = config["pipelines"][db_pipeline.template]["steps"]
@@ -247,7 +243,7 @@ def autorun_pipelines(db: Session):
     """
     pipes = get_pipelines_by_status(db, status="autorun")
     for pipe in pipes:
-        print(f"Attempting to progress pipeline #{pipe.id}")
+        logging.info(f"Attempting to progress pipeline #{pipe.id}")
         if is_pipe_ready(db, pipe.id):
             steps = get_steps_of_pipeline(db, pipe.id)
             encountered_failure = False

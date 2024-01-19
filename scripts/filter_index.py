@@ -43,8 +43,10 @@ wwwp = re.compile(r'^(?:www|ww2|ww3|www2|www3)[.]')
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--input_dir', '-i', help='the input directory.')
-    parser.add_argument('--output_dir', '-o', help='the output directory.')
+    parser.add_argument('--input_dir', '-i', required=True,
+                        help='the input directory.')
+    parser.add_argument('--output_dir', '-o', required=True,
+                        help='the output directory.')
     parser.add_argument('--allowed-mimes', '-a', required=True,
                         help='the list of allowed mime types (in a file).')
     parser.add_argument('--bad-index', '-b', default=None,

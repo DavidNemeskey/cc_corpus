@@ -10,7 +10,7 @@
     default_yaml_variables:
         cc_batch: "2023-06"
         language: "hu"
-        url_pattern: "elte.hu"
+        url_pattern: "hu"
     scripts:
         get_indexfiles:
             script_file: "get_indexfiles.py"

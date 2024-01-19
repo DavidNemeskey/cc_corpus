@@ -29,7 +29,8 @@ def parse_arguments():
     parser.add_argument('--pipe', '-p', required=True,
                         help='the input directory.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
-                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        choices=['debug', 'info', 'warning',
+                                 'error', 'critical'],
                         help='the logging level.')
 
     # The parameters we accept are fetched from the config.yaml:

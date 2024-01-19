@@ -32,7 +32,8 @@ def download_ranges(url: str,
     :param retry_left: the number of retries left.
     :param delay_period: the base time unit for delay in seconds.
     """
-    logging.debug(f'Downloading {len(offsets_and_lengths)=} ranges from {url}.')
+    logging.debug(
+        f'Downloading {len(offsets_and_lengths)=} ranges from {url}.')
     range_str = ', '.join(f'{offset}-{offset + length}'
                           for offset, length in offsets_and_lengths)
     byte_range = f'bytes={range_str}'
@@ -45,7 +46,8 @@ def download_ranges(url: str,
                 url, headers={'Range': byte_range}, stream=True, timeout=60
             )
         except Exception as e:
-            logging.exception(f'Exception {e} with URL {url}; {retry_str} left.')
+            logging.exception(
+                f'Exception {e} with URL {url}; {retry_str} left.')
             continue
 
         if r.status_code == 206:
@@ -80,8 +82,7 @@ def download_warc_ranges(
         warc_file_name: str,
         offsets_and_lengths: list[tuple[int, int]],
         retry_left: int,
-        delay: int = 10,
-) -> list[bytes]:
+        delay: int = 10,) -> list[bytes]:
     """
     Downloads byte ranges from a WARC file. A thin wrapper over
     :func:`download_ranges`.
@@ -98,8 +99,7 @@ def download_index_range(
         offset: int,
         length: int,
         retry_left: int,
-        delay: int = 10,
-) -> bytes:
+        delay: int = 10,) -> bytes:
     """
     Downloads a single byte range from an index file.
     """

@@ -55,8 +55,7 @@ class Step(Base):
                      manager_logfile,
                      str(self.id),
                      self.script_file,
-                     "-o", self.output,
-                     ]
+                     "-o", self.output]
         if self.input:
             arguments.append("-i")
             arguments.append(self.input)

@@ -320,8 +320,9 @@ def main():
         create_sorted_index(args.input_dir, ranges_dir)
 
     print('Downloading pages...')
-    download_collected_ranges(ranges_dir, args.processes, args.index_output_dir,
-                              args.data_output_dir, args.error_file, args.retry, args.chunksize,
+    download_collected_ranges(ranges_dir, args.processes,
+                              args.index_output_dir, args.data_output_dir,
+                              args.error_file, args.retry, args.chunksize,
                               args.out_filename, args.padding, args.ext)
     print('Done.')
 
