@@ -26,8 +26,7 @@ def possible_pipeline_params():
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--pipe', '-p', required=True,
-                        help='the input directory.')
+    parser.add_argument('pipe', help='the input directory.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning',
                                  'error', 'critical'],
