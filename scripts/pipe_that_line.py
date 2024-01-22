@@ -52,7 +52,7 @@ def main():
     # Get the args arranged into pipeline parameters:
     try:
         pipe_params = config["pipelines"][args.pipe]["params"]
-        print(pipe_params)
+        logging.debug(pipe_params)
     except KeyError:
         logging.error(f"Pipeline type {args.pipe} was not found in the "
                       f"config files.")
@@ -72,7 +72,7 @@ def main():
         template=args.pipe,
         params=params,
     )
-    print(pipeline)
+    logging.debug(pipeline)
     # Get the DB connection:
     db = database.SessionLocal()
     # Create the pipeline object:

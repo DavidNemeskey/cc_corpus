@@ -25,13 +25,8 @@ def parse_arguments():
 
 
 def main():
-    print("Testing args:")
     args, extra_args = parse_arguments()
-    print(args)
-    print(extra_args)
-
     step_id = args.step_id
-
     logging.basicConfig(
         filename=args.manager_logfile,
         filemode='a',
