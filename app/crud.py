@@ -109,16 +109,17 @@ def delete_step_by_id(db: Session, step_id: int):
     db.commit()
 
 
-def get_pipelines(db: Session, skip: int = 0, limit: int = 100):
+def get_pipelines(db: Session,
+                  skip: int = 0,
+                  limit: int = None,
+                  status: str = None):
     """Fetches Pipeline objects from the DB."""
-    return db.query(models.Pipeline).offset(skip).limit(limit).all()
-
-
-def get_pipelines_by_status(db: Session, status: str):
-    """Fetches Pipeline objects from the DB filtered by status."""
-    pipelines = db.query(models.Pipeline).\
-        filter(models.Pipeline.status == status).all()
-    return pipelines
+    if status:
+        return db.query(models.Pipeline).filter(
+            models.Pipeline.status == status).offset(skip).limit(
+            limit).all()
+    else:
+        return db.query(models.Pipeline).offset(skip).limit(limit).all()
 
 
 def is_pipe_ready(db: Session, pipeline_id):
@@ -241,7 +242,7 @@ def autorun_pipelines(db: Session):
     If the last Step of a Pipeline is completed, then we change the Pipeline!s
     status from "autorun" to "completed".
     """
-    pipes = get_pipelines_by_status(db, status="autorun")
+    pipes = get_pipelines(db, status="autorun")
     for pipe in pipes:
         logging.info(f"Attempting to progress pipeline #{pipe.id}")
         if is_pipe_ready(db, pipe.id):
