@@ -200,7 +200,7 @@ async def run_step(step_id: int,
             status_code=403,
             detail=f"Step with {step_id=} is not ready for execution."
         )
-    db_step.run_script()
+    db_step.run_script(request.base_url)
     # TODO should this DB update be done here or in the run_script method?
     db_step.status = "running"
     db.commit()
@@ -380,5 +380,5 @@ async def autorun(request: Request,
                   db: Session = Depends(get_db),
                   ):
     """Controller to start the autorunner functionality."""
-    background_tasks.add_task(crud.autorun_pipelines, db)
+    background_tasks.add_task(crud.autorun_pipelines, db, request.base_url)
     return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)

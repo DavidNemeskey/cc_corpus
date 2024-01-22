@@ -27,6 +27,8 @@ def possible_pipeline_params():
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('pipe', help='the input directory.')
+    parser.add_argument('server', help='The address of the manager app,'
+                                       'example: 127.0.0.1:8000/')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning',
                                  'error', 'critical'],
@@ -84,7 +86,7 @@ def main():
     crud.update_pipeline(db, db_pipeline)
     # Note: if there were already Pipelines waiting for autorun execution
     # our newly created pipeline will be at the end of the queue.
-    crud.autorun_pipelines(db)
+    crud.autorun_pipelines(db, args.server)
     db.close()
 
 

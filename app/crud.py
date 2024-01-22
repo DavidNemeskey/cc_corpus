@@ -222,7 +222,7 @@ def get_steps_of_pipeline(db: Session, pipeline_id: int):
     return steps
 
 
-def autorun_pipelines(db: Session):
+def autorun_pipelines(db: Session, app_url: str):
     """
     Runs the next step according to the autorun logic.
 
@@ -270,7 +270,7 @@ def autorun_pipelines(db: Session):
                     break
                 else:
                     # We have to run this step:
-                    step.run_script()
+                    step.run_script(app_url)
                     step.status = "running"
                     db.commit()
                     print(f"--Started the execution of step #{step.id}")

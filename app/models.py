@@ -37,7 +37,7 @@ class Step(Base):
     output = Column(String)
     further_params = Column(String)
 
-    def run_script(self):
+    def run_script(self, app_url):
         """
         Starts the actual execution of the script defined by this step.
 
@@ -53,6 +53,7 @@ class Step(Base):
 
         arguments = ["api_wrapper.py",
                      manager_logfile,
+                     str(app_url),
                      str(self.id),
                      self.script_file,
                      "-o", self.output]

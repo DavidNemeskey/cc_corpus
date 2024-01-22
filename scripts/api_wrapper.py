@@ -19,6 +19,8 @@ def parse_arguments():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("manager_logfile",
                         help="The log file for the api wrapper script.")
+    parser.add_argument("app_url",
+                        help="The address of the app for callback.")
     parser.add_argument("step_id", help="The DB record ID of this step.")
     parser.add_argument("script_file", help="The script file for execution.")
     return parser.parse_known_args()
@@ -40,15 +42,13 @@ def main():
     if results.returncode == 0:
         logging.info(f"Script {args.script_file} "
                      f"(id: {step_id}) - Successfully executed")
-        # TODO this url shoud not be hardwired:
-        success_url = f"http://127.0.0.1:8000/completed/{step_id}"
+        success_url = f"{args.app_url}completed/{step_id}"
         requests.post(success_url)
         logging.info(f"Finished running script {step_id}")
     else:
-        logging.info(f"Script {args.script_name} "
+        logging.info(f"Script {args.script_file} "
                      f"(id: {step_id}) - Error code: {results.returncode}")
-        # TODO this url shoud not be hardwired:
-        failed_url = f"http://127.0.0.1:8000/failed/{step_id}"
+        failed_url = f"{args.app_url}failed/{step_id}"
         requests.post(failed_url)
         logging.info(f"Reported script failing to execute {step_id}")
 
