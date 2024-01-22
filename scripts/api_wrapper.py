@@ -8,32 +8,50 @@ This wrapper starts the script described in the command line argument,
 and when that finishes, it makes an API call back to the manager.
 """
 
+from argparse import ArgumentParser
 import logging
-import sys
 import requests
 import subprocess
 
 
+def parse_arguments():
+    """Returns the listed and the additional parameters"""
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument("manager_logfile",
+                        help="The log file for the api wrapper script.")
+    parser.add_argument("step_id", help="The DB record ID of this step.")
+    parser.add_argument("script_file", help="The script file for execution.")
+    return parser.parse_known_args()
+
+
 def main():
-    step_id = sys.argv[2]
+    print("Testing args:")
+    args, extra_args = parse_arguments()
+    print(args)
+    print(extra_args)
+
+    step_id = args.step_id
 
     logging.basicConfig(
-        filename= sys.argv[1],
+        filename=args.manager_logfile,
         filemode='a',
         format='%(asctime)s - %(threadName)-10s)- %(levelname)s - %(message)s',
         level=logging.INFO
     )
 
-    logging.info(f"Script {sys.argv[3]} (id: {step_id}) - Starting with: {sys.argv[2:]}")
-    results = subprocess.run(sys.argv[3:])
+    logging.info(f"Script {args.script_file} "
+                 f"(id: {step_id}) - Starting with params: {extra_args}")
+    results = subprocess.run([args.script_file] + extra_args)
     if results.returncode == 0:
-        logging.info(f"Script {sys.argv[3]} (id: {step_id}) - Successfully executed")
+        logging.info(f"Script {args.script_file} "
+                     f"(id: {step_id}) - Successfully executed")
         # TODO this url shoud not be hardwired:
         success_url = f"http://127.0.0.1:8000/completed/{step_id}"
         requests.post(success_url)
         logging.info(f"Finished running script {step_id}")
     else:
-        logging.info(f"Script {sys.argv[3]} (id: {step_id}) - Error code: {results.returncode}")
+        logging.info(f"Script {args.script_name} "
+                     f"(id: {step_id}) - Error code: {results.returncode}")
         # TODO this url shoud not be hardwired:
         failed_url = f"http://127.0.0.1:8000/failed/{step_id}"
         requests.post(failed_url)
