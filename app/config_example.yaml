@@ -1,19 +1,48 @@
+# Rename this file to config.yaml and be sure to fill out the working_dir!
+# You should also check the runtime_configurations, default_yaml_variables and the folders/logs,
+# and edit it according to your needs.
 ---
     folders:
-        working_dir: "/mnt/d/coding/test_corpus3/"
+        working_dir: ""
         # The absolute path of the working dir.
         logs: "logs"
-        # Either an absolute path, or a relative one to the working_dir. E.g.: "logs"
-    version_number: "1.14.0"
+        # Either an absolute path, or a relative one to the working_dir. E.g.: "logs".
+    version_number: "1.15.0"
+    # It will be saved for every step on creation. It could help with debugging.
     runtime_configurations:
         processes: 4
+        # The number of processes for multithreading scripts.
         log_level: 'info'
+        # This will be applied to every script run via the manager app. E.g.: 'info'.
     cc_batch: '${cc_batch}'
+    # Leave this as a variable, and set the one below.
     default_yaml_variables:
+        # These are used as defaults when the given variable is not set at the Step or Pipeline level.
         cc_batch: "2023-06"
+        # The common crawl batch ID for downloading it and folder naming. E.g.: "2023-06".
         language: "hu"
+        # The language code for the language we work with. Used in filtering. E.g.: "hu".
         url_pattern: "hu"
+        # This is the url pattern we want to download from common crawl. E.g.: "hu" or "elte.hu"
+        # It will be interpreted as *.url_pattern, so "hu" will download everything in *.hu
     scripts:
+    # Every script type is listed here. The top level is the name of the script.
+    # The nested dicts contain the following:
+    # - script_file: the name of the script file we have to run.
+    # - hardwired_params: command line arguments which are not set by the user.
+    # Normal runtime parameters have the parameter prefix as the key and the default value as the value.
+    #     So an entry "a: blabla" will yield the command line argument "-a blabla".
+    # If the command line argument requires 2 dashes, add 1 dash to the key here.
+    #     So an entry "-alfa: blabla" will yield the command line argument "--alfa blabla"
+    # Some parameter values depend upon the working dir. Usually we want the variable interjected.
+    # If our working dir is /home/cc-batch, we want the result to be /home/variable/cc-batch.
+    # For this use the following syntax:
+    # key:
+    #     is_path: True
+    #     key: value
+    # If we need a working dir dependent path without the cc-batch, so turn /home/cc-batch into /home/variable
+    # also add an extra line:
+    #     no_batch_in_path: True
         get_indexfiles:
             script_file: "get_indexfiles.py"
             hardwired_params: ""
@@ -90,6 +119,11 @@
                 is_path: True
                 m: "07c_minhash_full"
     pipelines:
+    # Every pipeline type is listed here. The top level is the name of the pipeline type.
+    # The params section lists the parameters for this type. These will be queried upon creating
+    # the pipeline, and the values will be used when creating the steps, filling up the
+    # variables in this config.yaml.
+    # The steps section lists the steps in order which will be executed by this pipeline.
         download:
             params:
                 - cc_batch
