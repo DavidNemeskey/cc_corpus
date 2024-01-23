@@ -1,7 +1,9 @@
 ---
     folders:
         working_dir: "/mnt/d/coding/test_corpus3/"
-        logs: "/mnt/d/coding/test_corpus3/logs"
+        # The absolute path of the working dir.
+        logs: "logs"
+        # Either an absolute path, or a relative one to the working_dir. E.g.: "logs"
     version_number: "1.14.0"
     runtime_configurations:
         processes: 4

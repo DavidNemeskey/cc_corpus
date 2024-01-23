@@ -11,11 +11,9 @@ from sqlalchemy import Column, Integer, String
 # from sqlalchemy.dialects.postgresql import JSON  # For PostgreSQL
 # from sqlalchemy.dialects.mysql import JSON  # For MySQL
 from sqlalchemy import JSON  # For SQLite
-
-from pathlib import Path
 import subprocess
 
-from .config import config
+from .config import config, get_logs_dir
 from .database import Base
 
 
@@ -47,7 +45,7 @@ class Step(Base):
         api_wrapper.py to wait for the completion of the actual task and make
         a callback to the API.
         """
-        log_dir = Path(config["folders"]["logs"])
+        log_dir = get_logs_dir(config)
         task_logfile = log_dir / f"step_{self.id}_{self.script_file.split('.')[0]}.log"
         manager_logfile = log_dir / "task_manager.log"
 
