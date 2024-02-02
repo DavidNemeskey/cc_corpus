@@ -343,6 +343,9 @@ async def update_pipeline_from_form(request: Request,
     form_data = jsonable_encoder(form_data)
 
     # Convert nested Dicts and replace empty strings with Nones:
+    # This is because fastapi doesn't handle html responses elegantly.
+    # If the user doesn't change a value on the frontend, we got empty strings
+    # But SQL Alchemy needs Nones, otherwise it overwrites the values.
     if form_data["params"]:
         form_data["params"] = loads(form_data["params"])
     else:

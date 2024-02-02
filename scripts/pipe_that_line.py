@@ -58,6 +58,7 @@ def main():
     except KeyError:
         logging.error(f"Pipeline type {args.pipe} was not found in the "
                       f"config files.")
+        exit(1)
     params = {}
     for param in pipe_params:
         param_value = getattr(args, param, None)
@@ -66,7 +67,7 @@ def main():
         else:
             logging.error(f"Pipeline type {args.pipe} requires parameter "
                           f"{param} but it was not supplied.")
-            raise KeyError
+            exit(1)
 
     logging.info(f"Creating pipeline type {args.pipe} with the following "
                  f"parameters: {params}")
