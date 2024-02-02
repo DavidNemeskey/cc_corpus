@@ -12,6 +12,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import logging
 from json import loads
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 from . import crud, models, seed_db, schemas
 from .config import config
 from .database import SessionLocal, engine
+from .logging import configure_logging
 
 # Sets up the tables in the DB according to the schemas defined by models.py
 #
@@ -33,6 +35,10 @@ app.mount("/static",
           name="static")
 templates = Jinja2Templates(directory="app/templates")
 favicon_path = 'app/static/favicon.ico'
+
+
+configure_logging()
+logging.info("Launched manager webapp")
 
 
 @app.get('/favicon.ico', include_in_schema=False)
@@ -59,7 +65,7 @@ def dev_seed():
     if num_steps == 0:
         seed_db.seed_steps(db)
     else:
-        print(f"There are {num_steps} step records in our DB")
+        logging.info(f"There are {num_steps} step records in our DB")
 
 
 @app.get("/", response_class=HTMLResponse)

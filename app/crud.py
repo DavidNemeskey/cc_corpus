@@ -11,7 +11,10 @@ from sqlalchemy.orm import Session
 import time
 
 from .config import config, load_and_substitute_config, CONFIG_FILE
+from .logging import configure_logging
 from . import models, schemas
+
+configure_logging()
 
 
 def get_steps(db: Session, skip: int = 0, limit: int = 100):
@@ -250,22 +253,22 @@ def autorun_pipelines(db: Session, app_url: str):
             encountered_failure = False
             for step in steps:
                 if step.status == "completed":
-                    print(f"--Step #{step.id} was already completed.")
+                    logging.info(f"--Step #{step.id} was already completed.")
                     pass
                 elif step.status == "running":
-                    print(f"--Step #{step.id} was already started.")
+                    logging.info(f"--Step #{step.id} was already started.")
                     # We have to wait until it finishes
                     while step.status == "running":
-                        print(f"--Waiting for #{step.id} to complete.")
+                        logging.info(f"--Waiting for #{step.id} to complete.")
                         time.sleep(10)
                         db.refresh(step)
                     if step.status == "failed":
-                        print(f"--Step #{step.id} failed.")
+                        logging.info(f"--Step #{step.id} failed.")
                         encountered_failure = True
                         break
                 elif step.status == "failed":
                     # We cannot progress with this pipeline:
-                    print(f"--Step #{step.id} failed.")
+                    logging.info(f"--Step #{step.id} failed.")
                     encountered_failure = True
                     break
                 else:
@@ -273,20 +276,20 @@ def autorun_pipelines(db: Session, app_url: str):
                     step.run_script(app_url)
                     step.status = "running"
                     db.commit()
-                    print(f"--Started the execution of step #{step.id}")
+                    logging.info(f"--Started the execution of step #{step.id}")
                     # We have to wait until it finishes:
                     while step.status == "running":
-                        print(f"--Waiting for #{step.id} to complete.")
+                        logging.info(f"--Waiting for #{step.id} to complete.")
                         time.sleep(10)
                         db.refresh(step)
                     if step.status == "failed":
-                        print(f"--Step #{step.id} failed.")
+                        logging.info(f"--Step #{step.id} failed.")
                         encountered_failure = True
                         break
             if encountered_failure:
-                print(f"Pipeline #{pipe.id} has a failed task.")
+                logging.info(f"Pipeline #{pipe.id} has a failed task.")
             else:
                 pipe.status = "completed"
                 db.commit()
-                print(f"Pipeline #{pipe.id} was completed.")
-    print("Autorunner finished.")
+                logging.info(f"Pipeline #{pipe.id} was completed.")
+    logging.info("Autorunner finished.")

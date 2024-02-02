@@ -6,8 +6,8 @@ Defines the model classes.
 These implements the SQLAlchemy ORM and also the model-logic level methods.
 """
 
+import logging
 from sqlalchemy import Column, Integer, String
-
 # from sqlalchemy.dialects.postgresql import JSON  # For PostgreSQL
 # from sqlalchemy.dialects.mysql import JSON  # For MySQL
 from sqlalchemy import JSON  # For SQLite
@@ -15,10 +15,12 @@ import subprocess
 
 from .config import config, get_logs_dir
 from .database import Base
+from .logging import configure_logging
 
 
 STEP_STATUSES = ["prelaunch", "running", "completed", "failed"]
 PIPELINE_STATUSES = ["seeded", "spawned", "autorun", "completed"]
+configure_logging()
 
 
 class Step(Base):
@@ -59,7 +61,7 @@ class Step(Base):
             arguments.append("-i")
             arguments.append(self.input)
         arguments += self.further_params.split()
-        print(f"Executing script: {arguments}")
+        logging.info(f"Executing script: {arguments}")
 
         with open(task_logfile, 'w') as log_f:
             subprocess.Popen(arguments, stdout=log_f, stderr=log_f)
