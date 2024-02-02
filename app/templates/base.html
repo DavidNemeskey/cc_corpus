@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>CC Corpus pipeline manager</title>
+        <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+    </head>
+    <body>
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <a class="navbar-brand" href="#">Da Manager App</a>
+
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item active">
+                    <a class="nav-link" href="/">Steps</a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" href="/pipelines/">Pipelines</a>
+                </li>
+                <li class="nav-item active">
+                    <form action="/autorun/" method="post">
+                        <input type="submit" value="autorun" class="btn btn-primary">
+                    </form>
+                </li>
+            </ul>
+
+        </nav>
+
+        {% block content %}
+        {% endblock %}
+
+    </body>
+</html>

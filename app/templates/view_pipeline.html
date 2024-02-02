@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="card card-body">
+        <h2>Pipeline type</h2>
+        <div>{{ pipeline.template }}</div>
+
+        <h2>Pipeline id</h2>
+        <div>{{ pipeline.id }}</div>
+
+        <h2>Params</h2>
+        <div>{{ pipeline.params | tojson }}</div>
+
+        <h2>Steps</h2>
+        {% if pipeline.steps is not none %}
+            {% for step in pipeline.steps %}
+                <a href="/step/{{step}}">{{ step }}</a>
+            {% endfor %}
+        {% endif %}
+
+        <h2>Prerequisite's pipeline id</h2>
+        <div>{{ pipeline.prereq_pipe }} </div>
+
+        <h2>Prerequisite's step no</h2>
+        <div>{{ pipeline.prereq_step }} </div>
+
+
+        <h2>comment</h2>
+        <div>{{ pipeline.comment }} </div>
+
+        <h2>status</h2>
+        <div>{{ pipeline.status }}</div>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-sm">
+                <a href="/edit_pipeline/{{pipeline.id}}" class="btn btn-primary">Edit pipeline</a>
+            </div>
+            {% if pipeline.status == 'seeded' %}
+                <div class="col-sm">
+                    <form action="/spawn/{{pipeline.id}}" method="post">
+                        <input type="submit" value="Spawn steps" class="btn btn-primary">
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

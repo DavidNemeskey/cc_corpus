@@ -33,7 +33,7 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the directory to which the filtered corpus '
                              'files are written.')
-    parser.add_argument('--input-dir', '-i',type=Path,
+    parser.add_argument('--input-dir', '-i', type=Path,
                         help='the directory that contains the corpus files to '
                              'filter. Since the minhash files store the names '
                              'of the input files, this argument is only '

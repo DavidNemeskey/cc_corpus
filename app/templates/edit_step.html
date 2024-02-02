@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="card card-body">
+        <form action="/update_step/" method="post">
+
+            <input type="hidden" name="stepId", value={{ step.id }}>
+
+            <div>
+                <label for="stepName">Step name</label>
+                <input type="text" class="form-control" name="stepName", value="{{ step.step_name }}">
+            </div>
+
+            <div>
+                <label for="scriptFile">Script file</label>
+                <input type="text" class="form-control" name="scriptFile", value="{{ step.script_file }}">
+            </div>
+
+            <div>
+                <label for="input">Input directory</label>
+                <input type="text" class="form-control" name="input",
+                       value="{% if step.input is not none %}{{ step.input }}{% endif %}">
+            </div>
+
+            <div>
+                <label for="output">Output directory</label>
+                <input type="text" class="form-control" name="output", value="{{ step.output }}">
+            </div>
+
+            <div>
+                <label for="furtherParams">Further command-line parameters</label>
+                <input type="text" class="form-control" name="furtherParams",
+                       value="{% if step.further_params is not none %}{{ step.further_params }}{% endif %}">
+            </div>
+
+            <div>
+                <label for="scriptVersion">Version of the script codebase</label>
+                <input type="text" class="form-control" name="scriptVersion", value="{{ step.script_version }}">
+            </div>
+
+            <div>
+                <label for="comment">Comment</label>
+                <input type="text" class="form-control" name="comment",
+                       value="{% if step.comment is not none %}{{ step.comment }}{% endif %}">
+            </div>
+
+            <div>
+                <label for="status">Runtime status of the step</label>
+                <select name="status">
+                {% for status in status_options %}
+                    <option value="{{ status }}" {% if status == step.status %}selected="selected"{% endif%}>
+                        {{ status}}
+                    </option>
+                {% endfor %}
+            </select>
+
+            </div>
+
+
+            <input type="submit" class="btn btn-primary" value="Save changes">
+
+
+        </form>
+
+    </div>
+{% endblock %}

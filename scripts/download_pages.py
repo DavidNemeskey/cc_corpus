@@ -30,6 +30,7 @@ from pathlib import Path
 from queue import Empty, Full, Queue
 import signal
 import subprocess
+from tempfile import gettempdir
 import threading
 import time
 from typing import TextIO
@@ -42,18 +43,17 @@ from cc_corpus.utils import notempty, num_digits, openall, otqdm
 def parse_arguments():
     parser = ArgumentParser(
         description='CDX Index Batch Document Downloader')
-    parser.add_argument('input_pattern',
-                        help='Input glob pattern, e.g. "index/*.gz". Must '
-                             'be quoted to avoid shell replacement.')
-    parser.add_argument('index_output_dir', type=Path,
+    parser.add_argument('--input_dir', '-i',
+                        help='Input directory.')
+    parser.add_argument('--index_output_dir', type=Path,
                         help='The directory to which the new, sorted index '
                              'files are written.')
-    parser.add_argument('data_output_dir', type=Path,
+    parser.add_argument('--data_output_dir', '-o', type=Path,
                         help='The directory to which the downloaded pages are '
                              'written. The numbering will be consistent with '
                              'the files in index_output_dir, which is '
                              'required by remove_boilerplate.py.')
-    parser.add_argument('error_file', type=Path,
+    parser.add_argument('--error_file', type=Path,
                         help='The file to which the index lines that '
                              'could not be downloaded are written.')
     parser.add_argument('--out-filename', '-of', default='common_crawl',
@@ -67,7 +67,7 @@ def parse_arguments():
                         help='Out file extension (default: warc.gz)')
     parser.add_argument('--padding', '-p', default=2,
                         help='Padding for chunk numbering (default: 2)')
-    parser.add_argument('-T', '--tmp',
+    parser.add_argument('-t', '--tmp', default=gettempdir(),
                         help='The name of the temporary directory. Defaults '
                              'to the system default.')
     parser.add_argument('--processes', '-P', type=int, default=1,
@@ -146,20 +146,20 @@ class RotatedGzip:
                 os.unlink(self.current_file)
 
 
-def step1(glob_pattern: str, out_dir: Path) -> int:
+def create_sorted_index(input_dir: Path, out_dir: Path) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_file = out_dir / 'sorted_index.gz'
     logging.info(f'Sorting index to {out_file}...')
     if not out_file.exists():
-        retval = os.system(f'ls {glob_pattern} | parallel zcat | '
+        retval = os.system(f'ls {input_dir}/* | parallel zcat | '
                            f'sort -k 3,3 -k 4,4n | gzip > {out_file}')
     logging.info('Index sorted.')
     return retval
 
 
-def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
-          data_out_dir: Path, error_file: Path, retries: int, chunk_size: int,
-          file_prefix: str, doc_padding: int, extension: str):
+def download_collected_ranges(ranges_dir: Path, num_threads: int, index_out_dir: Path,
+                              data_out_dir: Path, error_file: Path, retries: int, chunk_size: int,
+                              file_prefix: str, doc_padding: int, extension: str):
     """The actual downloading of byte ranges collected in step1."""
     logging.info('Downloading pages...')
     q = Queue(num_threads * 2)
@@ -171,7 +171,7 @@ def step2(ranges_dir: Path, num_threads: int, index_out_dir: Path,
     def signal_handler(signum, frame):  # noqa
         print('Stopping after all ongoing downloads have completed. This '
               'may take some time...')
-        logging.warn(f'Received signal {signum}. Exiting...')
+        logging.warning(f'Received signal {signum}. Exiting...')
         exiting.set()
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -307,7 +307,9 @@ def main():
 
     os.nice(20)  # Play nice
 
-    input_str = str((Path(os.getcwd()) / args.input_pattern).resolve())
+    # First we create a unified, sorted index
+    # Unless it has already been created and stored in the temp dir.
+    input_str = str((Path(os.getcwd()) / args.input_dir).resolve())
     input_hash = hashlib.sha224(input_str.encode('utf-8')).hexdigest()
     ranges_dir = Path(args.tmp) / f'ranges_{input_hash}'
     if ranges_dir.is_dir() and (ranges_dir / "sorted_index.gz").is_file():
@@ -315,12 +317,13 @@ def main():
         logging.info(f'Ranges already computed in {ranges_dir}, skipping...')
     else:
         print('Sorting index...')
-        step1(args.input_pattern, ranges_dir)
+        create_sorted_index(args.input_dir, ranges_dir)
 
     print('Downloading pages...')
-    step2(ranges_dir, args.processes, args.index_output_dir,
-          args.data_output_dir, args.error_file, args.retry, args.chunksize,
-          args.out_filename, args.padding, args.ext)
+    download_collected_ranges(ranges_dir, args.processes,
+                              args.index_output_dir, args.data_output_dir,
+                              args.error_file, args.retry, args.chunksize,
+                              args.out_filename, args.padding, args.ext)
     print('Done.')
 
 

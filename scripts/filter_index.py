@@ -17,6 +17,7 @@ from the downloaded index. In particular,
 from argparse import ArgumentParser
 from functools import partial
 import json
+import logging
 import mimetypes
 from multiprocessing import Pool
 import os
@@ -42,8 +43,10 @@ wwwp = re.compile(r'^(?:www|ww2|ww3|www2|www3)[.]')
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('input_dir', help='the input directory.')
-    parser.add_argument('output_dir', help='the output directory.')
+    parser.add_argument('--input_dir', '-i', required=True,
+                        help='the input directory.')
+    parser.add_argument('--output_dir', '-o', required=True,
+                        help='the output directory.')
     parser.add_argument('--allowed-mimes', '-a', required=True,
                         help='the list of allowed mime types (in a file).')
     parser.add_argument('--bad-index', '-b', default=None,
@@ -53,6 +56,9 @@ def parse_arguments():
     parser.add_argument('--processes', '-P', type=int, default=1,
                         help='number of worker processes to use (max is the '
                              'num of cores, default: 1).')
+    parser.add_argument('--log-level', '-L', type=str, default='info',
+                        choices=['debug', 'info', 'warning', 'error', 'critical'],
+                        help='the logging level.')
     args = parser.parse_args()
     num_procs = len(os.sched_getaffinity(0))
     if args.processes < 1 or args.processes > num_procs:
@@ -157,6 +163,11 @@ def filter_file(file_name: str, input_dir: str, output_dir: str,
 
 def main():
     args = parse_arguments()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
+    )
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)

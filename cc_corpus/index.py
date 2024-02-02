@@ -154,6 +154,7 @@ def find_pattern_in_index(
         function :func:`find_pattern_in_index_iterator` should be used instead.
     """
     logging.debug(f'Searching clusters for the pattern {pattern}...')
+    cluster_index = list(cluster_index)
     idx = bisect_left(cluster_index, pattern, key=attrgetter('domain'))
     # The domain might start in the middle of the previous cluster
     if idx != 0:
@@ -171,7 +172,8 @@ def collect_clusters_from_index(
 ) -> set[Cluster]:
     """Collects the index clusters that match the specified patterns."""
     if len(patterns) == 1:
-        return find_pattern_in_index(patterns[0], read_cluster_idx(cluster_idx))
+        return find_pattern_in_index(patterns[0],
+                                     read_cluster_idx(cluster_idx))
     else:
         cluster_index = list(read_cluster_idx(cluster_idx))
         clusters = set()

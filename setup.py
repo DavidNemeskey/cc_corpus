@@ -14,7 +14,7 @@ def readme():
 
 
 setup(name='commoncrawl-downloader',
-      version='1.14.0',
+      version='1.15.0',
       description='A Python package for retrieving a list of urls and '
                   'specific files in bulk from Common Crawl, as well as '
                   'for processing the downloaded files.',
@@ -52,6 +52,7 @@ setup(name='commoncrawl-downloader',
       packages=find_packages(exclude=['scripts']),
       # Install the scripts
       scripts=[
+          'scripts/api_wrapper.py',
           'scripts/autonomous_cross_deduplicator.py',
           'scripts/autonomous_cross_deduplicator2.py',
           'scripts/batch_deduplicate_index_urls.py',
@@ -85,6 +86,7 @@ setup(name='commoncrawl-downloader',
           'scripts/sort_files.py',
           'scripts/emtsv.py',
           'scripts/parse_log.py',
+          'scripts/pipe_that_line.py',
           'scripts/shuffle_tsv.py',
           'scripts/convert_tsv.py',
           'scripts/sentencepiece_to_bert.py',

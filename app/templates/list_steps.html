@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="card card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Step id</th>
+                    <th>Step name</th>
+                    <th>input directory</th>
+                    <th>output directory</th>
+                    <th>status</th>
+                    <th>actions</th>
+                </tr>
+            </thead>
+            {% for step in steps %}
+                <tr>
+                    <td>{{ step.id }}</td>
+                    <td>{{ step.step_name }}</td>
+                    <td>{{ step.input }}</td>
+                    <td>{{ step.output }}</td>
+                    <td>{{ step.status }}</td>
+                    <td>
+                        <a href="/step/{{step.id}}">view</a>
+                        <a href="/edit_step/{{step.id}}">edit</a>
+                        <form action="/run/{{step.id}}" method="post">
+                            <input type="submit" value="run step" class="btn btn-outline-primary btn-sm">
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="container">
+        <a href="/create_step_form/" class="btn btn-primary">Create New Step</a>
+    </div>
+{% endblock %}

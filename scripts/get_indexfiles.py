@@ -158,7 +158,8 @@ def main():
                     index_range = download_index_range(
                         base_url + frange.file_name,
                         frange.offset, frange.length,
-                        args.max_retry
+                        args.max_retry,
+                        args.delay
                     )
                     for line in process_index_range(index_range):
                         if pattern_matcher.match(line):
