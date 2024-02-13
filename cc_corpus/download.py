@@ -6,7 +6,7 @@
 import boto3
 import logging
 import time
-from typing import Union
+from typing import Any, Union
 
 import requests
 from requests_toolbelt.multipart import decoder
@@ -14,6 +14,7 @@ from requests_toolbelt.multipart import decoder
 
 WARC_BASE_URI = 'https://ds5q9oxwqwsfj.cloudfront.net/'
 BUCKET_NAME = 'commoncrawl'
+
 
 class DownloadError(Exception):
     """Exception raised on if a download fails."""
@@ -24,20 +25,25 @@ def download_ranges(url_or_key: str,
                     offsets_and_lengths: list[tuple[int, int]],
                     retry_left: int,
                     delay_period: int = 1,
-                    s3_download: bool = False,) -> Union[bytes, list[bytes]]:
+                    s3_download: bool = False,
+                    session: Any = None) -> Union[bytes, list[bytes]]:
     """
     Downloads a list of ranges from a URL.
 
-    :param url_or_key: the URL the byte ranges are downloaded from.
+    :param url_or_key: the URL or S3 object key of the source.
     :param offsets_and_lengths: the byte ranges to download, represented as
                                 offset-lengths pairs.
     :param retry_left: the number of retries left.
     :param delay_period: the base time unit for delay in seconds.
+    :param s3_download: whether to download via S3 or http.
+    :param session: S3 session to use. If None and we download via S3, a new
+                    session will be created.
     """
     logging.debug(
         f'Downloading {len(offsets_and_lengths)=} ranges from {url_or_key}.')
 
-    session = boto3.client('s3')
+    if not session:
+        session = boto3.client('s3')
 
     range_str = ', '.join(f'{offset}-{offset + length}'
                           for offset, length in offsets_and_lengths)
@@ -100,6 +106,7 @@ def download_warc_ranges(
         offsets_and_lengths: list[tuple[int, int]],
         retry_left: int,
         delay: int = 10,
+        session: Any = None,
 ) -> list[bytes]:
     """
     Downloads byte ranges from a WARC file. A thin wrapper over
@@ -110,6 +117,7 @@ def download_warc_ranges(
         offsets_and_lengths, retry_left,
         delay_period=delay,
         s3_download=True,
+        session=session,
     )
 
 
