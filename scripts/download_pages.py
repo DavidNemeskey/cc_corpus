@@ -258,10 +258,12 @@ def download_collected_ranges(ranges_dir: Path,
     q = queue.Queue(maxsize=2 * num_threads)
 
     def worker(tid: str, session: Any):
-        # This will be a persisent daemon worker.
-        # It will consume a single line from the queue, download it,
-        # save the contents to a file, then fetch another line.
-        # Each worker has its own set of output files.
+        """
+        A persistent daemon worker.
+        It consumes a single line from the queue, downloads it,
+        saves the contents to a file, then fetches another line.
+        Each worker has its own set of output files.
+        """
 
         # Chunk is the counter for the number of output files.
         # Written is the counter for the documents written within the current
@@ -285,8 +287,7 @@ def download_collected_ranges(ranges_dir: Path,
             else:
                 # TODO What should we do?
                 # The errors are already logged in download_document.
-                # Maybe just continue?
-                exit()
+                pass
             q.task_done()
         outf.close()
         doc_file.close()
