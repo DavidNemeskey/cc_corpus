@@ -42,7 +42,7 @@ def download_ranges(url_or_key: str,
     logging.debug(
         f'Downloading {len(offsets_and_lengths)=} ranges from {url_or_key}.')
 
-    if not session:
+    if s3_download and not session:
         session = boto3.client('s3')
 
     range_str = ', '.join(f'{offset}-{offset + length}'

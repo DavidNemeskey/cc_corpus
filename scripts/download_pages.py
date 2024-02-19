@@ -226,7 +226,7 @@ def download_collected_ranges(ranges_dir: Path,
                                 shell=True, encoding='utf-8').strip()
     )
     lines_per_file = 1000
-    # We (vastly over) estimate how many digits we need for file numbering.
+    # We estimate how many digits we need for file numbering.
     num_files = max(num_lines / num_threads / lines_per_file, 1)
     file_padding = f'{{:0{num_digits(num_files)}}}'
 
