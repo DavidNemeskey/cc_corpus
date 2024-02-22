@@ -35,8 +35,6 @@ import zlib
 from cc_corpus.download import download_warc_ranges, DownloadError
 from cc_corpus.utils import notempty, num_digits, openall, otqdm
 
-BUCKET_NAME = 'commoncrawl'
-
 
 def parse_arguments():
     parser = ArgumentParser(

@@ -3,7 +3,6 @@
 
 """Network-related functionality."""
 
-import boto3
 import logging
 import time
 from typing import Any, Union
@@ -36,14 +35,18 @@ def download_ranges(url_or_key: str,
     :param retry_left: the number of retries left.
     :param delay_period: the base time unit for delay in seconds.
     :param s3_download: whether to download via S3 or http.
-    :param session: S3 session to use. If None and we download via S3, a new
-                    session will be created.
+    :param session: S3 session to use.
     """
+    if s3_download and (len(offsets_and_lengths) > 1):
+        logging.error(f"S3 does not support multiple ranges in a single"
+                      f"get request.")
+        raise ValueError("More than one range requested for S3 download.")
     logging.debug(
         f'Downloading {len(offsets_and_lengths)=} ranges from {url_or_key}.')
 
     if s3_download and not session:
-        session = boto3.client('s3')
+        logging.error("S3 Session object is required for S3 download")
+        raise ValueError("S3 Session object is required for S3 download")
 
     range_str = ', '.join(f'{offset}-{offset + length}'
                           for offset, length in offsets_and_lengths)
@@ -98,7 +101,7 @@ def download_ranges(url_or_key: str,
                 time.sleep((orig_retry_left - retry_left) * delay_period)
                 continue
     else:
-        raise DownloadError(f'Could not download ranges from URL {url_or_key}.')
+        raise DownloadError(f'Could not download ranges from {url_or_key}.')
 
 
 def download_warc_ranges(
