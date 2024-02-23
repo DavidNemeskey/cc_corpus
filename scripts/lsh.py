@@ -20,7 +20,6 @@ from tempfile import TemporaryDirectory
 from time import sleep
 
 from datasketch import MinHashLSH
-from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.deduplication import (
     BatchWriter, find_all_batches, read_batch, read_batch_to_lsh,
@@ -182,7 +181,9 @@ def deduplicate_other(main_batch: Path,
         if multiproc_coordination:
             check_and_wait_for_batch(batch.parent)
         initial_batch_len = len(main_batch_data)
-        lsh = read_batch_to_lsh(batch, threshold, permutations)
+        lsh = read_batch_to_lsh(batch,
+                                threshold=threshold,
+                                permutations=permutations)
         main_batch_data = [x for x in main_batch_data if not lsh.query(x[1])]
         logging.info(
             f'Cross-deduplicated input batch {main_batch} with cross batch '
