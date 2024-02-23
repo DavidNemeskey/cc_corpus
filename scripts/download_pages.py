@@ -17,23 +17,19 @@ That last step might be very slow on a HDD, but since we have SSDs, it should
 not be a big problem. Too bad we have to open and close file handles all the
 time.
 """
-
+import queue
 from argparse import ArgumentParser
-from concurrent.futures import ThreadPoolExecutor
+import boto3
 import gzip
 import hashlib
-from itertools import groupby
 import logging
-from operator import itemgetter
 import os
 from pathlib import Path
-from queue import Empty, Full, Queue
-import signal
 import subprocess
 from tempfile import gettempdir
 import threading
 import time
-from typing import TextIO
+from typing import Any, TextIO
 import zlib
 
 from cc_corpus.download import download_warc_ranges, DownloadError
@@ -157,24 +153,68 @@ def create_sorted_index(input_dir: Path, out_dir: Path) -> int:
     return retval
 
 
-def download_collected_ranges(ranges_dir: Path, num_threads: int, index_out_dir: Path,
-                              data_out_dir: Path, error_file: Path, retries: int, chunk_size: int,
-                              file_prefix: str, doc_padding: int, extension: str):
+def download_document(line: str,
+                      retries: int,
+                      outf: TextIO,
+                      doc_file: TextIO,
+                      errf: TextIO,
+                      session: Any) -> str:
+    """
+    Downloads a single document based on a line from the index.
+    Returns True if successful, False if ran into an error.
+
+    :param line: the description of the target as a line in the index.
+    :param retries: the number of retries left.
+    :param outf: the file where we write the sorted index.
+    :param doc_file: the file where we write the downloaded document itself.
+    :param errf: the file where we write the download errors.
+    :param session: the S3 connection session.
+    """
+    line = line.strip().split()
+    warc = line[2]
+    # We never have more than one range here, because AWS does not
+    # support multirange requests. But for compatibility reasons
+    # we put the range into an array:
+    ranges = [(int(line[3]), int(line[4]))]
+    try:
+        st = time.time()
+        downloaded = download_warc_ranges(warc,
+                                          ranges,
+                                          retries,
+                                          session=session)
+        logging.info(f'Downloaded in {time.time() - st:.2f} seconds.')
+
+        index_str = ' '.join(line)
+        # Write it to the current index and data files:
+        try:
+            decompressed = zlib.decompress(downloaded, zlib.MAX_WBITS | 32)
+            print(index_str, file=outf)
+            doc_file.write(decompressed)
+        except zlib.error:
+            logging.exception(
+                'Decompression error occured for '
+                f'`{index_str}.`'
+            )
+            return False
+    except DownloadError as de:
+        logging.error(f'Could not download {warc}: {de}.')
+        print(' '.join(line), file=errf)
+        return False
+    return True
+
+
+def download_collected_ranges(ranges_dir: Path,
+                              num_threads: int,
+                              index_out_dir: Path,
+                              data_out_dir: Path,
+                              error_file: Path,
+                              retries: int,
+                              chunk_size: int,
+                              file_prefix: str,
+                              doc_padding: int,
+                              extension: str):
     """The actual downloading of byte ranges collected in step1."""
     logging.info('Downloading pages...')
-    q = Queue(num_threads * 2)
-
-    # Signal handling so that the script can be interrupted / terminated
-    # gracefully. See https://stackoverflow.com/questions/65832061/
-    exiting = threading.Event()
-    error_lock = threading.Lock()
-    def signal_handler(signum, frame):  # noqa
-        print('Stopping after all ongoing downloads have completed. This '
-              'may take some time...')
-        logging.warning(f'Received signal {signum}. Exiting...')
-        exiting.set()
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
 
     # The number of lines in the input, so that we know how many zeros to use
     # for padding
@@ -184,117 +224,91 @@ def download_collected_ranges(ranges_dir: Path, num_threads: int, index_out_dir:
                                 shell=True, encoding='utf-8').strip()
     )
     lines_per_file = 1000
-    # At least one file...
+    # We estimate how many digits we need for file numbering.
     num_files = max(num_lines / num_threads / lines_per_file, 1)
     file_padding = f'{{:0{num_digits(num_files)}}}'
 
-    # TODO use a condition to signal end of processing
-    def producer():
-        """Groups ranges in the index by warc and puts them into the queue."""
-        logging.info('Producer running')
-        with openall(ranges_file, 'rt') as inf:
-            it = (line.strip().split() for line in inf)
-            for warc, ranges in groupby(it, key=itemgetter(2)):
-                ranges_list = list(ranges)
-                # logging.info(f'Adding {warc=} ({len(l)}) {l=}...')
-                while not exiting.is_set():
-                    try:
-                        q.put((warc, ranges_list), True, 5)
-                        break
-                    except Full:
-                        pass
-        # To signal the end of processing
-        logging.info('Producer ended!')
-        if not exiting.is_set():
-            q.put((None, (None, None)))
-
-    def consumer(tid: int, progress_bar, errf: TextIO):
+    def open_files(tid, chunk):
         """
-        Downloads the byte ranges read from the queue and writes them to disk.
+        Opens a new output index and document file.
+        :param tid: The thread id, so each thread has its own output files.
         """
-        logging.info(f'Consumer {tid} started....')
-        chunk, written = 1, 0
+        file_name = f'{file_prefix}_{tid}_{file_padding.format(chunk)}.gz'
+        return (
+            notempty(openall(index_out_dir / f'{file_name}', 'wt')),
+            RotatedGzip(str(data_out_dir), chunk_size,
+                        os.path.splitext(file_name)[0], doc_padding,
+                        extension)
+        )
 
-        def open_files():
-            """Opens a new output index and document file."""
-            file_name = f'{file_prefix}_{tid}_{file_padding.format(chunk)}.gz'
-            return (
-                notempty(openall(index_out_dir / f'{file_name}', 'wt')),
-                RotatedGzip(str(data_out_dir), chunk_size,
-                            os.path.splitext(file_name)[0], doc_padding,
-                            extension)
-            )
-
-        outf, doc_file = open_files()
-        try:
-            while not exiting.is_set():
-                try:
-                    warc, index_lines = q.get(True, 5)
-                except Empty:
-                    continue
-                if warc is not None:
-                    ranges = [(int(index[3]), int(index[4]))
-                              for index in index_lines]
-                    try:
-                        st = time.time()
-                        downloaded = download_warc_ranges(warc, ranges, retries)
-                        logging.info(f'Downloaded in {time.time() - st:.2f} seconds.')
-                        for index, doc in zip(index_lines, downloaded):
-                            if doc is None:
-                                continue
-                            index_str = ' '.join(index)
-                            try:
-                                decompressed = zlib.decompress(doc, zlib.MAX_WBITS | 32)
-                                print(index_str, file=outf)
-                                doc_file.write(decompressed)
-                                written += 1
-                                if written == lines_per_file:
-                                    outf.close()
-                                    doc_file.close()
-                                    chunk, written = chunk + 1, 0
-                                    outf, doc_file = open_files()
-                            except zlib.error:
-                                logging.exception(
-                                    'Decompression error occured for '
-                                    f'`{index_str}.`'
-                                )
-                    except DownloadError as de:
-                        logging.error(f'Could not download {warc}: {de}.')
-                        error_lock.acquire()
-                        for index in index_lines:
-                            print(' '.join(index), file=errf)
-                        error_lock.release()
-                    progress_bar.update(1)
-                else:
-                    # Put the item signalling end of processing back so that
-                    # other threads get it as well.
-                    q.put((warc, index_lines))
-                    break
-        except:  # noqa
-            logging.exception(f'Exception in {tid}: exiting...')
-            exiting.set()
-        finally:
-            logging.info(f'Consumer {tid} finished, written {chunk} files.')
-            outf.close()
-            doc_file.close()
-
+    # Set up the shared environment:
     index_out_dir.mkdir(parents=True, exist_ok=True)
     data_out_dir.mkdir(parents=True, exist_ok=True)
     error_file.parent.mkdir(parents=True, exist_ok=True)
-
-    thread_padding = f'{{:0{num_digits(num_threads)}}}'
-    progress_bar = otqdm(desc='Downloading WARC ranges...')
     errf = openall(error_file, 'wt')
-    try:
-        with ThreadPoolExecutor(max_workers=num_threads + 1) as executor:
-            executor.submit(producer)
-            for tid in range(1, num_threads + 1):
-                executor.submit(consumer,
-                                thread_padding.format(tid), progress_bar, errf)
-        logging.info('Download completed.')
-    finally:
-        errf.close()
-        progress_bar.close()
+    progress_bar = otqdm(desc='Downloading WARC ranges...')
+
+    q = queue.Queue(maxsize=2 * num_threads)
+
+    def worker(tid: str, session: Any):
+        """
+        A persistent daemon worker.
+        It consumes a single line from the queue, downloads it,
+        saves the contents to a file, then fetches another line.
+        Each worker has its own set of output files.
+        """
+
+        # Chunk is the counter for the number of output files.
+        # Written is the counter for the documents written within the current
+        # output file.
+        logging.info(f'Worker {tid} started....')
+        chunk, written = 1, 0
+        outf, doc_file = open_files(tid, chunk)
+        while True:
+            line = q.get()
+            success = download_document(line, retries, outf, doc_file, errf,
+                                        session)
+            if success:
+                # Update counters, open new files if needed:
+                written += 1
+                if written == lines_per_file:
+                    outf.close()
+                    doc_file.close()
+                    chunk, written = chunk + 1, 0
+                    outf, doc_file = open_files(tid, chunk)
+                progress_bar.update(1)
+            else:
+                # The errors are already logged by the download_document()
+                # method.
+                pass
+            q.task_done()
+        outf.close()
+        doc_file.close()
+
+    # We start the workers:
+    thread_padding = f'{{:0{num_digits(num_threads)}}}'
+    for i in range(num_threads):
+        # We have to initialize the S3 sessions here
+        # because if we try to initialize them inside the workers
+        # launching many workers concurrently, boto3 produces random errors
+        # in some of those threads.
+        session = boto3.client('s3')
+        thread = threading.Thread(target=worker,
+                                  args=(thread_padding.format(i), session))
+        thread.daemon = True
+        thread.start()
+
+    # We fill up the queue:
+    with openall(ranges_file, 'rt') as inf:
+        for line in inf:
+            q.put(line)
+
+    # This is to wait for all the threads to finish:
+    q.join()
+
+    errf.close()
+    progress_bar.close()
+    logging.info('Download completed.')
 
 
 def main():
