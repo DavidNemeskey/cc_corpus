@@ -182,7 +182,7 @@ def download_document(line: str,
                                           ranges,
                                           retries,
                                           session=session)
-        logging.info(f'Downloaded in {time.time() - st:.2f} seconds.')
+        logging.debug(f'Downloaded in {time.time() - st:.2f} seconds.')
 
         index_str = ' '.join(line)
         # Write it to the current index and data files:
