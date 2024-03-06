@@ -312,7 +312,7 @@ def _parse_jsonl(file: Path):
             json_object = json.loads(line)
             yield Document(
                 id=json_object['id'],
-                attrs=json_object['meta'],
+                attrs=json_object.get('meta', {}),
                 http_meta=None,
                 paragraphs=json_object['text'].split("\n")
             )

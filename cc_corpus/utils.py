@@ -167,7 +167,8 @@ def collect_inputs(inputs):
             files.append(input)
         elif op.isdir(input):
             # TODO this doesn't work with a recursive directory structure
-            files.extend([op.join(input, f) for f in os.listdir(input)])
+            files.extend([op.join(input, f) for f in os.listdir(input)
+                          if op.isfile(op.join(input, f))])
         else:
             raise ValueError('{} is neither a file nor a directory'.format(input))
     return files
@@ -311,7 +312,7 @@ def unquote_inf(url: str) -> str:
 
 def ispunct(s: str) -> bool:
     """Checks if *s* consists purely of nonalnum characters."""
-    return not any(str.isalnum(c) for c in s)
+    return not any(c.isalnum() or c.isspace() for c in s)
 
 
 def split_into(seq: Sequence, n: int) -> Generator[Sequence, None, None]:
