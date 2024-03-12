@@ -17,9 +17,15 @@ from . import models, schemas
 configure_logging()
 
 
-def get_steps(db: Session, skip: int = 0, limit: int = 100):
+def get_steps(db: Session,
+              skip: int = 0,
+              limit: int = 100,
+              filters: dict[str, str] = None):
     """Gets steps from the DB."""
-    return db.query(models.Step).offset(skip).limit(limit).all()
+    if filters:
+        return db.query(models.Step).filter_by(**filters).offset(skip).limit(limit).all()
+    else:
+        return db.query(models.Step).offset(skip).limit(limit).all()
 
 
 def get_step_by_id(db: Session, step_id: int):
