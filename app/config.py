@@ -24,7 +24,8 @@ def load_config_file(config_file) -> Dict[str, Any]:
     working_dir_var = config["folders"]["working_dir"]
     if not Path(working_dir_var).is_dir():
         raise FileNotFoundError(
-            f"The working dir {working_dir_var} is missing.")
+            f"The working dir {working_dir_var} is missing. "
+            f"Please ensure that it is properly set in app/config.yaml")
 
     return config
 
