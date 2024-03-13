@@ -6,7 +6,8 @@ The main script for running the FastAPI app. Also contains all the controllers.
 """
 
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Form
+from fastapi import Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -69,10 +70,19 @@ def dev_seed():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, db: Session = Depends(get_db)):
+async def index(request: Request,
+                status: str = Query(None),
+                db: Session = Depends(get_db)):
     """Controller for rendering the list of steps."""
-    steps = crud.get_steps(db)
-    context = {"request": request, "steps": steps}
+    if status:
+        filter = {'status': status}
+        steps = crud.get_steps(db, filters=filter)
+    else:
+        steps = crud.get_steps(db)
+    context = {"request": request,
+               "status_options": models.STEP_STATUSES,
+               "selected_status": status,
+               "steps": steps}
     return templates.TemplateResponse("list_steps.html", context)
     # return {"steps": steps}
 
@@ -262,11 +272,15 @@ async def report_failure(step_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/pipelines/", response_class=HTMLResponse)
-async def list_pipelines(request: Request, db: Session = Depends(get_db)):
+async def list_pipelines(request: Request,
+                         status: str = Query(None),
+                         db: Session = Depends(get_db)):
     """Controller for rendering the list of pipelines."""
-    pipelines = crud.get_pipelines(db)
+    pipelines = crud.get_pipelines(db, status=status)
     pipeline_types = list(config["pipelines"].keys())
     context = {"request": request,
+               "status_options": models.PIPELINE_STATUSES,
+               "selected_status": status,
                "pipelines": pipelines,
                "pipeline_types": pipeline_types}
     return templates.TemplateResponse("list_pipelines.html", context)
