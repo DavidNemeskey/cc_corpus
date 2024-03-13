@@ -7,6 +7,7 @@ A CRUD layer for basic interactions with the DB.
 import logging
 
 from fastapi.encoders import jsonable_encoder
+from pathlib import Path
 from sqlalchemy.orm import Session
 import time
 
@@ -50,38 +51,38 @@ def create_step(db: Session,
         settings = config
 
     db_step = models.Step(**step.dict())
-    db_step.status = 'prelaunch'
+    db_step.status = "prelaunch"
     db_step.script_version = settings["version_number"]
 
-    dir_head = settings['folders']['working_dir']
-    dir_tail = '/' + settings['cc_batch']
-    further_params = "-L " + settings['runtime_configurations']['log_level']
+    dir_head = str(Path(settings["folders"]["working_dir"]).expanduser())
+    dir_tail = "/" + settings["cc_batch"]
+    further_params = "-L " + settings["runtime_configurations"]["log_level"]
 
     # Some steps can run on only one process and thus have no processes param.
-    # These steps are marked by 'no_p_param: True' in the config.yaml.
-    if not settings["scripts"][db_step.step_name].pop('no_p_param', False):
-        further_params += ' -P ' \
-                          + str(config['runtime_configurations']['processes'])
+    # These steps are marked by "no_p_param: True" in the config.yaml.
+    if not settings["scripts"][db_step.step_name].pop("no_p_param", False):
+        further_params += " -P " \
+                          + str(config["runtime_configurations"]["processes"])
 
     # Let's go over and process the parameters:
     for key, value in settings["scripts"][db_step.step_name].items():
-        if key == 'script_file':
+        if key == "script_file":
             db_step.script_file = value
-        elif key == 'input':
+        elif key == "input":
             db_step.input = dir_head + value + dir_tail
-        elif key == 'output':
+        elif key == "output":
             db_step.output = dir_head + value + dir_tail
-        elif key == 'hardwired_params':
-            further_params += ' ' + value
+        elif key == "hardwired_params":
+            further_params += " " + value
         else:
             # Most parameters have a simple value:
             if isinstance(value, str):
                 further_params += " -" + key + " " + value
             # If the parameter requires special treatment, then it is a dict.
-            elif value['is_path']:
+            elif value["is_path"]:
                 # If it is a path we must append it to the project root dir.
                 # and may have to append the current batch to it.
-                if value.get('no_batch_in_path'):
+                if value.get("no_batch_in_path"):
                     further_params += " -" + key + " " + dir_head + value[key]
                 else:
                     further_params += " -" + key \

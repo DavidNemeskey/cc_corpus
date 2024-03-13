@@ -28,9 +28,10 @@ def load_config_file(config_file) -> Dict[str, Any]:
 
     # If the working dir is not set properly we raise an error:
     working_dir_var = config["folders"]["working_dir"]
-    if not Path(working_dir_var).is_dir():
+    working_dir = Path(working_dir_var).expanduser()
+    if not Path(working_dir).is_dir():
         raise FileNotFoundError(
-            f"The working dir {working_dir_var} is missing. "
+            f"The working dir {working_dir} is missing. "
             f"Please ensure that it is properly set in app/config.yaml")
 
     return config
@@ -61,11 +62,11 @@ def load_config_with_defaults(config_file) -> Dict[str, Any]:
 
 
 def get_logs_dir(config) -> Path:
-    logs_path = Path(config["folders"]["logs"])
+    logs_path = Path(config["folders"]["logs"]).expanduser()
     if logs_path.is_absolute():
         return logs_path
     else:
-        return Path(config["folders"]["working_dir"]) / logs_path
+        return Path(config["folders"]["working_dir"]).expanduser() / logs_path
 
 
 config = load_config_with_defaults(CONFIG_FILE)
