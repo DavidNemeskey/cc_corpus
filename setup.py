@@ -135,6 +135,8 @@ setup(name='commoncrawl-downloader',
           'tldextract',
           # Language identification -- cld2 master doesn't compile ATM
           'cld2-cffi==0.1.4', 'langid',
+          # A web server for the manager webapp:
+          'uvicorn>=0.23.2'
           # WARC 3 library
           # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
           'warc-knot>=0.2.5',
