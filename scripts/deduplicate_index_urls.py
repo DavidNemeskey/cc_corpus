@@ -291,6 +291,15 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
+    if args.export_urls_file is None:
+        url_list_output_file = os.devnull
+    elif args.export_urls_file.exists():
+        logging.error(f"The file {args.export_urls_file} already exists,"
+                      f"please assign another file for the url lists.")
+        exit(0)
+    else:
+        url_list_output_file = args.export_urls_file
+
     url_fn = hash_normalize if args.hash else noop_normalize
     skip_urls = set()
     if args.skip_urls:
@@ -299,7 +308,8 @@ def main():
                 urls_set = read_urls(url_file, url_fn)
                 skip_urls.update(urls_set)
         else:
-            skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
+            skip_urls = read_urls(args.skip_urls, url_fn
+                                  ) if args.skip_urls else set()
 
     input_files = [file for file in args.input_dir.iterdir()]
     basenames = [file.name for file in input_files]
@@ -325,7 +335,7 @@ def main():
     f = partial(filter_file,
                 uniqs=global_uniqs,
                 url_fn=url_fn,
-                url_list_output_file = args.export_urls_file)
+                url_list_output_file=url_list_output_file)
     sum_stats = reduce(operator.add, starmap(f, tasks), FilterStats())
 
     logging.info(

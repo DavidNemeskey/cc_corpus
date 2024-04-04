@@ -54,7 +54,7 @@ def create_step(db: Session,
     db_step.status = "prelaunch"
     db_step.script_version = settings["version_number"]
 
-    dir_head = str(Path(settings["folders"]["working_dir"]).expanduser())
+    dir_head = str(Path(settings["folders"]["working_dir"]).expanduser()) + "/"
     dir_tail = "/" + settings["cc_batch"]
     further_params = "-L " + settings["runtime_configurations"]["log_level"]
 
@@ -84,6 +84,18 @@ def create_step(db: Session,
                 # and may have to append the current batch to it.
                 if value.get("no_batch_in_path"):
                     further_params += " -" + key + " " + dir_head + value[key]
+                elif value.get("url_repo_path"):
+                    # In this case we don't use the project root dir, we just
+                    # use the url repository dir.
+                    further_params += " -" + key + " " \
+                                      + settings["folders"]["url_repository"]
+                elif value.get("url_repo_append"):
+                    # In this case we append the filename to the url_repository
+                    # path.
+                    print(value)
+                    further_params += " -" + key + " " \
+                                      + settings["folders"]["url_repository"] \
+                                      + value[key]
                 else:
                     further_params += " -" + key \
                                       + " " + dir_head + value[key] + dir_tail

@@ -7,6 +7,10 @@
         # The absolute path of the working dir.
         logs: "logs"
         # Either an absolute path, or a relative one to the working_dir. E.g.: "logs".
+        url_repository: None
+        # The directory which contains the url lists from all related projects.
+        # These will be used to detect duplicate urls, and we will place the
+        # newly generated url lists there as well, to keep it up to date.
     version_number: "1.15.0"
     # It will be saved for every step on creation. It could help with debugging.
     runtime_configurations:
