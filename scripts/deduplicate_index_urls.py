@@ -8,6 +8,7 @@ from functools import partial, reduce
 from itertools import starmap
 import logging
 import operator
+import os
 from pathlib import Path
 import re
 from typing import Any, Callable, Dict, List, Set, Union
@@ -25,6 +26,9 @@ def parse_arguments():
                         help='a file with the list of URLs to skip (i.e. '
                              'drop). Typically, these are URLs already '
                              'downloaded in a previous batch.')
+    parser.add_argument('--export-urls-file', '-euf', type=Path,
+                        help='If given, we will export the urls we keep as'
+                             'a list to this file.')
     parser.add_argument('--hash', action='store_true',
                         help='use hashes to store the URLs to skip. Uses less '
                              'memory, but there is a chance for hash collision '
@@ -217,7 +221,11 @@ FilterStats = Stats.create(
     'old_files', 'new_files', 'old_urls', 'new_urls')  # type: Any
 
 
-def filter_file(input_file, output_file, uniqs, url_fn: UrlFn) -> FilterStats:
+def filter_file(input_file,
+                output_file,
+                uniqs,
+                url_fn: UrlFn,
+                url_list_output_file) -> FilterStats:
     """
     Filters an index file; i.e. drops all duplicate URLs.
     :param input_file: the input index file
@@ -225,10 +233,16 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn) -> FilterStats:
     :param uniqs: the shared dictionary of unique URLs
     :param url_fn: the URL transformation function to apply to each URL. In the
                    scope of this program, this is either hashing or nothing.
+    :param url_list_output_file: the file where the urls which we keep are
+                    saved to.
     """
     logging.info('Filtering file {}...'.format(input_file))
+    if url_list_output_file is None:
+        url_list_output_file = os.devnull
     stats = FilterStats(old_files=1)
-    with openall(input_file, 'rt') as inf, notempty(openall(output_file, 'wt')) as outf:
+    with openall(input_file, 'rt') as inf, \
+            notempty(openall(output_file, 'wt')) as outf, \
+            openall(url_list_output_file, 'at') as urlf:
         line_no = lines_printed = 0
         for line_no, line in enumerate(map(str.strip, inf), start=1):
             try:
@@ -236,6 +250,7 @@ def filter_file(input_file, output_file, uniqs, url_fn: UrlFn) -> FilterStats:
                 record = IndexRecord(warc, offset, length)
                 if record == uniqs.get(url_fn(url)):
                     print(line, file=outf)
+                    print(url, file=urlf)
                     lines_printed += 1
             except:
                 logging.exception(
@@ -307,7 +322,10 @@ def main():
         f'Removing duplicates from {args.input_dir}...', total=len(input_files)
     )
 
-    f = partial(filter_file, uniqs=global_uniqs, url_fn=url_fn)
+    f = partial(filter_file,
+                uniqs=global_uniqs,
+                url_fn=url_fn,
+                url_list_output_file = args.export_urls_file)
     sum_stats = reduce(operator.add, starmap(f, tasks), FilterStats())
 
     logging.info(
