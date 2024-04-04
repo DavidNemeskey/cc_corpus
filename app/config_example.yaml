@@ -67,6 +67,13 @@
             no_p_param: True
             input: "02_index_filtered"
             output: "03_index_dedup"
+            -skip-urls:
+                is_path: True
+                url_repo_path: True
+            -export-urls-file:
+                is_path: True
+                url_repo_append: True
+                -export-urls-file: "${language}_${url_pattern}_${cc_batch}.gz"
         download_pages:
             script_file: "download_pages.py"
             no_p_param: True
