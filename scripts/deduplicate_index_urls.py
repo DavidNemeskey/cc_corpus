@@ -8,8 +8,7 @@ from functools import partial, reduce
 from itertools import starmap
 import logging
 import operator
-import os
-import os.path as op
+from pathlib import Path
 import re
 from typing import Any, Callable, Dict, List, Set, Union
 
@@ -18,11 +17,11 @@ from cc_corpus.utils import notempty, openall, otqdm, Stats
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--input-dir', '-i', required=True,
+    parser.add_argument('--input-dir', '-i', type=Path, required=True,
                         help='the index directory')
-    parser.add_argument('--output-dir', '-o', required=True,
+    parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the output directory')
-    parser.add_argument('--skip-urls', '-s', metavar='URL_FILE', default=None,
+    parser.add_argument('--skip-urls', '-s', type=Path, default=None,
                         help='a file with the list of URLs to skip (i.e. '
                              'drop). Typically, these are URLs already '
                              'downloaded in a previous batch.')
@@ -175,7 +174,7 @@ def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
         # In-file deduplication
         with openall(index_file, 'rt') as inf:
             uniqs = {}  # type: UrlIndexDict
-            file_id = file_name_p.search(index_file).group(1)
+            file_id = file_name_p.search(str(index_file)).group(1)
             line_no = 0
             for line_no, line in enumerate(map(str.strip, inf), start=1):
                 try:
@@ -278,10 +277,17 @@ def main():
     )
 
     url_fn = hash_normalize if args.hash else noop_normalize
-    skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
+    skip_urls = set()
+    if args.skip_urls:
+        if args.skip_urls.is_dir():
+            for url_file in args.skip_urls.iterdir():
+                urls_set = read_urls(url_file, url_fn)
+                skip_urls.update(urls_set)
+        else:
+            skip_urls = read_urls(args.skip_urls, url_fn) if args.skip_urls else set()
 
-    basenames = os.listdir(args.input_dir)
-    input_files = [op.join(args.input_dir, f) for f in basenames]
+    input_files = [file for file in args.input_dir.iterdir()]
+    basenames = [file.name for file in input_files]
 
     logging.info('Collected {} index files from {}.'.format(
         len(input_files), args.input_dir))
@@ -295,10 +301,9 @@ def main():
         len(global_uniqs)))
 
     # And filter from the files all non-representative URLs
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     tasks = otqdm(
-        zip(input_files, [op.join(args.output_dir, f) for f in basenames]),
+        zip(input_files, [args.output_dir / f for f in basenames]),
         f'Removing duplicates from {args.input_dir}...', total=len(input_files)
     )
 
