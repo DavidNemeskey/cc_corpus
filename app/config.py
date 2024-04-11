@@ -23,7 +23,7 @@ def load_config_file(config_file) -> Dict[str, Any]:
     except FileNotFoundError:
         raise FileNotFoundError('Config file is missing. Please make sure '
                                 'that you have created an '
-                                'app/config.yaml using the'
+                                'app/config.yaml using the '
                                 'app/config_example.yaml as a template.')
 
     # If the working dir is not set properly we raise an error:
