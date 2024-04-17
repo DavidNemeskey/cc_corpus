@@ -69,9 +69,23 @@ def create_step(db: Session,
         if key == "script_file":
             db_step.script_file = value
         elif key == "input":
-            db_step.input = dir_head + value + dir_tail
+            if isinstance(value, str):
+                # This is a simple input field.
+                db_step.input = dir_head + value + dir_tail
+            elif value.get("no_batch_in_path"):
+                db_step.input = dir_head + value[key]
+            else:
+                raise(ValueError(f"In the config.yaml the input was "
+                                 f"in an unknown structure"))
         elif key == "output":
-            db_step.output = dir_head + value + dir_tail
+            if isinstance(value, str):
+                # This is a simple output field.
+                db_step.output = dir_head + value + dir_tail
+            elif value.get("no_batch_in_path"):
+                db_step.output = dir_head + value[key]
+            else:
+                raise (ValueError(f"In the config.yaml the output was "
+                                  f"in an unknown structure"))
         elif key == "hardwired_params":
             further_params += " " + value
         else:
@@ -89,6 +103,11 @@ def create_step(db: Session,
                     # use the url repository dir.
                     further_params += " -" + key + " " \
                                       + settings["folders"]["url_repository"]
+                elif value.get("minhash_repo_path"):
+                    # In this case we don't use the project root dir, we just
+                    # use the minhash repository dir.
+                    further_params += " -" + key + " " \
+                                      + settings["folders"]["minhash_repository"]
                 elif value.get("url_repo_append"):
                     # In this case we append the filename to the url_repository
                     # path.

@@ -11,6 +11,9 @@
         # The directory which contains the url lists from all related projects.
         # These will be used to detect duplicate urls, and we will place the
         # newly generated url lists there as well, to keep it up to date.
+        minhash_repository: None
+        # The directory which contains the minhashes from other projects.
+        # These will be used to deduplicate documents.
     version_number: "1.15.0"
     # It will be saved for every step on creation. It could help with debugging.
     runtime_configurations:
@@ -122,6 +125,20 @@
                 is_path: True
                 no_batch_in_path: True
                 c: "07c_minhash_full"
+        deduplicate_cumulative_fast:
+            # This is a faster, but more memory intensive version.
+            # It processess all batches ready for this step.
+            script_file: "autonomous_cross_deduplicator2.py"
+            hardwired_params: ""
+            input:
+                no_batch_in_path: True
+                input: "07b_minhash_self"
+            output:
+                no_batch_in_path: True
+                output: "07c_minhash_full"
+            d:
+                is_path: True
+                minhash_repo_path: True
         apply_deduplication:
             script_file: "dedup_filter.py"
             hardwired_params: ""
@@ -153,5 +170,5 @@
                 - filter_corpus
                 - minhash
                 - deduplicate_self
-                - deduplicate_cumulative
+                - deduplicate_cumulative_fast
                 - apply_deduplication
