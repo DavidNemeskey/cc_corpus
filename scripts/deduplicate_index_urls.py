@@ -24,7 +24,8 @@ def parse_arguments():
                         help='the output directory')
     parser.add_argument('--skip-urls', '-s', type=Path, default=None,
                         help='a file with the list of URLs to skip (i.e. '
-                             'drop). Typically, these are URLs already '
+                             'drop) or a directory of these. '
+                             'Typically, these are URLs already '
                              'downloaded in a previous batch.')
     parser.add_argument('--export-urls-file', '-euf', type=Path,
                         help='If given, we will export the urls we keep as'
