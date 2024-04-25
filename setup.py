@@ -108,7 +108,7 @@ setup(name='commoncrawl-downloader',
           # Uncommented until my PR is merged
           # 'idzip',
           # Manager webapp framework:
-          'fastapi==0.101.1',
+          'fastapi>=0.101.1',
           # Boilerplate removal
           'justext',
           'lxml',

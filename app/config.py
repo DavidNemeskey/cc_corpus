@@ -21,10 +21,10 @@ def load_config_file(config_file) -> Dict[str, Any]:
         with open(config_file, "r") as f:
             config = yaml.safe_load(f)
     except FileNotFoundError:
-        raise FileNotFoundError('Config file is missing. Please make sure '
-                                'that you have created an '
-                                'app/config.yaml using the'
-                                'app/config_example.yaml as a template.')
+        raise FileNotFoundError("Config file is missing. Please make sure "
+                                "that you have created an "
+                                "app/config.yaml using the "
+                                "app/config_example.yaml as a template.")
 
     # If the working dir is not set properly we raise an error:
     working_dir_var = config["folders"]["working_dir"]
