@@ -1,6 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
     <div class="card card-body">
+        <!-- Selector for filtering by status: -->
+        Filter pipelines by status:
+        <form action="/pipelines/" method=""get>
+            <input type="radio" name="status" value=""
+                {% if not selected_status %} checked {% endif %}
+            > no filtering
+            {% for status_option in status_options %}
+                <input type="radio" name="status" value={{ status_option }}
+                    {% if selected_status == status_option %} checked {% endif %}
+                > {{ status_option }}
+            {% endfor %}
+            <button type="submit">Filter</button>
+        </form>
+    </div>
+    <div class="card card-body">
         <table>
             <thead>
                 <tr>
