@@ -146,6 +146,13 @@
             m:
                 is_path: True
                 m: "07c_minhash_full"
+        renumber_corpus:
+            script_file: "renumber_corpus_files.py"
+            hardwired_params: ""
+            no_p_param: True
+            input: "07d_dedup"
+            output: "08_renumbered"
+            d: "5000"
     pipelines:
     # Every pipeline type is listed here. The top level is the name of the pipeline type.
     # The params section lists the parameters for this type. These will be queried upon creating
@@ -172,3 +179,4 @@
                 - deduplicate_self
                 - deduplicate_cumulative_fast
                 - apply_deduplication
+                - renumber_corpus
