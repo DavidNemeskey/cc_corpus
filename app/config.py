@@ -15,16 +15,16 @@ import yaml
 CONFIG_FILE = "app/config.yaml"
 
 
-def load_config_file(config_file) -> Dict[str, Any]:
+def load_config_file(config_file: str) -> Dict[str, Any]:
     """Loads the config from a YAML file to an object."""
     try:
         with open(config_file, "r") as f:
             config = yaml.safe_load(f)
     except FileNotFoundError:
-        raise FileNotFoundError('Config file is missing. Please make sure '
-                                'that you have created an '
-                                'app/config.yaml using the '
-                                'app/config_example.yaml as a template.')
+        raise FileNotFoundError("Config file is missing. Please make sure "
+                                "that you have created an "
+                                "app/config.yaml using the "
+                                "app/config_example.yaml as a template.")
 
     # If the working dir is not set properly we raise an error:
     working_dir_var = config["folders"]["working_dir"]
@@ -37,7 +37,10 @@ def load_config_file(config_file) -> Dict[str, Any]:
     return config
 
 
-def load_and_substitute_config(config_file, variables_dict) -> Dict[str, Any]:
+def load_and_substitute_config(
+        config_file: str,
+        variables_dict: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Loads the config from a YAML file and substitutes variables.
     The variables in the YAML are written as "$key" or "${key}".
@@ -50,7 +53,7 @@ def load_and_substitute_config(config_file, variables_dict) -> Dict[str, Any]:
     return config
 
 
-def load_config_with_defaults(config_file) -> Dict[str, Any]:
+def load_config_with_defaults(config_file: str) -> Dict[str, Any]:
     """
     Loads the config from a YAML file using the default variables.
     The default variables are themselves contained in that YAML.
@@ -61,7 +64,7 @@ def load_config_with_defaults(config_file) -> Dict[str, Any]:
     return config
 
 
-def get_logs_dir(config) -> Path:
+def get_logs_dir(config: Dict[str, Any]) -> Path:
     logs_path = Path(config["folders"]["logs"]).expanduser()
     if logs_path.is_absolute():
         return logs_path

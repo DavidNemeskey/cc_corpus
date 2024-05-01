@@ -63,7 +63,7 @@ class Step(Base):
         arguments += self.further_params.split()
         logging.info(f"Executing script: {arguments}")
 
-        with open(task_logfile, 'w') as log_f:
+        with open(task_logfile, "w") as log_f:
             subprocess.Popen(arguments, stdout=log_f, stderr=log_f)
 
 
