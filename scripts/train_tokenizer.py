@@ -3,6 +3,10 @@
 
 """
 Trains a tokenizer on the corpus.
+
+It uses a tokenizer from hugging face as its base.
+It uses the configurations of the base, but not its token vocab.
+For example: mistralai/Mistral-7B-Instruct-v0.2
 """
 
 from argparse import ArgumentParser
@@ -33,6 +37,16 @@ def parse_arguments():
     return args
 
 
+def get_training_corpus(dir):
+    # This is a generator that yields one file's worth of documents per
+    # iteration. We usually chunk our final corpus to have 5000 documents
+    # per file.
+    input_files = collect_inputs([dir])
+    # logging.info(f'Load {len(input_files)} files as corpus.')
+    for input_file in input_files:
+        yield [document.content() for document in parse_file(input_file)]
+
+
 def main():
     args = parse_arguments()
 
@@ -40,17 +54,8 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    input_files = collect_inputs([args.input_dir])
-    logging.info(f'Load {len(input_files)} files as corpus.')
 
-    # TODO turn this into a function that returns a generator.
-    # One yield should return all the documents from a single file.
-    training_corpus = []
-    for input_file in input_files:
-        for document in parse_file(input_file):
-            training_corpus.append(document.content())
-    logging.info(f'Collected {len(training_corpus)} documents as corpus.')
-
+    training_corpus = get_training_corpus(args.input_dir)
     old_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
     example = "Szia uram, tokenizer érdekelne?"
