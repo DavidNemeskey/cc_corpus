@@ -158,19 +158,17 @@ def notempty(f):
 
 def collect_inputs(inputs):
     """
-    Collects all files from the files and directories specified.
+    Collects all files from the files and directories specified,
+    iteratively going into subdirs as well.
     """
-    # TODO: glob?
     files = []
     for input in inputs:
         if op.isfile(input):
             files.append(input)
         elif op.isdir(input):
-            # TODO this doesn't work with a recursive directory structure
-            files.extend([op.join(input, f) for f in os.listdir(input)
-                          if op.isfile(op.join(input, f))])
+            files.extend(collect_inputs(list(input.iterdir())))
         else:
-            raise ValueError('{} is neither a file nor a directory'.format(input))
+            raise ValueError(f'{input} is neither a file nor a directory')
     return files
 
 
