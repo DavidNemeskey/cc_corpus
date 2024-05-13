@@ -11,6 +11,7 @@ For example: mistralai/Mistral-7B-Instruct-v0.2
 
 from argparse import ArgumentParser
 import logging
+import os
 from pathlib import Path
 from transformers import AutoTokenizer
 
@@ -54,11 +55,12 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
+    os.nice(20)
 
     training_corpus = get_training_corpus(args.input_dir)
     old_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
-    example = "Szia uram, tokenizer érdekelne?"
+    example = "Szia uram, tokenizer vagy palacsinta érdekelne?"
     tokens = old_tokenizer.tokenize(example)
     print(f'Tokenizing the following text: {example}:\n')
     print(tokens)
@@ -69,6 +71,9 @@ def main():
     print(f'Tokenizing the following text: {example}:\n')
     print(tokens)
     print(len(tokens))
+
+    new_tokens = set(tokenizer.vocab).difference(old_tokenizer.vocab)
+    print(f'We got {len(new_tokens)} new tokens.')
 
     tokenizer.save_pretrained(args.output_dir)
 
