@@ -9,12 +9,16 @@ of them.
 """
 
 from argparse import ArgumentParser
+from collections import Counter
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field, InitVar
 from functools import partial
 from itertools import chain
 import logging
 from multiprocessing import Pool
 import os
 from pathlib import Path
+from typing import Any, ClassVar
 
 from more_itertools import unique_everseen, windowed
 from cc_corpus.corpus import Document, parse_file
@@ -79,7 +83,7 @@ def collect_ngrams(input_file: Path, n: int) -> set[tuple[str]]:
     return n_grams
 
 
-collected_n_grams = None
+collected_n_grams: Counter = None
 
 
 def load_ngrams(ngrams_file: Path):
@@ -90,19 +94,106 @@ def load_ngrams(ngrams_file: Path):
         }
 
 
-def find_matches(input_file: Path, n: int, min_count: int) -> list[str]:
+@dataclass
+class DocFound:
+    doc_id: str
+    common_ratio: float
+    common: set[tuple[str]]
+
+
+def find_matches(
+    input_file: Path, n: int, min_count: int
+) -> list[DocFound]:
     docs = []
     for doc in parse_file(input_file):
         content = convert_document(doc)
-        to_add = True
         if len(content) >= n:
             n_grams = set(windowed(content, n))
-            if len(n_grams & collected_n_grams) >= min_count:
-                to_add = False
-                # docs.append(doc.id)
-        if to_add:
-            docs.append(doc.id)
+            if len(common := n_grams & collected_n_grams) >= min_count:
+                docs.append(DocFound(doc.id, len(common) / len(n_grams), common))
     return docs
+
+
+@dataclass
+class Runner:
+    fn: Callable[[Path], list[Any]] = field(default=None, init=False, repr=False)
+    n: int
+    pool: Pool = field(default=None, init=False, repr=False)
+    processes: InitVar[int]
+
+    def __post_init__(self, processes: int):
+        self.pool = Pool(processes)
+
+    def run(self, input_dir: Path, output_file: Path):
+        raise NotImplementedError()
+
+    def input_it(self, input_dir: Path) -> Iterable[Any]:
+        input_files = [f for f in input_dir.glob('**/*')
+                       if not f.name.startswith('.') and f.is_file()]
+
+        logging.info(f'Scheduled {len(input_files)} files for {self.task_np}.')
+
+        it = otqdm(self.pool.imap_unordered(self.fn, input_files),
+                   f'{self.task_ving} {input_dir.name}...',
+                   total=len(input_files))
+        return chain.from_iterable(it)
+
+
+@dataclass
+class Collector(Runner):
+    task_np: ClassVar[str] = 'n-gram collection'
+    task_ving: ClassVar[str] = 'Collecting from'
+
+    def __post_init__(self, processes: int):
+        super.__post_init__(processes)
+        self.fn = partial(collect_ngrams, n=self.n)
+
+    def run(self, input_dir: Path, output_file: Path):
+        with self.pool:
+            it = map(lambda t: ' '.join(t),
+                     unique_everseen(self.input_it(input_dir)))
+            with openall(output_file, 'wt') as outf:
+                for item in it:
+                    print(item, file=outf)
+            self.pool.close()
+            self.pool.join()
+
+
+@dataclass
+class Deduplicator(Runner):
+    task_np: ClassVar[str] = 'deduplication'
+    task_ving: ClassVar[str] = 'Deduplicating'
+
+    ngrams_file: InitVar[Path]
+    min_count: int
+
+    def __post_init__(self, processes: int, ngrams_file: Path):
+        self.fn = partial(find_matches, n=self.n, min_count=self.min_count)
+        self.pool = Pool(processes,
+                         initializer=load_ngrams,
+                         initargs=[ngrams_file])
+
+    def run(self, input_dir: Path, output_file: Path):
+        collected_n_grams = Counter()
+        with self.pool:
+            it = self.input_it(input_dir)
+            with openall(output_file, 'wt') as outf:
+                for doc_found in it:
+                    info = (
+                        f'{doc_found.doc_id}\t{len(doc_found.common)}\t'
+                        f'{doc_found.common_ratio}\t{next(iter(doc_found.common))}'
+                    )
+                    print(info, file=outf)
+                    collected_n_grams.update(doc_found.common)
+
+            self.pool.close()
+            self.pool.join()
+
+        with openall(
+            output_file.stem + '_ngram_stats' + output_file.suffix, 'wt'
+        ) as outf:
+            for ngram, freq in collected_n_grams.most_common():
+                print(f'{" ".join(ngram)}\t{freq}', file=outf)
 
 
 def main():
@@ -115,36 +206,13 @@ def main():
     os.nice(20)
     logging.info(args)
 
-    input_files = [f for f in args.input_dir.glob('**/*')
-                   if not f.name.startswith('.') and f.is_file()]
-
     if args.command == 'collect':
-        fn = partial(collect_ngrams, n=args.n)
-        pool = Pool(args.processes)
-        task_np = 'n-gram collection'
-        task_ving = 'Collecting from'
+        runner = Collector(args.n, args.processes)
     elif args.command == 'deduplication':
-        fn = partial(find_matches, n=args.n, min_count=args.min_count)
-        pool = Pool(args.processes,
-                    initializer=load_ngrams,
-                    initargs=[args.ngrams_file])
-        task_np = 'deduplication'
-        task_ving = 'Deduplicating'
+        runner = Deduplicator(args.n, args.processes,
+                              args.ngrams_file, args.min_count)
 
-    logging.info(f'Scheduled {len(input_files)} files for {task_np}.')
-
-    with pool:
-        it = otqdm(pool.imap_unordered(fn, input_files),
-                   f'{task_ving} {args.input_dir.name}...',
-                   total=len(input_files))
-        it = chain.from_iterable(it)
-        if args.command == 'collect':
-            it = map(lambda t: ' '.join(t), unique_everseen(it))
-        with openall(args.output_file, 'wt') as outf:
-            for item in it:
-                print(item, file=outf)
-        pool.close()
-        pool.join()
+    runner.run(args.input_dir, args.output_file)
 
     logging.info('Done.')
 
