@@ -12,6 +12,7 @@ References:
 """
 
 from argparse import ArgumentParser
+import boto3
 from contextlib import closing, nullcontext
 import logging
 from pathlib import Path
@@ -103,8 +104,13 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
-    base_url = f'https://data.commoncrawl.org/cc-index/collections/' \
-               f'{args.collection}/indexes/'
+    # The http server was very unreliable
+    # base_url = f'https://data.commoncrawl.org/cc-index/collections/' \
+    #            f'{args.collection}/indexes/'
+
+    base_path = f'cc-index/collections/{args.collection}/indexes/'
+    s3_path_cluster_idx = f'cc-index/collections/{args.collection}/indexes/cluster.idx'
+    s3 = boto3.client('s3')
 
     if args.patterns:
         raw_patterns = args.patterns
@@ -131,8 +137,11 @@ def main():
         cluster_idx = Path(clusters_dir) / f'{args.collection}_cluster.idx'
         if not cluster_idx.is_file():
             logging.info(f'Downloading cluster index for {args.collection}...')
-            logging.debug(base_url + 'cluster.idx')
-            urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
+            logging.debug(s3_path_cluster_idx)
+            # The old, http based one:
+            # urllib.request.urlretrieve(base_url + 'cluster.idx', cluster_idx)
+            # Using AWS S3:
+            s3.download_file('commoncrawl', s3_path_cluster_idx, cluster_idx)
 
         # Then, get the files and byte ranges that correspond to the query:
         clusters = collect_clusters_from_index(patterns, cluster_idx)
@@ -156,10 +165,11 @@ def main():
                 logging.debug(f'Downloading {frange}...')
                 try:
                     index_range = download_index_range(
-                        base_url + frange.file_name,
+                        base_path + frange.file_name,
                         frange.offset, frange.length,
                         args.max_retry,
-                        args.delay
+                        args.delay,
+                        s3
                     )
                     for line in process_index_range(index_range):
                         if pattern_matcher.match(line):
