@@ -96,8 +96,6 @@ def main():
             path.relative_to(args.input_dir)
         )
 
-    logging.info(f'{len(relative_files)=}')
-    logging.info(f'{len(relative_dirs)=} {relative_dirs=}')
     create_directories(args.output_dir, relative_dirs)
     create_directories(args.excluded_dir, relative_dirs)
 
