@@ -16,7 +16,7 @@ import zlib
 
 from more_itertools import batched, peekable
 
-from cc_corpus.io import BatchWriter as BatchWriterBase
+from cc_corpus.io import BatchWriterBase
 from cc_corpus.utils import openall
 
 

@@ -3,7 +3,6 @@
 
 from argparse import ArgumentParser
 from functools import partial
-from itertools import islice
 import logging
 from multiprocessing import Pool
 import os
@@ -71,7 +70,7 @@ def delete_empty_directories(base_dir: Path, relative_dirs: list[Path]):
     if base_dir:
         for relative_dir in relative_dirs[::-1]:
             full_dir = base_dir / relative_dir
-            if sum(1 for _ in islice(full_dir.iterdir(), 1)) == 0:
+            if not any(full_dir.iterdir()):
                 full_dir.rmdir()
 
 

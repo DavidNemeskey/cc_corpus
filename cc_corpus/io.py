@@ -10,7 +10,7 @@ from typing import Any
 from cc_corpus.utils import openall
 
 
-class BatchWriter:
+class BatchWriterBase:
     """
     Writes generic "documents" into a batch of files with consecutive numbering.
 

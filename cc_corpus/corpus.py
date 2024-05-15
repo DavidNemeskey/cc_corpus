@@ -14,7 +14,7 @@ from queue import Empty, Queue
 import re
 import shutil
 
-from cc_corpus.io import BatchWriter as BatchWriterBase
+from cc_corpus.io import BatchWriterBase
 from cc_corpus.utils import openall
 
 
