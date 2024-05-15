@@ -14,6 +14,7 @@ from queue import Empty, Queue
 import re
 import shutil
 
+from cc_corpus.io import BatchWriter as BatchWriterBase
 from cc_corpus.utils import openall
 
 
@@ -351,87 +352,53 @@ def parse_file(corpus_file, attrs=True, meta=True, content=True, **meta_fields):
                                attrs, meta, content, **meta_fields)
 
 
-class BatchWriter:
+class BatchWriter(BatchWriterBase):
+    jsonl_to_suffix = { True: '.jsonl.gz', False: '.txt.gz' }
+
     """Writes Documents into a batch of files with consecutive numbering."""
     def __init__(self, batch_size, out_dir, digits=4,
-                 name_prefix='', first_batch=1):
+                 name_prefix='', first_batch=1, jsonl: bool = True):
         """
-        Parameters:
-        :param batch_size: the number of documents after which a new batch file
-                           is opened (with consecutive numbering)
-        :param out_dir: the output directory
-        :param digits: the number of zeroes in the batch files' name (e.g. if 2,
-                       the first batches will be called 01, 02, etc.)
-        :param name_prefix: prepend this string to all file names
-        :param first_batch: start batch numbering here instead of the default 1
-        """
-        self.batch_size = batch_size
-        self.out_dir = Path(out_dir)
-        self.digits = digits
-        self.name_prefix = name_prefix
-        self.batch = first_batch - 1
-        self.outf = None
-        self.doc_written = self.batch_size + 1  # so that we invoke new_file
-        self.total_written = 0
+        See the super class for the arguments aside from
 
-    def write(self, document, jsonl=False):
+        :param jsonl: whether to write jsonl files (``True``) or the
+                      semi-XML corpus format (``False``).
+        """
+        super().__init__(batch_size, out_dir, digits, name_prefix,
+                         BatchWriter.jsonl_to_suffix[jsonl], first_batch)
+        self.jsonl = jsonl
+
+    def write(self, document):
         """
         Writes a single document to the currently open file. Opens a new file
         when the current one is full.
         """
-        if self.doc_written >= self.batch_size:
-            self.new_file(jsonl)
-
-        if jsonl:
-            print(document.to_json(), file=self.outf)
-        else:
-            print(document, file=self.outf)
-        self.doc_written += 1
+        super().write(document.to_json() if self.jsonl else document)
 
     def copy_file(self, input_file):
         """
         Opens a file and makes it a copy of ``input_file``, giving it a
         (possibly) renumbered filename.
-        """
-        self.new_file(is_it_jsonl(input_file))
-        self.close()
 
-        new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
-        if is_it_jsonl(input_file):
-            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
-        else:
-            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
+        This is one method which disregards the _jsonl_ attribute as the format
+        of the output file will only depend on that of the input file.
+        """
+        self.new_file(self.jsonl_to_suffix[is_it_jsonl(input_file)])
+        new_file = self.current_file
+        self.close()
         shutil.copy(input_file, new_file)
 
-    def new_file(self, jsonl=False):
-        """Closes the old file and opens a new one."""
-        self.close()
-
-        self.batch += 1
-        new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(self.batch)
-        if jsonl:
-            new_file = (self.out_dir / new_file_name).with_suffix('.jsonl.gz')
-        else:
-            new_file = (self.out_dir / new_file_name).with_suffix('.txt.gz')
-        logging.debug('Opening file {}...'.format(new_file))
-        self.outf = openall(new_file, 'wt')
-
-    def close(self):
+    def new_file(self, suffix: str = None):
         """
-        Closes the currently written file handle. Called automatically when
-        the batch counter increases, but should also be called when processing
-        ends to close the files of the last batch.
+        Closes the old file and opens a new one.
+
+        :param suffix: same as the argument in :meth:`__init__`, but overwrites
+                       its value solely for the current file. Regular user code
+                       should not use it.
         """
-        if self.outf is not None:
-            self.outf.close()
-            self.outf = None
-
-            self.total_written += self.doc_written
-        self.doc_written = 0
-
-    def __del__(self):
-        """Just calls close()."""
-        self.close()
+        orig_suffix = self.suffix
+        super().new_file()
+        self.suffix = orig_suffix
 
 
 def convert_file_to_jsonl(input_file: Path, output_file: Path):

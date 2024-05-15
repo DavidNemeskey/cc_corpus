@@ -58,13 +58,14 @@ def main():
     num_docs = 0
     name_prefix = f'{args.prefix}_' if args.prefix else ''
     with closing(
-        BatchWriter(batch_size, args.output_dir, args.digits, name_prefix)
+        BatchWriter(batch_size, args.output_dir, args.digits, name_prefix,
+                    jsonl=is_it_jsonl(input_files[0]))
     ) as bw:
         for input_file in otqdm(input_files, 'Renumbering files...'):
             if not args.keep_sizes:
                 logging.debug('Reading file {}...'.format(input_file))
                 for document in parse_file(input_file):
-                    bw.write(document, jsonl=is_it_jsonl(input_file))
+                    bw.write(document)
                     num_docs += 1
             else:
                 logging.debug('Copying file {}...'.format(input_file))
