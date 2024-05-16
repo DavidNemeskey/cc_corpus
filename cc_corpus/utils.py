@@ -156,19 +156,18 @@ def notempty(f):
     return NoEmptyWriteWrapper(f)
 
 
-def collect_inputs(inputs):
+def collect_inputs(inputs: list[Path | str]) -> list[Path]:
     """
     Collects all files from the files and directories specified.
     """
     # TODO: glob?
     files = []
-    for input in inputs:
-        if op.isfile(input):
+    for input in map(Path, inputs):
+        if input.is_file():
             files.append(input)
-        elif op.isdir(input):
+        elif input.is_dir():
             # TODO this doesn't work with a recursive directory structure
-            files.extend([op.join(input, f) for f in os.listdir(input)
-                          if op.isfile(op.join(input, f))])
+            files.extend([f for f in input.iterdir() if f.is_file()])
         else:
             raise ValueError('{} is neither a file nor a directory'.format(input))
     return files
