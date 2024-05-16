@@ -145,9 +145,9 @@ abysmal.
 
 ### Download pages
 
-Common crawl offers to ways to download their corpus: via http and via Amazon's
+Common crawl offers two ways to download their corpus: via http and via Amazon's
 S3 buckets. The first version is getting less and less support and since 2023 it
-has been throttled down. So we switched over to use the S3 version.
+has been throttled down. So we use the S3 version.
 
 This requires a valid AWS account to be configured using ENV variables with the
 default names: AWS_ACCESS_KEY, AWS_SECRET_ACCES_KEY, etc.
@@ -171,7 +171,7 @@ to the total number of documents we download.
 We have to turn webscraped pages into plain text representations. We also want
 to remove "boilerplate", that is text strings which are not parts of the 
 document itself. For example the texts of the menus of a webpage, the legal
-disclaimers, privacy and cookie policy explanations and such.
+disclaimers, privacy and cookie policy explanations, etc.
 
 ```
 remove_boilerplate.py -i 04_downloaded/2019-04 -o 05_boilerplate_removed/2019-04 

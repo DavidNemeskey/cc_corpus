@@ -238,8 +238,6 @@ def filter_file(input_file,
                     saved to.
     """
     logging.info('Filtering file {}...'.format(input_file))
-    if url_list_output_file is None:
-        url_list_output_file = os.devnull
     stats = FilterStats(old_files=1)
     with openall(input_file, 'rt') as inf, \
             notempty(openall(output_file, 'wt')) as outf, \

@@ -10,6 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from pathlib import Path
 from sqlalchemy.orm import Session
 import time
+from typing import Dict, Union
 
 from .config import config, load_and_substitute_config, CONFIG_FILE
 from .logging import configure_logging
@@ -32,6 +33,21 @@ def get_steps(db: Session,
 def get_step_by_id(db: Session, step_id: int):
     """Gets a single step by ID from the DB."""
     return db.query(models.Step).filter(models.Step.id == step_id).first()
+
+
+def generate_path_from_param(param_key: str,
+                             param_value: Union[str, Dict[str, str]],
+                             dir_head: str,
+                             dir_tail: str) -> str:
+    if isinstance(param_value, str):
+        # This is a simple input field.
+        path = dir_head + param_value + dir_tail
+    elif param_value.get("no_batch_in_path"):
+        path = dir_head + param_value[param_key]
+    else:
+        raise (ValueError(f"In the config.yaml the input was "
+                          f"in an unknown structure"))
+    return path
 
 
 def create_step(db: Session,
@@ -69,23 +85,11 @@ def create_step(db: Session,
         if key == "script_file":
             db_step.script_file = value
         elif key == "input":
-            if isinstance(value, str):
-                # This is a simple input field.
-                db_step.input = dir_head + value + dir_tail
-            elif value.get("no_batch_in_path"):
-                db_step.input = dir_head + value[key]
-            else:
-                raise(ValueError(f"In the config.yaml the input was "
-                                 f"in an unknown structure"))
+            db_step.input = generate_path_from_param(key, value, dir_head,
+                                                     dir_tail)
         elif key == "output":
-            if isinstance(value, str):
-                # This is a simple output field.
-                db_step.output = dir_head + value + dir_tail
-            elif value.get("no_batch_in_path"):
-                db_step.output = dir_head + value[key]
-            else:
-                raise (ValueError(f"In the config.yaml the output was "
-                                  f"in an unknown structure"))
+            db_step.output = generate_path_from_param(key, value, dir_head,
+                                                      dir_tail)
         elif key == "hardwired_params":
             further_params += " " + value
         else:
