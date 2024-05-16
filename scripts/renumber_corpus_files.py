@@ -19,7 +19,10 @@ from cc_corpus.utils import collect_inputs, otqdm
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('--input-dir', '-i', type=Path, required=True,
+    # This argument should be called input-dirs, but we kept it in singular
+    # to keep the pattern used by every other script and we don't have to
+    # handle this as a separate case in the manager webapp:
+    parser.add_argument('--input-dir', '-i', type=Path, action='append',
                         help='the corpus directory')
     # parser.add_argument('input_dirs', nargs='+',
     #                     help='the input directories.')
@@ -39,7 +42,10 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.input_dir:
+        parser.error('At least one input must be supplied.')
+    return args
 
 
 def main():
@@ -53,7 +59,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     os.nice(20)
 
-    input_files = collect_inputs([args.input_dir])
+    input_files = collect_inputs(args.input_dir)
     logging.info('Scheduled {} files for renumbering.'.format(len(input_files)))
 
     batch_size = args.documents if not args.keep_sizes else sys.maxsize
