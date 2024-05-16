@@ -119,7 +119,7 @@ setup(name='commoncrawl-downloader',
           # MIME detection
           'python-magic',
           # To parse the manager webapp's config.yaml:
-          'pyyaml>=6.0'
+          'pyyaml>=6.0',
           # Just for URL deduplication
           'redis',
           'requests',
@@ -128,7 +128,7 @@ setup(name='commoncrawl-downloader',
           # Will maybe remove this later
           'simplejson',
           # Manager webapp database:
-          'sqlalchemy>=2.0.20'
+          'sqlalchemy>=2.0.20',
           # Boilerplate removal
           'trafilatura==1.2.2',  # 1.2.2
           # Easier TLD extraction
@@ -136,7 +136,7 @@ setup(name='commoncrawl-downloader',
           # Language identification -- cld2 master doesn't compile ATM
           'cld2-cffi==0.1.4', 'langid',
           # A web server for the manager webapp:
-          'uvicorn>=0.23.2'
+          'uvicorn>=0.23.2',
           # WARC 3 library
           # 'warc @ https://github.com/erroneousboat/warc3/archive/master.zip',
           'warc-knot>=0.2.5',

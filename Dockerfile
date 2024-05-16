@@ -31,4 +31,8 @@ RUN . ${HOME}/.bashrc && conda activate cc_corpus && conda install python=3.11 p
     && export CFLAGS="-Wno-narrowing" \
     && pip install -e cc_corpus
 
+RUN echo 'conda activate cc_corpus ' >> ~/.bashrc
+
+ENTRYPOINT ["/bin/bash", "-l", "-c"]
+
 CMD ["/bin/bash"]
