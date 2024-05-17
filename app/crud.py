@@ -10,6 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from pathlib import Path
 from sqlalchemy.orm import Session
 import time
+from typing import Dict, Union
 
 from .config import config, load_and_substitute_config, CONFIG_FILE
 from .logging import configure_logging
@@ -34,6 +35,21 @@ def get_step_by_id(db: Session, step_id: int):
     return db.query(models.Step).filter(models.Step.id == step_id).first()
 
 
+def generate_path_from_param(param_key: str,
+                             param_value: Union[str, Dict[str, str]],
+                             dir_head: str,
+                             dir_tail: str) -> str:
+    if isinstance(param_value, str):
+        # This is a simple input field.
+        path = dir_head + param_value + dir_tail
+    elif param_value.get("no_batch_in_path"):
+        path = dir_head + param_value[param_key]
+    else:
+        raise (ValueError(f"In the config.yaml the input was "
+                          f"in an unknown structure"))
+    return path
+
+
 def create_step(db: Session,
                 step: schemas.StepCreate,
                 optional_settings={}):
@@ -54,7 +70,7 @@ def create_step(db: Session,
     db_step.status = "prelaunch"
     db_step.script_version = settings["version_number"]
 
-    dir_head = str(Path(settings["folders"]["working_dir"]).expanduser())
+    dir_head = str(Path(settings["folders"]["working_dir"]).expanduser()) + "/"
     dir_tail = "/" + settings["cc_batch"]
     further_params = "-L " + settings["runtime_configurations"]["log_level"]
 
@@ -69,9 +85,11 @@ def create_step(db: Session,
         if key == "script_file":
             db_step.script_file = value
         elif key == "input":
-            db_step.input = dir_head + value + dir_tail
+            db_step.input = generate_path_from_param(key, value, dir_head,
+                                                     dir_tail)
         elif key == "output":
-            db_step.output = dir_head + value + dir_tail
+            db_step.output = generate_path_from_param(key, value, dir_head,
+                                                      dir_tail)
         elif key == "hardwired_params":
             further_params += " " + value
         else:
@@ -84,6 +102,23 @@ def create_step(db: Session,
                 # and may have to append the current batch to it.
                 if value.get("no_batch_in_path"):
                     further_params += " -" + key + " " + dir_head + value[key]
+                elif value.get("url_repo_path"):
+                    # In this case we don't use the project root dir, we just
+                    # use the url repository dir.
+                    further_params += " -" + key + " " \
+                                      + settings["folders"]["url_repository"]
+                elif value.get("minhash_repo_path"):
+                    # In this case we don't use the project root dir, we just
+                    # use the minhash repository dir.
+                    further_params += " -" + key + " " \
+                                      + settings["folders"]["minhash_repository"]
+                elif value.get("url_repo_append"):
+                    # In this case we append the filename to the url_repository
+                    # path.
+                    print(value)
+                    further_params += " -" + key + " " \
+                                      + settings["folders"]["url_repository"] \
+                                      + value[key]
                 else:
                     further_params += " -" + key \
                                       + " " + dir_head + value[key] + dir_tail
