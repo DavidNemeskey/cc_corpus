@@ -26,33 +26,75 @@ The reason for the export is that one of the language detection packages,
 problems (narrowing conversions) that were once only warnings are now considered
 errors by modern compilers. The export tells them to disregard these errors.
 
-## From start to end
+## Manager webapp
+
+You can use this package either using command line commands or by the manager webapp interface.
+The webapp uses a sqlite DB.
+
+Once you have set up its configuration (see below), you can launch 
+the manager webapp server with uvicorn:
+```
+uvicorn app.main:app
+```
+
+In the manager you can create individual steps or entire pipelines. Steps come with
+default parameters which you can change. The same is true for pipelines. Once the proper
+parameteres have been given to a pipeline, you can "spawn" the steps that constitute it.
+The pipeline will set the parameters of those steps based on its own parameters.
+
+### Configuring the webapp
+
+To use the webapp you must set up a configuration file for it.
+
+First, create it from the template:
+
+```
+cp app/config_example.yaml app/config.yaml
+```
+
+Then open it with an editor and following the instructions fill out the required fields.
+
+### Autorunner
+
+If you set a pipeline's status to "autorun" it flags it for being available to the autorun
+feature. You can start that feature by the autorun button, and it will try to go through
+all the steps of all the "autorun" flagged pipelines.
+
+### Standalone Autorunner
+
+The pipe_that_line.py script takes its command line parameters to create a pipeline,
+spawn its corresponding steps and start the autorunner feature.
+
+It requires the webapp to be configured properly (see above).
+
+## Manually running the scripts
 
 This section describes how to download and process the Common Crawl data to
-arrive at a corpus.
+arrive at a corpus. 
+
+Note: there are several optional command line parameters beyond the ones
+covered in this overview. Use the -h flag to get information about them.
+
+Most scripts support multiprocessing. You can activate it with the -P x
+command line argument, where x is the number of processes.
 
 ### Download the index
 
 The script `get_indexfiles.py` can be used to download the index for a
 specific collection. The example below downloads the index for all pages
-in the `.hu` domain in January 2019:
+in the `elte.hu` domain in the January (week 04) 2019 common crawl batch:
 ```
-get_indexfiles.py -q "*.hu" -o 2019/cc_index -l 2019_01.log -m 5 -c CC-MAIN-2019-04
+get_indexfiles.py -p elte.hu -c CC-MAIN-2019-04 -o 01_index/2019-04
 ```
-
-Note that `get_indexfiles.py` is a replacement for the original
-`get_indexfiles.sh`.
 
 ### Filter the index
 
 Next, filter the index with the script `filter_index.py`:
 ```
-filter_index.py 2019/cc_index/ 2019/cc_index_filtered/ -a commoncrawl-downloader2/allowed_mimes.txt -P 12
+filter_index.py -i 01_index/2019-04 -o 02_index_filtered/2019-04 -a data/allowed_mimes.txt
 ```
 
-This script is a replacement for and an improvement on the original
-`filter_index.sh`. Being Python, it might be a little slower than the original
-though, hence the `-P` option for multiprocessing.
+This filters out invalid documents based on the metadata in the index.
 
 ### Index statistics
 
@@ -71,109 +113,88 @@ This script writes 5 files:
 ### Index deduplication
 
 Once the index is filtered, it should be deduplicated, because the same URLs
-are re-downloaded time and again (as many times as 240 in 4 month). The first
-step is to collect all URLs we have already downloaded in a previous batch.
-For example, if we already have the (deduplicated) URLs of the previous year,
-we should do something like this first:
+are re-downloaded time and again (as many times as 240 in 4 month). 
+
+If you have already downloaded previous batches, or have any other collection
+of URLs, collect all the url lists into a single directory and pass it on as
+the -s parameter.
+
+If you plan to download further batches it is higly recommended to add the
+url list of the current batch to that directory. You can do that by using the
+--export-urls-file argument and pass along a filename for the url list.
+
 ```
-zcat 2018/cc_index_dedup/*.gz | cut -d' ' -f2 | sort | gzip > 2018_index_urls.gz
-```
-or, parallelly,
-```
-ls *.gz | parallel -j12 -k "zcat {} | cut -d' ' -f2 " | sort | gzip > ../2018_index_urls.gz
+deduplicate_index_urls.py -i 02_index_filtered/2019-04 -o 03_index_dedup/2019-04 
+-s urls_already_collected/ -euf hu_hu_2019-04.gz -k biggest
 ```
 
-Alternatively, the URLs can be extracted from an already existing corpus:
+If you have not exported the url list, you can extract them at any later point:
 ```
 extract_attributes.py -i 2018/cc_corpus/ -a url -o 2018_urls.tsv.gz -P 12 2> /dev/null
 ```
 
-Generally, it is better to collect the list from the index, because the corpus
-might already have been filtered (based on language, length, etc.), which means
-a lot of URLs that we have downloaded and discarded don't appear in it, so we'll
-just re-download them again.
+Generally, it is better to collect the url list from the index, and not the
+corpus. Because the corpus might already have been filtered (based on language, 
+length, etc.), which means a lot of URLs that we have downloaded and discarded 
+would no longer be included in it. So if we based our url list on the corpus we 
+would re-download unnecessary documents again.
 
-Once the list of URLs to skip is complete, the index can be deduplicated like
-```
-deduplicate_index_urls.py -i 2019/cc_index_filtered/ -o 2019/cc_index_dedup/ -s 2018_index_urls.gz -k biggest
-```
-
-Note: unfortunately, loading the old URLs takes a very long time... also, the
-script runs in a single process as Python's shared memory performance is
+Note: unfortunately, loading the previously collected URLs takes a very long time... 
+also, the script runs in a single process as Python's shared memory performance is
 abysmal.
 
 ### Download pages
 
+Common crawl offers two ways to download their corpus: via http and via Amazon's
+S3 buckets. The first version is getting less and less support and since 2023 it
+has been throttled down. So we use the S3 version.
+
+This requires a valid AWS account to be configured using ENV variables with the
+default names: AWS_ACCESS_KEY, AWS_SECRET_ACCES_KEY, etc.
+
+Thanks to Amazon's support for the Common Crawl project, downloading is free.
+
 Pages in the (filtered, deduplicated) index can be downloaded by the command
 ```
-download_pages.py -o 2019/cc_downloaded -e warc.gz -i '2019/cc_index_dedup/*.gz'
+download_pages.py -i 03_index_dedup/2019-04 -o 04_downloaded/2019-04
+--index_output_dir 04a_index_sorted/2019-04 --error_file 04b_download_errors
 ```
 
-This step takes a while, so it make sense to [distribute the work among
-a cluster of machines](#tech). However, it is a bit more involved than
-distributing other scripts, as this one has been inherited from the old
-repository. The differences are:
-
-1. The script requires a `glob` (possibly wildcard) expression that expands to
-   a list of input files, and not an input directory. So the place of the host
-   name in the value to the `-i` argument must be specified manually (with
-   `{}`, see below)
-1. The number of processes must be set to 0. This eliminates the `-P` argument
-   from the Python command line. We need to do this because first, `-P` means
-   something else in `download_pages.py`, and second, the script uses threads
-   anyway.
-
-```
-ansible-playbook -i hosts distribute_files.yml -e
-    '{"input_dir": "/mnt/data/lang/Hungarian/cc_corpus/2019/cc_index_dedup",
-      "output_dir": "/mnt/data/lang/Hungarian/cc_corpus/2019"}'
-
-ansible-playbook -i hosts python.yml -e
-    '{"python_script": "download_pages.py",
-      "log_file": "2019_download.log",
-      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
-      "arguments": "-o $output_dir -e warc.gz -i $input_glob",
-      "per_host_args": {"input_glob": "\"2019/cc_index_dedup_{}/*.gz\"",
-                        "output_dir": "2019/cc_downloaded/"}, "processes": 0}'
-```
+It is highly recommended to set the number of processes (-P) as high as
+possible in your environment. The reason for this is that S3 does not allow 
+the download of multiple slices from a single file during a single request.
+This means that the number of download requests we make will be comparable
+to the total number of documents we download.
 
 ### Remove boilerplate
 
-Boilerplate code is removed with `justext`, which also splits the data into
-paragraphs. The script to run is `remove_boilerplate.py`. Since we have already
-split up the data between hosts, we can distribute boilerplate removal as well.
+We have to turn webscraped pages into plain text representations. We also want
+to remove "boilerplate", that is text strings which are not parts of the 
+document itself. For example the texts of the menus of a webpage, the legal
+disclaimers, privacy and cookie policy explanations, etc.
+
 ```
-ansible-playbook -i hosts python.yml -e
-    '{"python_script": "remove_boilerplate.py",
-      "log_file": "2019_remove_boilerplate.log",
-      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
-      "arguments": "-i $index -w $warc -o $output",
-      "per_host_args": {"index": "2019/cc_index_dedup/",
-                        "warc": "2019/cc_downloaded/",
-                        "output": "2019/cc_corpus/"}}'
+remove_boilerplate.py -i 04_downloaded/2019-04 -o 05_boilerplate_removed/2019-04 
+--index-dir 04a_index_sorted/2019-04 --boilerplate-tool justext
 ```
+
+Note: by default the language of the filter is set to Hungarian. This determines
+the stopword list used by the algorithm to detect SEO texts and such. If you work
+with another language, use the -l argument with the correct language, otherwise 
+your entire corpus might get removed!
+
+The language parameter must be passed according to the naming conventions of 
+Justext, so "hungarian" and not "hu".
 
 ### <a name="filtering">Filtering</a>
 
 After boilerplate removal, the corpus is in its final format. However, to
-increase its quality, we also filter out certain pages: those not in Hungarian
-and those shorter than 1500 characters.
-```
-ansible-playbook -i hosts python.yml -e
-    '{"python_script": "filter_corpus.py",
-      "log_file": "2019_filter_corpus.log",
-      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
-      "arguments": "-i $input -o $output -l hu",
-      "per_host_args": {"input": "2019/cc_corpus/",
-                        "output": "2019/cc_corpus_hu/"}}'
+increase its quality, we should filter out certain documents. For example those
+that are not in the language we want, or those which are too short.
 
-ansible-playbook -i hosts python.yml -e
-    '{"python_script": "filter_corpus.py",
-      "log_file": "2019_filter_length.log",
-      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
-      "arguments": "-i $input -o $output -m 1500c",
-      "per_host_args": {"input": "2019/cc_corpus_hu/",
-                        "output": "2019/cc_corpus_hu_1500c/"}}'
+```
+filter_corpus.py -i 06_filtered/2019-04/ -o 06_filtered_500c/2019-04/ 
+-l hu -u doc -m 500c
 ```
 
 ### Document deduplication
@@ -185,58 +206,104 @@ are important to the content (e.g. _doc_id_ probably is, while _token_ most
 likely isn't); and second, the same news item / poem / etc. might have been
 published on different domains. So we need document-level deduplication.
 
-Unfortunately, deduplication is not a one-step process. First, the documents
+Unfortunately, deduplication is not a one-step process. 
+
+## Generate minhashes
+
+First, the documents
 have to be <em>minhash</em>ed:
 ```
-ansible-playbook -i hosts python.yml -e
-    '{"python_script": "minhash.py",
-      "log_file": "2019_minhash.log",
-      "working_dir": "/mnt/data/lang/Hungarian/cc_corpus/",
-      "arguments": "-i $input -o $output -b 3000000 -u doc -p 256 -n 5 -Z 1",
-      "per_host_args": {"input": "2019/cc_corpus_hu_1500c/",
-                        "output": "2019/minhashes/"}}'
+minhash.py -i 06_filtered_1500c/2019_04 -o 07a_minhash/2019_04 -u doc
 ```
 
-Since the command above output the files into separate directories, they need
-to be copied into one:
+There is also an option to do the deduplication based on paragraphs instead of
+documents.
+
+## Deduplicate a minhash
+
+We now deduplicate the minhashes of the current batch:
+
 ```
-renumber_minhash.py -i 2019/minhashes_host1 -i 2019/minhashes_host2
-                    -o 2019/minhashes/ -k -Z 1
+lsh.py -i 07a_minhash/2019_04/ -o 07b_minhash_self/2019_04 self
 ```
 
-The script `lsh.py` then can be used to deduplicate documents based on their
-minhashes. It has two modi operandi:
+## Deduplicate a minhash against earlier ones
 
-- <em>self</em>-deduplication: removes all documents that occur in one directory
-  of minhash files
-- <em>cross</em>-deduplication: removes all documents from a directory of
-  minhash files that are already contained in another (e.g. last year's)
+If you work with a single batch, you can skip this step.
 
-Usually one runs both like so:
+If you have earlier batches, it is important to deduplicate the current batch
+against those as well. There are several scripts for that depending on the
+workflow you need.
+
+Take care that the "earlier" batch(es) must be already deduplicated both with 
+themselves (see previous substep) and compared to the other earlier batches.
+Otherwise, you can run into fatal errors further down the process.
+
+Deduplicating a single new batch versus a single earlier batch:
+
 ```
-lsh.py -i 2019/minhashes/ -o 2019/minhashes_self/ -t 0.95 -p 256 -P 12 self
-lsh.py -i 2019/minhashes_self/ -o 2019/minhashes_full/ -t 0.95 -p 256
-       -P 12 cross -c 2018/minhashes_full
-```
-
-Here, the directory `2018/minhashes_full` contains the minhashes for documents
-in the 2018 corpus. We deduplicate with them to make sure we get rid of all
-documents we already have.
-
-Once the minhashes in `2019/minhashes_full/` are done, we could create a
-"minhashes of documents thus far" directory that includes all documents from
-2018 and 2019 by running
-```
-renumber_minhash.py -i 2018/minhashes_full -i 2019/minhashes_full
-                    -o all_time_minhashes -b 3000000 -Z 2
+lsh.py -i 07b_minhash_self/2019_04 -o 07c_minhash_full/2019_04 
+-c 07c_minhash_full/2018_06 cross
 ```
 
-Finally, we filter corpus to contain only the unique documents:
+Deduplicating a single new batch versus every earlier batch:
+
 ```
-dedup_filter.py -o 2019/cc_corpus_hu_1500c_dedup/ -m 2019/minhashes/minhashes_full --ignore-missing-files
+lsh.py -i 07b_minhash_self/2019_04/ -o 07c_minhash_full/2019_04 cumulative -c 07c_minhash_full/
+```
+This will look for the earlier batches in the directory supplied with the -c 
+argument. It will parse the last part of the path numerically to determine
+which batches are earlier then the current one and use only those for the
+deduplication.
+
+Under the hood this script chains together pairwise (one new vs one earlier) 
+deduplications, so it rebuilds the minhash tree several times. This can make it
+rather slow, but has a (relatively) low memory usage. If you don't worry about
+memory usage and want a faster method, you can use the following one even if
+you have only a single new batch.
+
+Deduplicating one or more new batches versus earlier batches and each other:
+
+```
+autonomous_cross_deduplicator2.py -i 07b_minhash_self/ -o 07c_minhash_dedup/ 
+-d ../com/07c_dedup -d ../ro/07c_dedup -d ../sk/07c_dedup
+```
+Take care that the input and the output does not point to a single batch, but to an
+entire directory containing data from (possibly) multiple batches. 
+
+This will automatically deduplicate batches against each other using the 
+following two presumptions:
+* Directory names follow the common crawl batch conventions and thus express
+temporal relations.
+* A batch that has already been deduplicated against every earlier batch has
+a file named 'DONE' in its (output) folder. 
+ 
+The script will also create these 'DONE' files as it finishes processing a batch, 
+so you don't have to worry about  this if you are using only this method to 
+deduplicate batches against each other. 
+
+You can also supply further minhash directories for this script with the 
+-d argument. You must pass a directory of directories with -d, and you can use
+it multiple times. This is used when you have other documents in your corpus
+which you want to deduplicate against. For example when we download hungarian
+language files from another domain or TLD as a separate project.
+
+This script loads the minhashes of every 'earlier' batch into memory, and then
+expands it with every new batch it processes. Therefore it requires a lot of
+memory, but runs faster.
+
+## Deduplicate the documents using the deduplicated minhashes
+
+So far we have only deduplicated the minhashes, not the corpus itself. To do so
+we have to run:
+
+```
+dedup_filter.py -m 07c_minhash_dedup/2019_04 -o 07d_deduplicated/2019_04
 ```
 
 ### <a name="frequent">Delete frequent paragraphs</a>
+
+This feature is currently under refactoring!
 
 Some sites contain "boilerplate" paragraphs that occur in many of their documents.
 We get rid of such paragraphs so that they do not skew the language model
@@ -314,7 +381,7 @@ renumber_corpus_files.py -o 2019/cc_corpus_hu_1500c_nofreq -k -Z 4 -L debug 2019
 
 (final)
 
-### Delete duplicate paragraphs
+## Delete duplicate paragraphs
 
 The last form of content duplication is when a document contains a paragraph
 several times. Sometimes this is valid repetition, but most of the time, it
@@ -329,18 +396,21 @@ distributed execution.
 remove_same_p.py -P 12 -i 2019/cc_corpus_hu_1500c_nofreq/ -L debug remove -o 2019/cc_corpus_hu_1500c_nodup/
 ```
 
-### Filtering -- again
+## Filtering -- again
 
 With frequent paragraph removed, the lengths of some documents might have fallen
-below the threshold (1500 characters in our case). It is therefore recommended
+below the threshold (500 characters in our case). It is therefore recommended
 to run the [filtering step](#filtering) anew.
 
 ### Final steps
 
-Let's assume that the re-filtered corpus is in the directory
-`cc_corpus_hu_1500c_filtered_again`. All processing steps are effectively done;
-however, in order to get the corpus ready for release, we need to run two
-clean-up steps.
+At this point all steps are effectively done. However, there is some tidying up
+to do.
+
+## Re-sort files (under refactoring)
+
+*This step, along with deduplication based on paragraphs, is currently under
+refactoring.*
 
 The first is re-sorting the files. With all the distributed processing, the
 order of the files in the directory no longer reflects the sorting we imposed
@@ -349,14 +419,15 @@ on it [earlier](#frequent). The following script re-sorts the files:
 sort_files.py -i cc_corpus_hu_1500c_filtered_again/ -t corpus
 ```
 
-The second step is to make sure each file (save the last one) has the same
+## Re-chunking files
+
+The final step is to make sure each file (save the last one) has the same
 number of documents. Even though we started with a corpus like that, the various
 filtering steps have made the document distribution uneven. The next command
 "renumbers" the files, creating the final form of the corpus, with 2,500
 documents per file:
 ```
-renumber_corpus_files.py -Z 4 -d 2500 -o 2019/cc_corpus_hu_1500c_filtered_again
-                         2019/cc_corpus_hu_1500c_final
+renumber_corpus_files.py -i 07d_dedup/2019_04/ -o 10_final/2019_04/ -d 5000
 ```
 
 **And we are done. Whew!**

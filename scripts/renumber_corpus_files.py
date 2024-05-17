@@ -10,6 +10,7 @@ from argparse import ArgumentParser
 from contextlib import closing
 import logging
 import os
+from pathlib import Path
 import sys
 
 from cc_corpus.corpus import BatchWriter, is_it_jsonl, parse_file
@@ -18,9 +19,14 @@ from cc_corpus.utils import collect_inputs, otqdm
 
 def parse_arguments():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('input_dirs', nargs='+',
-                        help='the input directories.')
-    parser.add_argument('--output-dir', '-o', required=True,
+    # This argument should be called input-dirs, but we kept it in singular
+    # to keep the pattern used by every other script and we don't have to
+    # handle this as a separate case in the manager webapp:
+    parser.add_argument('--input-dir', '-i', type=Path, action='append',
+                        help='the corpus directory')
+    # parser.add_argument('input_dirs', nargs='+',
+    #                     help='the input directories.')
+    parser.add_argument('--output-dir', '-o', type=Path, required=True,
                         help='the output directory.')
     size_group = parser.add_mutually_exclusive_group(required=True)
     size_group.add_argument('--documents', '-d', type=int,
@@ -36,7 +42,10 @@ def parse_arguments():
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'],
                         help='the logging level.')
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.input_dir:
+        parser.error('At least one input must be supplied.')
+    return args
 
 
 def main():
@@ -47,11 +56,10 @@ def main():
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
 
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     os.nice(20)
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
 
-    input_files = collect_inputs(args.input_dirs)
+    input_files = collect_inputs(args.input_dir)
     logging.info('Scheduled {} files for renumbering.'.format(len(input_files)))
 
     batch_size = args.documents if not args.keep_sizes else sys.maxsize
