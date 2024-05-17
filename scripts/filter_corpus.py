@@ -253,7 +253,6 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    install_mp_handler()
 
     os.nice(20)
     if not os.path.isdir(args.output_dir):

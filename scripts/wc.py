@@ -124,7 +124,8 @@ def main():
                     words=args.words, chars=args.characters)
         stats = [0, 0, 0, 0]
         tqdm_msg = f'Counting {tqdm_info(args.inputs)}'
-        for sub_stats in p.imap_unordered(f, otqdm(files, tqdm_msg)):
+        for sub_stats in otqdm(p.imap_unordered(f, files),
+                               tqdm_msg, total=len(files)):
             for i in range(len(stats)):
                 stats[i] += sub_stats[i]
 

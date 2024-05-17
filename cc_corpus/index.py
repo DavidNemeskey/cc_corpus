@@ -16,6 +16,7 @@ import zlib
 
 from more_itertools import batched, peekable
 
+from cc_corpus.io import BatchWriterBase
 from cc_corpus.utils import openall
 
 
@@ -240,56 +241,10 @@ def ranges_from_clusters(
                 yield range_from_clusters(file_name, range_clusters)
 
 
-class BatchWriter:
+class BatchWriter(BatchWriterBase):
     """Writes index lines into a batch of files with consecutive numbering."""
     def __init__(self, batch_size, out_dir, digits=4, name_prefix=''):
-        self.batch_size = batch_size
-        self.out_dir = Path(out_dir)
-        self.digits = digits
-        self.name_prefix = name_prefix
-        self.batch = 0
-        self.outf = None
-        self.lines_written = self.batch_size + 1  # so that we invoke new_file
-        self.total_written = 0
-
-    def write(self, index_line):
-        """
-        Writes a single index line to the currently open file. Opens a new file
-        when the current one is full.
-        """
-        if self.lines_written >= self.batch_size:
-            self.new_file()
-        print(index_line, file=self.outf)
-        self.lines_written += 1
-
-    def new_file(self):
-        """Closes the old file and opens a new one."""
-        self.close()
-
-        self.batch += 1
-        new_file_name = f'{self.name_prefix}{{:0{self.digits}}}.gz'.format(
-            self.batch
-        )
-        new_file = (self.out_dir / new_file_name).with_suffix('.gz')
-        logging.debug('Opening file {}...'.format(new_file))
-        self.outf = openall(new_file, 'wt')
-
-    def close(self):
-        """
-        Closes the currently written file handle. Called automatically when
-        the batch counter increases, but should also be called when processing
-        ends to close the files of the last batch.
-        """
-        if self.outf is not None:
-            self.outf.close()
-            self.outf = None
-
-            self.total_written += self.lines_written
-        self.lines_written = 0
-
-    def __del__(self):
-        """Just calls close()."""
-        self.close()
+        super().__init__(batch_size, out_dir, digits, name_prefix, first_batch=0)
 
 
 def process_index_range(index_range: bytes) -> Generator[str]:
