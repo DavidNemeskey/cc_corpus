@@ -1,0 +1,183 @@
+---
+    folders:
+        # working_dir: "~/test_corpus3/"
+        working_dir: "/data/corpus/"
+        # The absolute path of the working dir.
+        logs: "logs"
+        # Either an absolute path, or a relative one to the working_dir. E.g.: "logs".
+        url_repository: "/data/url_repo"
+        # The directory which contains the url lists from all related projects.
+        # These will be used to detect duplicate urls, and we will place the
+        # newly generated url lists there as well, to keep it up to date.
+        minhash_repository: "/data/minhash_repo"
+        # The directory which contains the minhashes from other projects.
+        # These will be used to deduplicate documents.
+    version_number: "1.15.0"
+    # It will be saved for every step on creation. It could help with debugging.
+    runtime_configurations:
+        processes: 4
+        # The number of processes for multithreading scripts.
+        log_level: 'info'
+        # This will be applied to every script run via the manager app. E.g.: 'info'.
+    cc_batch: '${cc_batch}'
+    # Leave this as a variable, and set the one below.
+    default_yaml_variables:
+        # These are used as defaults when the given variable is not set at the Step or Pipeline level.
+        cc_batch: "2023-06"
+        # The common crawl batch ID for downloading it and folder naming. E.g.: "2023-06".
+        language: "hu"
+        # The language code for the language we work with. Used in filtering. E.g.: "hu".
+        url_pattern: "hu"
+        # This is the url pattern we want to download from common crawl. E.g.: "hu" or "elte.hu"
+        # It will be interpreted as *.url_pattern, so "hu" will download everything in *.hu
+    scripts:
+    # Every script type is listed here. The top level is the name of the script.
+    # The nested dicts contain the following:
+    # - script_file: the name of the script file we have to run.
+    # - hardwired_params: command line arguments which are not set by the user.
+    # Normal runtime parameters have the parameter prefix as the key and the default value as the value.
+    #     So an entry "a: blabla" will yield the command line argument "-a blabla".
+    # If the command line argument requires 2 dashes, add 1 dash to the key here.
+    #     So an entry "-alfa: blabla" will yield the command line argument "--alfa blabla"
+    # Some parameter values depend upon the working dir. Usually we want the variable interjected.
+    # If our working dir is /home/cc-batch, we want the result to be /home/variable/cc-batch.
+    # For this use the following syntax:
+    # key:
+    #     is_path: True
+    #     key: value
+    # If we need a working dir dependent path without the cc-batch, so turn /home/cc-batch into /home/variable
+    # also add an extra line:
+    #     no_batch_in_path: True
+    # There are further special cases for the url list directory used for deduplication:
+    #     url_repo_path: True
+    #     url_repo_append: True
+        get_indexfiles:
+            script_file: "get_indexfiles.py"
+            hardwired_params: ""
+            no_p_param: True
+            output: "01_index"
+            p: "${url_pattern}"
+            c: "CC-MAIN-${cc_batch}"
+            d: "30"
+        filter_index:
+            script_file: "filter_index.py"
+            hardwired_params: ""
+            input: "01_index"
+            output: "02_index_filtered"
+            -allowed-mimes: "allowed_mimes.txt"
+        deduplicate_index_urls:
+            script_file: "deduplicate_index_urls.py"
+            hardwired_params: ""
+            no_p_param: True
+            input: "02_index_filtered"
+            output: "03_index_dedup"
+            -skip-urls:
+                is_path: True
+                url_repo_path: True
+            -export-urls-file:
+                is_path: True
+                url_repo_append: True
+                -export-urls-file: "${language}_${url_pattern}_${cc_batch}.gz"
+        download_pages:
+            script_file: "download_pages.py"
+            no_p_param: True
+            hardwired_params: ""
+            input: "03_index_dedup"
+            output: "04_download"
+            -index_output_dir:
+                is_path: True
+                -index_output_dir: "04a_index_sorted"
+            -error_file:
+                is_path: True
+                -error_file: "04b_download_errors"
+        remove_boilerplate:
+            script_file: "remove_boilerplate.py"
+            hardwired_params: ""
+            input: "04_downloaded"
+            output: "05_boilerplate_removed"
+            -index-dir:
+                is_path: True
+                -index-dir: "04a_index_sorted"
+            b: "justext"
+        filter_corpus:
+            script_file: "filter_corpus.py"
+            hardwired_params: ""
+            input: "05_boilerplate_removed"
+            output: "06_filtered"
+            u: "doc"
+            l: "${language}"
+        minhash:
+            script_file: "minhash.py"
+            hardwired_params: ""
+            input: "06_filtered"
+            output: "07a_minhash"
+            u: "doc"
+        deduplicate_self:
+            script_file: "lsh.py"
+            hardwired_params: "self"
+            input: "07a_minhash"
+            output: "07b_minhash_self"
+        deduplicate_cumulative:
+            script_file: "lsh.py"
+            hardwired_params: "cumulative"
+            input: "07b_minhash_self"
+            output: "07c_minhash_full"
+            c:
+                is_path: True
+                no_batch_in_path: True
+                c: "07c_minhash_full"
+        deduplicate_cumulative_fast:
+            # This is a faster, but more memory intensive version.
+            # It processess all batches ready for this step.
+            script_file: "autonomous_cross_deduplicator2.py"
+            hardwired_params: ""
+            input:
+                no_batch_in_path: True
+                input: "07b_minhash_self"
+            output:
+                no_batch_in_path: True
+                output: "07c_minhash_full"
+            d:
+                is_path: True
+                minhash_repo_path: True
+        apply_deduplication:
+            script_file: "dedup_filter.py"
+            hardwired_params: ""
+            output: "07d_dedup"
+            m:
+                is_path: True
+                m: "07c_minhash_full"
+        renumber_corpus:
+            script_file: "renumber_corpus_files.py"
+            hardwired_params: ""
+            no_p_param: True
+            input: "07d_dedup"
+            output: "08_renumbered"
+            d: "5000"
+    pipelines:
+    # Every pipeline type is listed here. The top level is the name of the pipeline type.
+    # The params section lists the parameters for this type. These will be queried upon creating
+    # the pipeline, and the values will be used when creating the steps, filling up the
+    # variables in this config.yaml.
+    # The steps section lists the steps in order which will be executed by this pipeline.
+        download:
+            params:
+                - cc_batch
+                - url_pattern
+            steps:
+                - get_indexfiles
+                - filter_index
+                - deduplicate_index_urls
+                - download_pages
+        post_download:
+            params:
+                - cc_batch
+                - language
+            steps:
+                - remove_boilerplate
+                - filter_corpus
+                - minhash
+                - deduplicate_self
+                - deduplicate_cumulative_fast
+                - apply_deduplication
+                - renumber_corpus

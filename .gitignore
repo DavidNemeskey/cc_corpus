@@ -111,3 +111,4 @@ venv.bak/
 # Project specific files:
 app/sql_app.db
 app/config.yaml
+app/config_local.yaml
