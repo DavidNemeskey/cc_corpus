@@ -82,7 +82,7 @@
             no_p_param: True
             hardwired_params: ""
             input: "03_index_dedup"
-            output: "04_download"
+            output: "04_downloaded"
             -index_output_dir:
                 is_path: True
                 -index_output_dir: "04a_index_sorted"
