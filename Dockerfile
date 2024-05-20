@@ -5,6 +5,7 @@ RUN apt-get update && apt-get -y upgrade \
     build-essential \
     ca-certificates \
     wget \
+    parallel \
     && rm -rf /var/lib/apt/lists/*
 
 ENV HOME /home/cc
