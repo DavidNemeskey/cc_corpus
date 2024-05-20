@@ -60,7 +60,7 @@ def main():
     training_corpus = get_training_corpus(args.input_dir)
     old_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
-    example = "Szia uram, tokenizer vagy palacsinta érdekelne?"
+    example = "Szia uram, tokenizer érdekelne?"
     tokens = old_tokenizer.tokenize(example)
     print(f'Tokenizing the following text: {example}:\n')
     print(tokens)

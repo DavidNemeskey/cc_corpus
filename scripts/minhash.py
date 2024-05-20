@@ -18,7 +18,7 @@ import logging
 from multiprocessing import Pool
 import os
 
-from multiprocessing_logging import install_mp_handler
+# from multiprocessing_logging import install_mp_handler
 
 from cc_corpus.corpus import parse_file
 from cc_corpus.deduplication import BatchWriter, MinHasher
@@ -116,7 +116,7 @@ def main():
         level=getattr(logging, args.log_level.upper()),
         format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
     )
-    install_mp_handler()
+    # install_mp_handler()
 
     os.nice(20)
     if not os.path.isdir(args.output_dir):
