@@ -28,7 +28,6 @@ RUN pwd && whoami && ls -la . && wget https://repo.anaconda.com/miniconda/Minico
     && conda create -n cc_corpus
 
 Copy --chown=cc:cc . cc_corpus
-# RUN rm 'cc_corpus/app/sql_app.db'
 RUN . ${HOME}/.bashrc && conda activate cc_corpus && conda install python=3.11 pip \
     && export CFLAGS="-Wno-narrowing" \
     && pip install -e cc_corpus
@@ -50,5 +49,4 @@ EXPOSE 8000
 ENTRYPOINT ["/bin/bash", "-l", "-c"]
 
 CMD ["./launch_app.sh"]
-# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-# CMD ["/bin/bash", "-c", "conda activate cc_corpus && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+
