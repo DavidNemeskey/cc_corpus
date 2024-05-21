@@ -63,7 +63,7 @@
             hardwired_params: ""
             input: "01_index"
             output: "02_index_filtered"
-            -allowed-mimes: "allowed_mimes.txt"
+            -allowed-mimes: "./data/allowed_mimes.txt"
         deduplicate_index_urls:
             script_file: "deduplicate_index_urls.py"
             hardwired_params: ""
