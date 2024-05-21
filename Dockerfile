@@ -28,7 +28,7 @@ RUN pwd && whoami && ls -la . && wget https://repo.anaconda.com/miniconda/Minico
     && conda create -n cc_corpus
 
 Copy --chown=cc:cc . cc_corpus
-RUN rm 'cc_corpus/app/sql_app.db'
+# RUN rm 'cc_corpus/app/sql_app.db'
 RUN . ${HOME}/.bashrc && conda activate cc_corpus && conda install python=3.11 pip \
     && export CFLAGS="-Wno-narrowing" \
     && pip install -e cc_corpus
