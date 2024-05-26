@@ -7,6 +7,13 @@
         # The absolute path of the working dir.
         logs: "logs"
         # Either an absolute path, or a relative one to the working_dir. E.g.: "logs".
+        url_repository: None
+        # The directory which contains the url lists from all related projects.
+        # These will be used to detect duplicate urls, and we will place the
+        # newly generated url lists there as well, to keep it up to date.
+        minhash_repository: None
+        # The directory which contains the minhashes from other projects.
+        # These will be used to deduplicate documents.
     version_number: "1.15.0"
     # It will be saved for every step on creation. It could help with debugging.
     runtime_configurations:
@@ -63,6 +70,13 @@
             no_p_param: True
             input: "02_index_filtered"
             output: "03_index_dedup"
+            -skip-urls:
+                is_path: True
+                url_repo_path: True
+            -export-urls-file:
+                is_path: True
+                url_repo_append: True
+                -export-urls-file: "${language}_${url_pattern}_${cc_batch}.gz"
         download_pages:
             script_file: "download_pages.py"
             no_p_param: True
@@ -111,6 +125,20 @@
                 is_path: True
                 no_batch_in_path: True
                 c: "07c_minhash_full"
+        deduplicate_cumulative_fast:
+            # This is a faster, but more memory intensive version.
+            # It processess all batches ready for this step.
+            script_file: "autonomous_cross_deduplicator2.py"
+            hardwired_params: ""
+            input:
+                no_batch_in_path: True
+                input: "07b_minhash_self"
+            output:
+                no_batch_in_path: True
+                output: "07c_minhash_full"
+            d:
+                is_path: True
+                minhash_repo_path: True
         apply_deduplication:
             script_file: "dedup_filter.py"
             hardwired_params: ""
@@ -118,6 +146,13 @@
             m:
                 is_path: True
                 m: "07c_minhash_full"
+        renumber_corpus:
+            script_file: "renumber_corpus_files.py"
+            hardwired_params: ""
+            no_p_param: True
+            input: "07d_dedup"
+            output: "08_renumbered"
+            d: "5000"
     pipelines:
     # Every pipeline type is listed here. The top level is the name of the pipeline type.
     # The params section lists the parameters for this type. These will be queried upon creating
@@ -142,5 +177,6 @@
                 - filter_corpus
                 - minhash
                 - deduplicate_self
-                - deduplicate_cumulative
+                - deduplicate_cumulative_fast
                 - apply_deduplication
+                - renumber_corpus
