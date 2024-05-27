@@ -36,7 +36,7 @@ class BatchWriterBase:
         :param name_prefix: prepend this string to all file names
         :param suffix: the suffix to add to each file (the part after the
                        digits). This also determines whether the file will be
-                       compressed (e.g. the default valud ``.gz`` implies
+                       compressed (e.g. the default value ``.gz`` implies
                        ``gzip`` compression).
         :param first_batch: start batch numbering here instead of the default 1
         """
@@ -73,7 +73,7 @@ class BatchWriterBase:
         new_file_name = f'{self.name_prefix}{{:0{self.digits}}}'.format(
             self.batch
         )
-        self.current_file = (self.out_dir / new_file_name).with_suffix(self.suffix)
+        self.current_file = self.out_dir / (new_file_name + self.suffix)
         logging.debug('Opening file {}...'.format(self.current_file))
         self.outf = openall(self.current_file, 'wt')
 

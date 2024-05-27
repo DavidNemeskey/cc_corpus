@@ -26,6 +26,49 @@ The reason for the export is that one of the language detection packages,
 problems (narrowing conversions) that were once only warnings are now considered
 errors by modern compilers. The export tells them to disregard these errors.
 
+## Docker Usage
+
+The package includes a docker buildfile. 
+
+```
+docker run cc_corpus:latest
+```
+
+By default, the docker run command will launch the manager webapp. But you can
+append any command to it, and then it will do that instead of launching the 
+webapp. For example, you can launch a bash, or a specific script.
+
+If you want to run the bash or any specific scripts, you should mount the
+input and output dirs and anything else needed with the `-v` flags.
+
+If you want to run a step which uses AWS S3 download (for example step 4), then
+you should also mount the dir which has your aws certificates to 
+`/home/cc/.aws` and (supposing that the permissions on your certificate files
+are 600) run the image with `-u root`.
+
+```
+docker run -v $HOME/.aws:/home/cc/.aws:ro -u root cc_corpus:latest
+```
+
+To run the manager webapp from docker:
+* you will need to map port 8000 to a port of your choice,
+* mount a dir where you want the corpus to /data/corpus,
+* mount a dir where you collect the url lists for deduplication (see Index 
+Deduplication below) to /data/url_repo,
+* mount a dir where you collect the minhashes for deduplication (see Document
+Deduplication below) to /data/minhash_repo.
+* If you want the state of your manager webapp to be persistent, you will also
+need to mount a dir to /home/cc/cc_corpus/db (the sqlite DB will be stored there)
+
+```
+docker run -p 8000:8000 -v <work dir>:/data/corpus 
+-v <url repository>:/data/url_repo 
+-v <minhash repository>:/data/minhash_repo  
+-v $HOME/.aws:/home/cc/.aws:ro  
+-v <dir for the sqlite db>:/home/cc/cc_corpus/db 
+-u root cc_corpus:latest
+```
+
 ## Manager webapp
 
 You can use this package either using command line commands or by the manager webapp interface.
