@@ -142,4 +142,4 @@ def download_index_range(
         delay_period=delay,
         s3_download=True,
         session=session
-    )[0]
+    )
