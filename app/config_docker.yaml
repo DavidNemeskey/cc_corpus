@@ -1,17 +1,15 @@
-# Rename this file to config.yaml and be sure to fill out the working_dir!
-# You should also check the runtime_configurations, default_yaml_variables and the folders/logs,
-# and edit it according to your needs.
 ---
     folders:
-        working_dir: None
+        # working_dir: "~/test_corpus3/"
+        working_dir: "/data/corpus/"
         # The absolute path of the working dir.
         logs: "logs"
         # Either an absolute path, or a relative one to the working_dir. E.g.: "logs".
-        url_repository: None
+        url_repository: "/data/url_repo/"
         # The directory which contains the url lists from all related projects.
         # These will be used to detect duplicate urls, and we will place the
         # newly generated url lists there as well, to keep it up to date.
-        minhash_repository: None
+        minhash_repository: "/data/minhash_repo/"
         # The directory which contains the minhashes from other projects.
         # These will be used to deduplicate documents.
     version_number: "1.15.0"
@@ -50,6 +48,9 @@
     # If we need a working dir dependent path without the cc-batch, so turn /home/cc-batch into /home/variable
     # also add an extra line:
     #     no_batch_in_path: True
+    # There are further special cases for the url list directory used for deduplication:
+    #     url_repo_path: True
+    #     url_repo_append: True
         get_indexfiles:
             script_file: "get_indexfiles.py"
             hardwired_params: ""

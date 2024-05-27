@@ -159,7 +159,7 @@ def uniq_record(url: Url, record: IndexRecord, uniqs: UrlIndexDict,
 def file_to_dict(index_file: str, keep: str, skip_urls: UrlList, url_fn: UrlFn,
                  global_uniqs: UrlIndexDict):
     """
-    Collects all URLs from an index file and deduplicats in two phrases:
+    Collects all URLs from an index file and deduplicates in two phrases:
 
     1. First, the index lines / URLs are deduplicated inside the file, in case
        an index file contains the same URL twice (not likely, but who knows?)
