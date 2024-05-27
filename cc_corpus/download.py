@@ -129,11 +129,17 @@ def download_index_range(
         offset: int,
         length: int,
         retry_left: int,
-        delay: int = 10,) -> bytes:
+        delay: int = 10,
+        session: Any = None,
+) -> bytes:
     """
     Downloads a single byte range from an index file.
     """
     return download_ranges(
-        index_file_url, [(offset, length)],
-        retry_left, delay_period=delay
-    )[0]
+        index_file_url,
+        [(offset, length)],
+        retry_left,
+        delay_period=delay,
+        s3_download=True,
+        session=session
+    )
