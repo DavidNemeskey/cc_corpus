@@ -23,18 +23,24 @@ def parse_arguments():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--input-dir', '-i', type=Path, required=True,
                         help='The input directory where the corpus is.')
-    parser.add_argument('--output-dir', '-o', type=Path, required=True,
+    parser.add_argument('--output-dir', '-o', type=Path,
                         help='The output directory for the tokenizer.')
+    parser.add_argument('--mode', '-m', type=str, required=True,
+                        help='Sets what task to do: count or train.')
     parser.add_argument('--base-tokenizer', '-bt', type=str, required=True,
-                        help='The hugging face moniker of the tokenizer'
-                             'which will serve as the basis for the new one.')
+                        help='The hugging face moniker or the path to the'
+                             'base tokenizer.')
+    parser.add_argument('--vocab-size', '-vc', type=int, default=52000,
+                        help='The vocabulary size of the new tokenizer.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
                         choices=['debug', 'info', 'warning',
                                  'error', 'critical'],
                         help='the logging level.')
     args = parser.parse_args()
     if not args.input_dir.is_dir():
-        parser.error('The directory for the batches must exist.')
+        parser.error('The directory for the input (the corpus) must exist.')
+    if args.mode == 'train' and not args.output_dir:
+        parser.error('When running mode train you must specify an output dir.')
     return args
 
 
@@ -58,24 +64,39 @@ def main():
     os.nice(20)
 
     training_corpus = get_training_corpus(args.input_dir)
-    old_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
+    base_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
     example = "Szia uram, tokenizer érdekelne?"
-    tokens = old_tokenizer.tokenize(example)
+    tokens = base_tokenizer.tokenize(example)
     print(f'Tokenizing the following text: {example}:\n')
     print(tokens)
     print(len(tokens))
+    print("=======")
 
-    tokenizer = old_tokenizer.train_new_from_iterator(training_corpus, 52000)
-    tokens = tokenizer.tokenize(example)
-    print(f'Tokenizing the following text: {example}:\n')
-    print(tokens)
-    print(len(tokens))
+    if args.mode == 'count':
+        logging.info('Started counting the token count of the corpus.')
+        token_count = 0
+        for text_batch in training_corpus:
+            for text in text_batch:
+                tokens = base_tokenizer.tokenize(text)
+                token_count += len(tokens)
+        print(token_count)
+        logging.info(f'Counted {token_count} tokens in the corpus.')
+    elif args.mode == 'train':
+        logging.info('Training a new tokenizer.')
+        new_tokenizer = base_tokenizer.train_new_from_iterator(
+            training_corpus,
+            args.vocab_size
+        )
+        tokens = new_tokenizer.tokenize(example)
+        print(f'Tokenizing the following text: {example}:\n')
+        print(tokens)
+        print(len(tokens))
 
-    new_tokens = set(tokenizer.vocab).difference(old_tokenizer.vocab)
-    print(f'We got {len(new_tokens)} new tokens.')
+        new_tokens = set(new_tokenizer.vocab).difference(base_tokenizer.vocab)
+        print(f'We got {len(new_tokens)} new tokens.')
 
-    tokenizer.save_pretrained(args.output_dir)
+        new_tokenizer.save_pretrained(args.output_dir)
 
 # TODO
 # The following dependencies were added:
