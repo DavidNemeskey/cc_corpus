@@ -109,5 +109,5 @@ venv.bak/
 .idea
 
 # Project specific files:
-app/sql_app.db
+db/*
 app/config.yaml

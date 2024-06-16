@@ -26,7 +26,8 @@ def parse_arguments():
     parser.add_argument('--output-dir', '-o', type=Path,
                         help='The output directory for the tokenizer.')
     parser.add_argument('--mode', '-m', type=str, required=True,
-                        help='Sets what task to do: count or train.')
+                        help='Sets what task to do: count, train or '
+                             'generate_sp_corpus')
     parser.add_argument('--base-tokenizer', '-bt', type=str, required=True,
                         help='The hugging face moniker or the path to the'
                              'base tokenizer.')
@@ -39,8 +40,8 @@ def parse_arguments():
     args = parser.parse_args()
     if not args.input_dir.is_dir():
         parser.error('The directory for the input (the corpus) must exist.')
-    if args.mode == 'train' and not args.output_dir:
-        parser.error('When running mode train you must specify an output dir.')
+    if args.mode in ['train', 'generate_sp_corpus'] and not args.output_dir:
+        parser.error('For this mode you must specify an output dir.')
     return args
 
 
@@ -97,6 +98,15 @@ def main():
         print(f'We got {len(new_tokens)} new tokens.')
 
         new_tokenizer.save_pretrained(args.output_dir)
+    elif args.mode == 'generate_sp_corpus':
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        with open(args.output_dir / 'corpus.txt', 'wt') as out_f:
+            for text_batch in training_corpus:
+                for text in text_batch:
+                    print(text, file=out_f)
+    else:
+        logging.info(f'The mode {args.mode} is undefined.')
+
 
 # TODO
 # The following dependencies were added:
