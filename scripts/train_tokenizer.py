@@ -14,6 +14,7 @@ import logging
 import os
 from pathlib import Path
 from transformers import AutoTokenizer
+from tokenizers import pre_tokenizers
 
 from cc_corpus.utils import collect_inputs
 from cc_corpus.corpus import parse_file
@@ -31,6 +32,7 @@ def parse_arguments():
     parser.add_argument('--base-tokenizer', '-bt', type=str, required=True,
                         help='The hugging face moniker or the path to the'
                              'base tokenizer.')
+    parser.add_argument('--add-pretokenizer', action='store_true')
     parser.add_argument('--vocab-size', '-vc', type=int, default=52000,
                         help='The vocabulary size of the new tokenizer.')
     parser.add_argument('--log-level', '-L', type=str, default='info',
@@ -65,14 +67,15 @@ def main():
     os.nice(20)
 
     training_corpus = get_training_corpus(args.input_dir)
+    print(f'Loading tokenizer: {args.base_tokenizer}')
     base_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
-    example = "Szia uram, tokenizer érdekelne?"
-    tokens = base_tokenizer.tokenize(example)
-    print(f'Tokenizing the following text: {example}:\n')
-    print(tokens)
-    print(len(tokens))
-    print("=======")
+    if args.add_pretokenizer:
+        pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.Whitespace(),
+                                                 pre_tokenizers.Digits(individual_digits=True)])
+        base_tokenizer.backend_tokenizer.pre_tokenizer = pre_tokenizer
+
+    example = "Szia uram, 13 db tokenizer érdekelne?"
 
     if args.mode == 'count':
         logging.info('Started counting the token count of the corpus.')
@@ -104,6 +107,16 @@ def main():
             for text_batch in training_corpus:
                 for text in text_batch:
                     print(text, file=out_f)
+    elif args.mode == 'test_tokenizer':
+        tokens = base_tokenizer.tokenize(example)
+        print(f'The example sentence: {example}\n')
+        print(f'\nPre-tokenization of the example:')
+        print(base_tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(example))
+        print(f'\nTokenizing the example:\n')
+        print(tokens)
+        print(len(tokens))
+        print("=======")
+
     else:
         logging.info(f'The mode {args.mode} is undefined.')
 
