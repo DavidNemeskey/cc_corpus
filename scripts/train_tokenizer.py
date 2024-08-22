@@ -71,8 +71,10 @@ def main():
     base_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
     if args.add_pretokenizer:
-        pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.Whitespace(),
-                                                 pre_tokenizers.Digits(individual_digits=True)])
+        pre_tokenizer = pre_tokenizers.Sequence([
+            pre_tokenizers.Digits(individual_digits=True),
+            pre_tokenizers.Metaspace(replacement="▁"),
+        ])
         base_tokenizer.backend_tokenizer.pre_tokenizer = pre_tokenizer
 
     example = "Szia uram, 13 db tokenizer érdekelne?"
@@ -90,7 +92,9 @@ def main():
         logging.info('Training a new tokenizer.')
         new_tokenizer = base_tokenizer.train_new_from_iterator(
             training_corpus,
-            args.vocab_size
+            args.vocab_size,
+            # initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
+            # This does nothing :(
         )
         tokens = new_tokenizer.tokenize(example)
         print(f'Tokenizing the following text: {example}:\n')
