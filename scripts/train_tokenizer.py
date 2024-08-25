@@ -14,7 +14,8 @@ import logging
 import os
 from pathlib import Path
 from transformers import AutoTokenizer
-from tokenizers import pre_tokenizers
+from tokenizers import normalizers, pre_tokenizers
+from tokenizers.normalizers import Replace
 
 from cc_corpus.utils import collect_inputs
 from cc_corpus.corpus import parse_file
@@ -71,13 +72,18 @@ def main():
     base_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
     if args.add_pretokenizer:
+        normalizer = normalizers.Sequence([
+            Replace("\n", " "),
+        ])
+        base_tokenizer.backend_tokenizer.normalizer = normalizer
         pre_tokenizer = pre_tokenizers.Sequence([
+            pre_tokenizers.Whitespace(),
             pre_tokenizers.Digits(individual_digits=True),
             pre_tokenizers.Metaspace(replacement="▁"),
         ])
         base_tokenizer.backend_tokenizer.pre_tokenizer = pre_tokenizer
 
-    example = "Szia uram, 13 db tokenizer érdekelne?"
+    example = "Szia uram, 13 db tokenizer érdekelne? Újhold 朔 éjszakáján?"
 
     if args.mode == 'count':
         logging.info('Started counting the token count of the corpus.')
@@ -129,7 +135,7 @@ def main():
 # The following dependencies were added:
 # pip install transformers
 # pip install chardet
-
+# pip install protobuff - for new llama based tokenizers (mistral-7B-v0.3)
 
 if __name__ == '__main__':
     main()
