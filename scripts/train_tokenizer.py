@@ -14,7 +14,7 @@ import logging
 import os
 from pathlib import Path
 from transformers import AutoTokenizer
-from tokenizers import normalizers, pre_tokenizers
+from tokenizers import normalizers, pre_tokenizers, Regex
 from tokenizers.normalizers import Replace
 
 from cc_corpus.utils import collect_inputs
@@ -71,18 +71,27 @@ def main():
     print(f'Loading tokenizer: {args.base_tokenizer}')
     base_tokenizer = AutoTokenizer.from_pretrained(args.base_tokenizer)
 
+    # if args.add_pretokenizer:
+    #     normalizer = normalizers.Sequence([
+    #         Replace("\n", " "),
+    #     ])
+    #     base_tokenizer.backend_tokenizer.normalizer = normalizer
+    #     pre_tokenizer = pre_tokenizers.Sequence([
+    #         pre_tokenizers.Whitespace(),
+    #         pre_tokenizers.Digits(individual_digits=True),
+    #         # pre_tokenizers.Metaspace(replacement="▁"),
+    #         pre_tokenizers.Metaspace(replacement="Ġ"),
+    #     ])
+    #     base_tokenizer.backend_tokenizer.pre_tokenizer = pre_tokenizer
+
     if args.add_pretokenizer:
-        normalizer = normalizers.Sequence([
-            Replace("\n", " "),
-        ])
-        base_tokenizer.backend_tokenizer.normalizer = normalizer
+        pattern = Regex("[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+")
         pre_tokenizer = pre_tokenizers.Sequence([
-            pre_tokenizers.Whitespace(),
-            pre_tokenizers.Digits(individual_digits=True),
-            # pre_tokenizers.Metaspace(replacement="▁"),
-            pre_tokenizers.Metaspace(replacement="Ġ"),
+            pre_tokenizers.Split(pattern, behavior="isolated", invert = False),
+            pre_tokenizers.ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex= False),
         ])
         base_tokenizer.backend_tokenizer.pre_tokenizer = pre_tokenizer
+
 
     example = "Szia uram, 13 db tokenizer érdekelne? Újhold 朔 éjszakáján?"
 
