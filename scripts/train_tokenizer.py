@@ -79,7 +79,8 @@ def main():
         pre_tokenizer = pre_tokenizers.Sequence([
             pre_tokenizers.Whitespace(),
             pre_tokenizers.Digits(individual_digits=True),
-            pre_tokenizers.Metaspace(replacement="▁"),
+            # pre_tokenizers.Metaspace(replacement="▁"),
+            pre_tokenizers.Metaspace(replacement="Ġ"),
         ])
         base_tokenizer.backend_tokenizer.pre_tokenizer = pre_tokenizer
 
@@ -135,7 +136,7 @@ def main():
 # The following dependencies were added:
 # pip install transformers
 # pip install chardet
-# pip install protobuff - for new llama based tokenizers (mistral-7B-v0.3)
+# pip install protobuf - for new llama based tokenizers (mistral-7B-v0.3)
 
 if __name__ == '__main__':
     main()
