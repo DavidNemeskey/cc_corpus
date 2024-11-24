@@ -109,8 +109,7 @@ def main():
         new_tokenizer = base_tokenizer.train_new_from_iterator(
             training_corpus,
             args.vocab_size,
-            # initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
-            # This does nothing :(
+            initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
         )
         tokens = new_tokenizer.tokenize(example)
         print(f'Tokenizing the following text: {example}:\n')
